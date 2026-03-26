@@ -16,6 +16,11 @@ import {
   Clock,
   ChevronDown,
   Settings,
+  ClipboardList,
+  DollarSign,
+  AlertCircle,
+  Copy,
+  MessageCircle,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -34,15 +39,26 @@ export default function Layout({ children }: LayoutProps) {
   const adminNavItems = [
     { path: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
     { path: '/shifts', label: 'シフト管理', icon: Calendar },
+    { path: '/shift-requests', label: '希望シフト収集', icon: ClipboardList },
+    { path: '/templates', label: 'テンプレート', icon: Copy },
     { path: '/timecards', label: 'タイムカード', icon: Clock },
     { path: '/staff', label: 'スタッフ管理', icon: Users },
+    { path: '/labor', label: '人件費・売上', icon: DollarSign },
     { path: '/report', label: '勤務集計', icon: BarChart2 },
+    { path: '/absence', label: '欠勤・ヘルプ', icon: AlertCircle },
     { path: '/stores', label: '店舗管理', icon: Store },
     { path: '/companies', label: '会社管理', icon: Building2 },
+    { path: '/line-settings', label: 'LINE通知', icon: MessageCircle },
     { path: '/settings', label: '設定', icon: Settings },
   ]
 
-  const navItems = user?.role === 'admin' ? adminNavItems : []
+  const staffNavItems = [
+    { path: '/timecards', label: 'タイムカード', icon: Clock },
+    { path: '/shift-requests', label: 'シフト希望提出', icon: ClipboardList },
+    { path: '/absence', label: '欠勤連絡', icon: AlertCircle },
+  ]
+
+  const navItems = user?.role === 'admin' ? adminNavItems : staffNavItems
   const isActive = (path: string) => location.pathname === path
 
   const getStatusInfo = (record: any) => {
@@ -113,9 +129,9 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         )}
 
-        {/* Admin: Navigation links */}
-        {!isStaff && (
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {/* Navigation links */}
+        {navItems.length > 0 && (
+          <nav className="px-3 py-4 space-y-1 overflow-y-auto shrink-0">
             {navItems.map(item => {
               const Icon = item.icon
               return (

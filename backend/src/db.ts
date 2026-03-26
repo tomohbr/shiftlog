@@ -110,6 +110,103 @@ db.exec(`
   );
 `);
 
+// ---- New feature tables ----
+db.exec(`
+  -- 希望シフト収集
+  CREATE TABLE IF NOT EXISTS shift_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    availability TEXT NOT NULL DEFAULT 'available',
+    preferred_start TEXT,
+    preferred_end TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(company_id, user_id, date)
+  );
+
+  -- 希望シフト収集期間
+  CREATE TABLE IF NOT EXISTS shift_request_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    deadline TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id),
+    UNIQUE(company_id, year, month)
+  );
+
+  -- 日次売上
+  CREATE TABLE IF NOT EXISTS daily_sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    amount INTEGER NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id),
+    UNIQUE(company_id, date)
+  );
+
+  -- シフトテンプレート
+  CREATE TABLE IF NOT EXISTS shift_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    break_minutes INTEGER DEFAULT 0,
+    color TEXT DEFAULT '#4A90E2',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+  );
+
+  -- 欠勤連絡・ヘルプ募集
+  CREATE TABLE IF NOT EXISTS absence_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    shift_id INTEGER,
+    date TEXT NOT NULL,
+    reason TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    cover_user_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (shift_id) REFERENCES shifts(id),
+    FOREIGN KEY (cover_user_id) REFERENCES users(id)
+  );
+
+  -- LINE連携
+  CREATE TABLE IF NOT EXISTS line_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL UNIQUE,
+    channel_access_token TEXT,
+    notify_shift_published INTEGER DEFAULT 1,
+    notify_shift_changed INTEGER DEFAULT 1,
+    notify_help_request INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+  );
+
+  -- ユーザーのLINE ID
+  CREATE TABLE IF NOT EXISTS user_line_ids (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    line_user_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+`);
+
 // ---- Subscriptions table ----
 db.exec(`
   CREATE TABLE IF NOT EXISTS subscriptions (

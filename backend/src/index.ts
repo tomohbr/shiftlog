@@ -8,6 +8,12 @@ import storeRoutes from './routes/stores';
 import companyRoutes from './routes/companies';
 import timecardRoutes from './routes/timecards';
 import billingRoutes from './routes/billing';
+import shiftRequestRoutes from './routes/shift-requests';
+import laborRoutes from './routes/labor';
+import templateRoutes from './routes/templates';
+import absenceRoutes from './routes/absence';
+import csvRoutes from './routes/csv';
+import lineRoutes from './routes/line';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +35,12 @@ app.use('/api/shifts', shiftRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/timecards', timecardRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/shift-requests', shiftRequestRoutes);
+app.use('/api/labor', laborRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/absence', absenceRoutes);
+app.use('/api/csv', csvRoutes);
+app.use('/api/line', lineRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

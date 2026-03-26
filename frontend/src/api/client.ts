@@ -172,3 +172,111 @@ export const billingApi = {
   createCheckout: (additional_stores: number) =>
     api.post<{ url: string }>('/billing/checkout', { additional_stores }),
 }
+
+// Shift Requests (希望シフト収集)
+export interface ShiftRequest {
+  id: number
+  company_id: number
+  user_id: number
+  user_name?: string
+  user_color?: string
+  date: string
+  availability: 'available' | 'unavailable' | 'preferred'
+  preferred_start?: string
+  preferred_end?: string
+  notes?: string
+}
+
+export const shiftRequestsApi = {
+  getAll: (params?: { year?: number; month?: number; user_id?: number }) =>
+    api.get<{ requests: ShiftRequest[] }>('/shift-requests', { params }),
+  submit: (data: Partial<ShiftRequest>) =>
+    api.post('/shift-requests', data),
+  submitBulk: (requests: Partial<ShiftRequest>[]) =>
+    api.post('/shift-requests/bulk', { requests }),
+  getSummary: (year: number, month: number) =>
+    api.get('/shift-requests/summary', { params: { year, month } }),
+  getPeriod: (year: number, month: number) =>
+    api.get('/shift-requests/period', { params: { year, month } }),
+  setPeriod: (year: number, month: number, deadline?: string, status?: string) =>
+    api.post('/shift-requests/period', { year, month, deadline, status }),
+}
+
+// Labor costs & alerts
+export const laborApi = {
+  getCosts: (year: number, month: number) =>
+    api.get('/labor/costs', { params: { year, month } }),
+  getAlerts: (year: number, month: number) =>
+    api.get('/labor/alerts', { params: { year, month } }),
+  getRatio: (year: number, month: number) =>
+    api.get('/labor/ratio', { params: { year, month } }),
+  getSales: (year: number, month: number) =>
+    api.get('/labor/sales', { params: { year, month } }),
+  saveSales: (date: string, amount: number, notes?: string) =>
+    api.post('/labor/sales', { date, amount, notes }),
+}
+
+// Templates
+export interface ShiftTemplate {
+  id: number
+  company_id: number
+  name: string
+  start_time: string
+  end_time: string
+  break_minutes: number
+  color: string
+}
+
+export const templatesApi = {
+  getAll: () => api.get<{ templates: ShiftTemplate[] }>('/templates'),
+  create: (data: Partial<ShiftTemplate>) => api.post<{ template: ShiftTemplate }>('/templates', data),
+  update: (id: number, data: Partial<ShiftTemplate>) => api.put<{ template: ShiftTemplate }>(`/templates/${id}`, data),
+  delete: (id: number) => api.delete(`/templates/${id}`),
+  apply: (id: number, user_ids: number[], dates: string[]) =>
+    api.post(`/templates/${id}/apply`, { user_ids, dates }),
+}
+
+// Absence & Help
+export interface AbsenceReport {
+  id: number
+  company_id: number
+  user_id: number
+  user_name?: string
+  user_color?: string
+  shift_id?: number
+  date: string
+  reason?: string
+  status: 'pending' | 'covered' | 'approved' | 'rejected'
+  cover_user_id?: number
+  cover_user_name?: string
+  start_time?: string
+  end_time?: string
+}
+
+export const absenceApi = {
+  getAll: (params?: { status?: string; year?: number; month?: number }) =>
+    api.get<{ reports: AbsenceReport[] }>('/absence', { params }),
+  report: (data: { shift_id?: number; date: string; reason?: string }) =>
+    api.post<{ report: AbsenceReport }>('/absence', data),
+  cover: (id: number) => api.post(`/absence/${id}/cover`),
+  update: (id: number, status: string) => api.put(`/absence/${id}`, { status }),
+  getHelpRequests: () => api.get<{ reports: AbsenceReport[] }>('/absence/help-requests'),
+}
+
+// CSV Export
+export const csvApi = {
+  downloadShifts: (year: number, month: number) =>
+    api.get('/csv/shifts', { params: { year, month }, responseType: 'blob' }),
+  downloadTimecards: (year: number, month: number) =>
+    api.get('/csv/timecards', { params: { year, month }, responseType: 'blob' }),
+  downloadSummary: (year: number, month: number) =>
+    api.get('/csv/summary', { params: { year, month }, responseType: 'blob' }),
+}
+
+// LINE
+export const lineApi = {
+  getSettings: () => api.get('/line/settings'),
+  saveSettings: (data: any) => api.post('/line/settings', data),
+  register: (line_user_id: string) => api.post('/line/register', { line_user_id }),
+  testNotify: () => api.post('/line/test'),
+}

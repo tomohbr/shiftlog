@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format, addMonths, subMonths } from 'date-fns'
 import { Download, TrendingUp, Clock, DollarSign } from 'lucide-react'
-import { shiftsApi, usersApi, Shift, User } from '../api/client'
+import { shiftsApi, usersApi, csvApi, Shift, User } from '../api/client'
 import MonthNavigator from '../components/MonthNavigator'
 import toast from 'react-hot-toast'
 
@@ -47,30 +47,27 @@ export default function ReportPage() {
   const totalHours = summary.reduce((sum, row) => sum + row.total_hours + row.total_minutes_remainder / 60, 0)
   const totalWage = summary.reduce((sum, row) => sum + row.total_wage, 0)
 
-  const handleExportCSV = () => {
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth() + 1
-
-    const headers = ['スタッフ名', 'シフト日数', '勤務時間', '時給', '給与合計']
-    const rows = summary.map(row => [
-      row.user_name,
-      row.shift_count,
-      `${row.total_hours}時間${row.total_minutes_remainder}分`,
-      `¥${row.hourly_wage}`,
-      `¥${row.total_wage.toLocaleString()}`,
-    ])
-
-    const csvContent = [headers, ...rows]
-      .map(row => row.join(','))
-      .join('\n')
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `シフト集計_${year}年${month}月.csv`
+    link.download = filename
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleExportCSV = async (type: 'shifts' | 'timecards' | 'summary') => {
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth() + 1
+    try {
+      const fn = type === 'shifts' ? csvApi.downloadShifts : type === 'timecards' ? csvApi.downloadTimecards : csvApi.downloadSummary
+      const res = await fn(year, month)
+      const names = { shifts: 'シフト一覧', timecards: 'タイムカード', summary: '勤務集計' }
+      downloadBlob(res.data, `${names[type]}_${year}年${month}月.csv`)
+      toast.success('CSVをダウンロードしました')
+    } catch {
+      toast.error('ダウンロードに失敗しました')
+    }
   }
 
   // Shift detail by date
@@ -91,13 +88,17 @@ export default function ReportPage() {
           onNext={() => setCurrentDate(d => addMonths(d, 1))}
           onToday={() => setCurrentDate(new Date())}
         />
-        <button
-          onClick={handleExportCSV}
-          className="btn-secondary flex items-center gap-2"
-        >
-          <Download className="w-4 h-4" />
-          CSV出力
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => handleExportCSV('summary')} className="btn-secondary flex items-center gap-2">
+            <Download className="w-4 h-4" />勤務集計
+          </button>
+          <button onClick={() => handleExportCSV('shifts')} className="btn-secondary flex items-center gap-2">
+            <Download className="w-4 h-4" />シフト
+          </button>
+          <button onClick={() => handleExportCSV('timecards')} className="btn-secondary flex items-center gap-2">
+            <Download className="w-4 h-4" />タイムカード
+          </button>
+        </div>
       </div>
 
       {/* Summary stats */}

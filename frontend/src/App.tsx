@@ -8,6 +8,11 @@ import StorePage from './pages/StorePage'
 import CompanyPage from './pages/CompanyPage'
 import TimecardPage from './pages/TimecardPage'
 import ProfilePage from './pages/ProfilePage'
+import ShiftRequestPage from './pages/ShiftRequestPage'
+import LaborPage from './pages/LaborPage'
+import AbsencePage from './pages/AbsencePage'
+import TemplatePage from './pages/TemplatePage'
+import LineSettingsPage from './pages/LineSettingsPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -69,6 +74,11 @@ function AppRoutes() {
           <Route path="/stores" element={<StorePage />} />
           <Route path="/companies" element={<CompanyPage />} />
           <Route path="/timecards" element={<TimecardPage />} />
+          <Route path="/shift-requests" element={<ShiftRequestPage />} />
+          <Route path="/labor" element={<LaborPage />} />
+          <Route path="/absence" element={<AbsencePage />} />
+          <Route path="/templates" element={<TemplatePage />} />
+          <Route path="/line-settings" element={<LineSettingsPage />} />
           <Route path="/settings" element={<ProfilePage />} />
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
@@ -83,6 +93,8 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Navigate to="/timecards" replace />} />
         <Route path="/timecards" element={<TimecardPage />} />
+        <Route path="/shift-requests" element={<ShiftRequestPage />} />
+        <Route path="/absence" element={<AbsencePage />} />
         <Route path="/login" element={<Navigate to="/timecards" replace />} />
         <Route path="*" element={<Navigate to="/timecards" replace />} />
       </Routes>
