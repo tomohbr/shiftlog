@@ -1,0 +1,14 @@
+{
+  "name": "workshift",
+  "version": "1.0.0",
+  "description": "ワークシフト - シフト管理システム",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "build": "cd frontend && npm install --include=dev && npm run build && cd ../backend && npm install --include=dev && npm run build",
+    "start": "cd backend && node dist/index.js",
+    "dev": "start.bat"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

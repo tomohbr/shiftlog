@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_18", "npm-9_x"]
+
+[phases.install]
+cmds = ["cd frontend && npm install --include=dev", "cd backend && npm install --include=dev"]
+
+[phases.build]
+cmds = ["cd frontend && npm run build", "cd backend && npm run build"]
+
+[start]
+cmd = "cd backend && node dist/index.js"

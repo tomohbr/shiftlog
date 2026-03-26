@@ -1,0 +1,103 @@
+import { Routes, Route, Navigate } from 'react-router-dom'
+import LoginPage from './pages/LoginPage'
+import DashboardPage from './pages/DashboardPage'
+import StaffPage from './pages/StaffPage'
+import ShiftEditPage from './pages/ShiftEditPage'
+import ReportPage from './pages/ReportPage'
+import StorePage from './pages/StorePage'
+import CompanyPage from './pages/CompanyPage'
+import TimecardPage from './pages/TimecardPage'
+import ProfilePage from './pages/ProfilePage'
+import Layout from './components/Layout'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { KioskProvider } from './contexts/KioskContext'
+
+function AppRoutes() {
+  const { user, selectedCompany, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    )
+  }
+
+  // No company selected - show company selection
+  if (!selectedCompany && user.role === 'admin') {
+    return (
+      <Layout>
+        <Routes>
+          <Route path="/" element={<CompanyPage />} />
+          <Route path="/companies" element={<CompanyPage />} />
+          <Route path="*" element={<Navigate to="/companies" replace />} />
+        </Routes>
+      </Layout>
+    )
+  }
+
+  // Staff with no company
+  if (!selectedCompany) {
+    return (
+      <Layout>
+        <div className="p-8 text-center text-gray-500">
+          所属する会社がありません。管理者にお問い合わせください。
+        </div>
+      </Layout>
+    )
+  }
+
+  // Admin gets full access
+  if (user.role === 'admin') {
+    return (
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/shifts" element={<ShiftEditPage />} />
+          <Route path="/staff" element={<StaffPage />} />
+          <Route path="/report" element={<ReportPage />} />
+          <Route path="/stores" element={<StorePage />} />
+          <Route path="/companies" element={<CompanyPage />} />
+          <Route path="/timecards" element={<TimecardPage />} />
+          <Route path="/settings" element={<ProfilePage />} />
+          <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Layout>
+    )
+  }
+
+  // Staff gets limited routes
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Navigate to="/timecards" replace />} />
+        <Route path="/timecards" element={<TimecardPage />} />
+        <Route path="/login" element={<Navigate to="/timecards" replace />} />
+        <Route path="*" element={<Navigate to="/timecards" replace />} />
+      </Routes>
+    </Layout>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <KioskProvider>
+        <AppRoutes />
+      </KioskProvider>
+    </AuthProvider>
+  )
+}
+
+export default App

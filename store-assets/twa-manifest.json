@@ -1,0 +1,22 @@
+{
+  "packageId": "com.shiftlog.app",
+  "host": "shift-app-production.up.railway.app",
+  "name": "シフトログ",
+  "launcherName": "シフトログ",
+  "display": "standalone",
+  "themeColor": "#2563EB",
+  "navigationColor": "#ffffff",
+  "backgroundColor": "#ffffff",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://shift-app-production.up.railway.app/icons/icon-512.png",
+  "maskableIconUrl": "https://shift-app-production.up.railway.app/icons/icon-512.png",
+  "shortcuts": [],
+  "signing": {
+    "keyPath": "./android.keystore",
+    "alias": "shiftlog"
+  },
+  "generatorApp": "bubblewrap-cli",
+  "appVersion": "1.0.0",
+  "appVersionCode": 1
+}
