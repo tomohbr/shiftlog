@@ -1,6 +1,6 @@
 {
   "packageId": "com.shiftlog.app",
-  "host": "shift-app-production.up.railway.app",
+  "host": "shiftlog-production.up.railway.app",
   "name": "シフトログ",
   "launcherName": "シフトログ",
   "display": "standalone",
@@ -9,8 +9,8 @@
   "backgroundColor": "#ffffff",
   "enableNotifications": false,
   "startUrl": "/",
-  "iconUrl": "https://shift-app-production.up.railway.app/icons/icon-512.png",
-  "maskableIconUrl": "https://shift-app-production.up.railway.app/icons/icon-512.png",
+  "iconUrl": "https://shiftlog-production.up.railway.app/icons/icon-512.png",
+  "maskableIconUrl": "https://shiftlog-production.up.railway.app/icons/icon-512.png",
   "shortcuts": [],
   "signing": {
     "keyPath": "./android.keystore",
