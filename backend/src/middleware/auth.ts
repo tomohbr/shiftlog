@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import db from '../db';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'workshift-secret-key-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'shiftlog-secret-key-2024';
 
 export interface AuthRequest extends Request {
   user?: {

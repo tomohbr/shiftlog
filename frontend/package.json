@@ -1,7 +1,7 @@
 {
-  "name": "workshift-frontend",
+  "name": "shiftlog-frontend",
   "version": "1.0.0",
-  "description": "ワークシフト - シフト管理システム",
+  "description": "シフトログ - シフト管理アプリ",
   "type": "module",
   "scripts": {
     "dev": "vite",

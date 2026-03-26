@@ -1,7 +1,7 @@
 {
-  "name": "workshift",
+  "name": "shiftlog",
   "version": "1.0.0",
-  "description": "ワークシフト - シフト管理システム",
+  "description": "シフトログ - シフト管理アプリ",
   "scripts": {
     "install:all": "cd backend && npm install && cd ../frontend && npm install",
     "build": "cd frontend && npm install --include=dev && npm run build && cd ../backend && npm install --include=dev && npm run build",
@@ -10,5 +10,8 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "puppeteer": "^24.40.0"
   }
 }

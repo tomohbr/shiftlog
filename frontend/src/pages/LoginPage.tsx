@@ -416,8 +416,8 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-lg mb-4">
             <Calendar className="w-9 h-9 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">ワークシフト</h1>
-          <p className="text-gray-500 mt-1">シフト管理システム</p>
+          <h1 className="text-3xl font-bold text-gray-900">シフトログ</h1>
+          <p className="text-gray-500 mt-1">シフト管理アプリ</p>
         </div>
 
         <div className="space-y-4">
