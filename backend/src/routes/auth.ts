@@ -233,7 +233,7 @@ router.post('/pin-login', (req: Request, res: Response): void => {
 // GET /api/auth/me
 router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => {
   const user = db.prepare(
-    'SELECT id, email, name, role FROM users WHERE id = ? AND is_active = 1'
+    'SELECT id, email, name, role, has_seen_onboarding FROM users WHERE id = ? AND is_active = 1'
   ).get(req.user!.id) as any;
 
   if (!user) {
@@ -249,6 +249,12 @@ router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => 
   `).all(user.id);
 
   res.json({ user, companies });
+});
+
+// POST /api/auth/onboarding-complete
+router.post('/onboarding-complete', authenticateToken, (req: AuthRequest, res: Response): void => {
+  db.prepare('UPDATE users SET has_seen_onboarding = 1 WHERE id = ?').run(req.user!.id);
+  res.json({ message: 'ok' });
 });
 
 // POST /api/auth/change-password

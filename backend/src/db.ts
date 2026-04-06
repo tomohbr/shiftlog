@@ -238,6 +238,26 @@ try {
   if (!ucCols.includes('employment_type')) {
     db.exec("ALTER TABLE user_companies ADD COLUMN employment_type TEXT NOT NULL DEFAULT 'part_time'");
   }
+  // has_seen_onboarding カラム追加
+  const userCols2 = db.prepare("PRAGMA table_info(users)").all().map((c: any) => c.name);
+  if (!userCols2.includes('has_seen_onboarding')) {
+    db.exec("ALTER TABLE users ADD COLUMN has_seen_onboarding INTEGER DEFAULT 1");
+  }
+  // feedback テーブル作成
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER,
+      user_id INTEGER NOT NULL,
+      category TEXT NOT NULL DEFAULT 'general',
+      subject TEXT,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (company_id) REFERENCES companies(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+  `);
   // Ensure existing companies have a subscription record (free plan)
   const companiesWithoutSub = db.prepare(`
     SELECT c.id FROM companies c
