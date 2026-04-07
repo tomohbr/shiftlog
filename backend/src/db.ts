@@ -249,6 +249,23 @@ try {
   }
 } catch (e) { /* tables may not exist yet */ }
 
+// super_admin アカウント確保（seed有無に関係なく）
+try {
+  const superEmail = 'shibahara.724@gmail.com';
+  const existingSuper = db.prepare('SELECT id FROM users WHERE email = ?').get(superEmail) as any;
+  if (!existingSuper) {
+    const superHash = bcrypt.hashSync('tomo0724', 10);
+    const superResult = db.prepare(
+      'INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)'
+    ).run(superEmail, superHash, '芝原 朋弥', 'super_admin');
+    // 既存の会社があれば紐づけ
+    const firstCompany = db.prepare('SELECT id FROM companies LIMIT 1').get() as any;
+    if (firstCompany) {
+      db.prepare('INSERT INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)').run(superResult.lastInsertRowid, firstCompany.id, 'admin');
+    }
+  }
+} catch (e) { /* ignore */ }
+
 function seedData() {
   const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@example.com');
   if (existingAdmin) return;
