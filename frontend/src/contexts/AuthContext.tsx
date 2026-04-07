@@ -6,12 +6,10 @@ interface User {
   email: string
   name: string
   role: string
-  has_seen_onboarding?: number
 }
 
 interface AuthContextType {
   user: User | null
-  setUser: (user: User) => void
   companies: Company[]
   selectedCompany: Company | null
   loading: boolean
@@ -109,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, companies, selectedCompany, loading, login, pinLogin, logout, selectCompany }}>
+    <AuthContext.Provider value={{ user, companies, selectedCompany, loading, login, pinLogin, logout, selectCompany }}>
       {children}
     </AuthContext.Provider>
   )

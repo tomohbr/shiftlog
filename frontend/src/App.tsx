@@ -13,10 +13,7 @@ import LaborPage from './pages/LaborPage'
 import AbsencePage from './pages/AbsencePage'
 import TemplatePage from './pages/TemplatePage'
 import LineSettingsPage from './pages/LineSettingsPage'
-import HelpPage from './pages/HelpPage'
-import FeedbackPage from './pages/FeedbackPage'
 import Layout from './components/Layout'
-import OnboardingModal from './components/OnboardingModal'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
 
@@ -64,13 +61,10 @@ function AppRoutes() {
     )
   }
 
-  const showOnboarding = user.has_seen_onboarding === 0
-
   // Admin gets full access
   if (user.role === 'admin') {
     return (
       <Layout>
-        {showOnboarding && <OnboardingModal />}
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -86,8 +80,6 @@ function AppRoutes() {
           <Route path="/templates" element={<TemplatePage />} />
           <Route path="/line-settings" element={<LineSettingsPage />} />
           <Route path="/settings" element={<ProfilePage />} />
-          <Route path="/help" element={<HelpPage />} />
-          <Route path="/feedback" element={<FeedbackPage />} />
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
@@ -98,15 +90,11 @@ function AppRoutes() {
   // Staff gets limited routes
   return (
     <Layout>
-      {showOnboarding && <OnboardingModal />}
       <Routes>
         <Route path="/" element={<Navigate to="/timecards" replace />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/timecards" element={<TimecardPage />} />
         <Route path="/shift-requests" element={<ShiftRequestPage />} />
         <Route path="/absence" element={<AbsencePage />} />
-        <Route path="/help" element={<HelpPage />} />
-        <Route path="/feedback" element={<FeedbackPage />} />
         <Route path="/login" element={<Navigate to="/timecards" replace />} />
         <Route path="*" element={<Navigate to="/timecards" replace />} />
       </Routes>

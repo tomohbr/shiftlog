@@ -21,8 +21,6 @@ import {
   AlertCircle,
   Copy,
   MessageCircle,
-  HelpCircle,
-  Send,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -52,17 +50,12 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/companies', label: '会社管理', icon: Building2 },
     { path: '/line-settings', label: 'LINE通知', icon: MessageCircle },
     { path: '/settings', label: '設定', icon: Settings },
-    { path: '/feedback', label: 'フィードバック', icon: Send },
-    { path: '/help', label: 'ヘルプ', icon: HelpCircle },
   ]
 
   const staffNavItems = [
-    { path: '/dashboard', label: 'シフト表', icon: LayoutDashboard },
     { path: '/timecards', label: 'タイムカード', icon: Clock },
     { path: '/shift-requests', label: 'シフト希望提出', icon: ClipboardList },
     { path: '/absence', label: '欠勤連絡', icon: AlertCircle },
-    { path: '/feedback', label: 'フィードバック', icon: Send },
-    { path: '/help', label: 'ヘルプ', icon: HelpCircle },
   ]
 
   const navItems = user?.role === 'admin' ? adminNavItems : staffNavItems

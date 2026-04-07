@@ -29,19 +29,8 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   }
 
   if (req.user!.role !== 'admin') {
-    // スタッフ: 公開済み月なら全員分、未公開なら自分のみ
-    if (year && month) {
-      const pub = db.prepare(
-        'SELECT is_published FROM shift_publications WHERE company_id = ? AND year = ? AND month = ?'
-      ).get(companyId, parseInt(year as string), parseInt(month as string)) as any;
-      if (!pub || pub.is_published !== 1) {
-        query += ' AND s.user_id = ?';
-        params.push(req.user!.id);
-      }
-    } else {
-      query += ' AND s.user_id = ?';
-      params.push(req.user!.id);
-    }
+    query += ' AND s.user_id = ?';
+    params.push(req.user!.id);
   } else if (user_id) {
     query += ' AND s.user_id = ?';
     params.push(parseInt(user_id as string));

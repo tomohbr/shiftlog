@@ -151,13 +151,6 @@ export const timecardsApi = {
 export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { currentPassword, newPassword }),
-  completeOnboarding: () => api.post('/auth/onboarding-complete'),
-}
-
-export const feedbackApi = {
-  submit: (data: { category: string; subject?: string; message: string }) =>
-    api.post('/feedback', data),
-  getAll: () => api.get('/feedback'),
 }
 
 export interface PlanInfo {

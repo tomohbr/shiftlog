@@ -10,7 +10,6 @@ import toast from 'react-hot-toast'
 
 export default function DashboardPage() {
   const { user, selectedCompany } = useAuth()
-  const isAdmin = user?.role === 'admin'
   const [currentDate, setCurrentDate] = useState(new Date())
   const [shifts, setShifts] = useState<Shift[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -27,33 +26,21 @@ export default function DashboardPage() {
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth() + 1
 
-      const [shiftsRes, pubRes] = await Promise.all([
+      const [shiftsRes, usersRes, pubRes] = await Promise.all([
         shiftsApi.getAll({ year, month }),
+        usersApi.getAll(),
         shiftsApi.getPublication(year, month),
       ])
 
       setShifts(shiftsRes.data.shifts)
+      setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
       setIsPublished(pubRes.data.publication?.is_published === 1)
-
-      // スタッフはusersAPIにアクセスできないので、シフトデータからユーザー情報を構築
-      if (isAdmin) {
-        const usersRes = await usersApi.getAll()
-        setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
-      } else {
-        const uniqueUsers = new Map<number, User>()
-        shiftsRes.data.shifts.forEach((s: Shift) => {
-          if (!uniqueUsers.has(s.user_id)) {
-            uniqueUsers.set(s.user_id, { id: s.user_id, name: s.user_name, color: s.user_color } as User)
-          }
-        })
-        setUsers(Array.from(uniqueUsers.values()))
-      }
     } catch {
       toast.error('データの読み込みに失敗しました')
     } finally {
       setLoading(false)
     }
-  }, [currentDate, selectedCompany, isAdmin])
+  }, [currentDate, selectedCompany])
 
   useEffect(() => {
     loadData()
@@ -96,10 +83,8 @@ export default function DashboardPage() {
             <Calendar className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <p className="text-sm text-gray-500">{isAdmin ? '今月のシフト' : '自分のシフト'}</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {isAdmin ? totalShifts : shifts.filter(s => s.user_id === user?.id).length}
-            </p>
+            <p className="text-sm text-gray-500">今月のシフト</p>
+            <p className="text-2xl font-bold text-gray-900">{totalShifts}</p>
           </div>
         </div>
 
@@ -113,17 +98,15 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {isAdmin && (
-          <div className="card flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">スタッフ数</p>
-              <p className="text-2xl font-bold text-gray-900">{users.length}</p>
-            </div>
+        <div className="card flex items-center gap-4">
+          <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+            <Users className="w-6 h-6 text-purple-600" />
           </div>
-        )}
+          <div>
+            <p className="text-sm text-gray-500">スタッフ数</p>
+            <p className="text-2xl font-bold text-gray-900">{users.length}</p>
+          </div>
+        </div>
       </div>
 
       <div className="card p-0 overflow-hidden">
@@ -135,26 +118,17 @@ export default function DashboardPage() {
             onToday={() => setCurrentDate(new Date())}
           />
           <div className="flex items-center gap-2">
-            {isAdmin ? (
-              <button
-                onClick={handlePublish}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isPublished
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <CheckCircle className="w-4 h-4" />
-                {isPublished ? '公開中' : 'シフト公開'}
-              </button>
-            ) : (
-              <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${
-                isPublished ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-              }`}>
-                <CheckCircle className="w-3.5 h-3.5" />
-                {isPublished ? '公開中' : '未公開'}
-              </span>
-            )}
+            <button
+              onClick={handlePublish}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isPublished
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <CheckCircle className="w-4 h-4" />
+              {isPublished ? '公開中' : 'シフト公開'}
+            </button>
           </div>
         </div>
 
@@ -178,24 +152,22 @@ export default function DashboardPage() {
             <ShiftCalendar
               currentDate={currentDate}
               shifts={shifts}
-              onDayClick={isAdmin ? handleDayClick : undefined}
-              onShiftClick={isAdmin ? handleShiftClick : undefined}
-              isAdmin={isAdmin}
+              onDayClick={handleDayClick}
+              onShiftClick={handleShiftClick}
+              isAdmin={true}
             />
           )}
         </div>
       </div>
 
-      {isAdmin && (
-        <ShiftModal
-          isOpen={modalOpen}
-          onClose={() => { setModalOpen(false); setSelectedShift(null) }}
-          onSave={loadData}
-          date={selectedDate}
-          shift={selectedShift}
-          users={users}
-        />
-      )}
+      <ShiftModal
+        isOpen={modalOpen}
+        onClose={() => { setModalOpen(false); setSelectedShift(null) }}
+        onSave={loadData}
+        date={selectedDate}
+        shift={selectedShift}
+        users={users}
+      />
     </div>
   )
 }
