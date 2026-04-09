@@ -230,6 +230,50 @@ router.post('/pin-login', (req: Request, res: Response): void => {
   });
 });
 
+// POST /api/auth/register - 新規登録（管理者アカウント + 会社作成）
+router.post('/register', (req: Request, res: Response): void => {
+  const { email, password, name, companyName } = req.body;
+
+  if (!email || !password || !name || !companyName) {
+    res.status(400).json({ error: 'すべての項目を入力してください' });
+    return;
+  }
+
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as any;
+  if (existing) {
+    res.status(409).json({ error: 'このメールアドレスは既に登録されています' });
+    return;
+  }
+
+  const hash = bcrypt.hashSync(password, 10);
+  const userResult = db.prepare(
+    'INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)'
+  ).run(email, hash, name, 'admin');
+  const userId = userResult.lastInsertRowid as number;
+
+  const companyPin = String(Math.floor(100000 + Math.random() * 900000));
+  const companyResult = db.prepare(
+    'INSERT INTO companies (name, company_pin) VALUES (?, ?)'
+  ).run(companyName, companyPin);
+  const companyId = companyResult.lastInsertRowid as number;
+
+  db.prepare(
+    'INSERT INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)'
+  ).run(userId, companyId, 'admin');
+
+  const token = jwt.sign(
+    { id: userId, email, role: 'admin', name },
+    JWT_SECRET,
+    { expiresIn: '90d' }
+  );
+
+  res.status(201).json({
+    token,
+    user: { id: userId, email, name, role: 'admin' },
+    companies: [{ id: companyId, name: companyName, company_role: 'admin' }],
+  });
+});
+
 // GET /api/auth/me
 router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => {
   const user = db.prepare(

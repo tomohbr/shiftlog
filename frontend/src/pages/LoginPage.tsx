@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Calendar, Eye, EyeOff, Clock, Coffee, LogOut, ArrowLeft } from 'lucide-react'
+import { Calendar, Eye, EyeOff, Clock, Coffee, LogOut, ArrowLeft, UserPlus } from 'lucide-react'
 import { api } from '../api/client'
 import toast from 'react-hot-toast'
 
@@ -21,8 +21,8 @@ interface TodayRecord {
 }
 
 export default function LoginPage() {
-  const { login, pinLogin } = useAuth()
-  const [mode, setMode] = useState<'select' | 'admin' | 'kiosk' | 'pin-login'>('select')
+  const { login, register, pinLogin } = useAuth()
+  const [mode, setMode] = useState<'select' | 'admin' | 'kiosk' | 'pin-login' | 'register'>('select')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -33,6 +33,12 @@ export default function LoginPage() {
   const [companyName, setCompanyName] = useState('')
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [todayRecords, setTodayRecords] = useState<TodayRecord[]>([])
+
+  // Register state
+  const [regName, setRegName] = useState('')
+  const [regEmail, setRegEmail] = useState('')
+  const [regPassword, setRegPassword] = useState('')
+  const [regCompanyName, setRegCompanyName] = useState('')
 
   // PIN login state
   const [pinLoginCompanyPin, setPinLoginCompanyPin] = useState('')
@@ -47,6 +53,18 @@ export default function LoginPage() {
       await login(email, password)
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'ログインに失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await register(regEmail, regPassword, regName, regCompanyName)
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || '登録に失敗しました')
     } finally {
       setLoading(false)
     }
@@ -358,6 +376,54 @@ export default function LoginPage() {
     )
   }
 
+  // Register
+  if (mode === 'register') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-600 rounded-2xl shadow-lg mb-4">
+              <UserPlus className="w-9 h-9 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900">新規登録</h1>
+            <p className="text-gray-500 mt-1">1店舗なら完全無料で使えます</p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <form onSubmit={handleRegisterSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">お名前</label>
+                <input type="text" value={regName} onChange={e => setRegName(e.target.value)} className="input-field" required autoFocus placeholder="山田太郎" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">店舗名・会社名</label>
+                <input type="text" value={regCompanyName} onChange={e => setRegCompanyName(e.target.value)} className="input-field" required placeholder="〇〇レストラン" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
+                <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="input-field" required placeholder="example@email.com" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
+                <input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="input-field" required placeholder="4文字以上" minLength={4} />
+              </div>
+              <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl text-base transition-colors">
+                {loading ? '登録中...' : '無料で始める'}
+              </button>
+            </form>
+
+            <button
+              onClick={() => setMode('select')}
+              className="w-full mt-4 text-sm text-gray-500 hover:text-gray-700"
+            >
+              戻る
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Admin login
   if (mode === 'admin') {
     return (
@@ -462,6 +528,21 @@ export default function LoginPage() {
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">管理者ログイン</h2>
                 <p className="text-sm text-gray-500">メール + パスワードでログイン</p>
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setMode('register')}
+            className="w-full bg-emerald-600 rounded-2xl shadow-xl p-6 text-left hover:bg-emerald-700 transition-colors"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center">
+                <UserPlus className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">新規登録（無料）</h2>
+                <p className="text-sm text-emerald-100">1店舗なら完全無料で使えます</p>
               </div>
             </div>
           </button>

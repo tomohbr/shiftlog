@@ -14,6 +14,7 @@ interface AuthContextType {
   selectedCompany: Company | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, name: string, companyName: string) => Promise<void>
   pinLogin?: (companyPin: string, userId: number) => Promise<void>
   logout: () => void
   selectCompany: (company: Company) => void
@@ -73,6 +74,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const register = async (email: string, password: string, name: string, companyName: string) => {
+    const res = await api.post('/auth/register', { email, password, name, companyName })
+    const { token, user: u, companies: comps } = res.data
+    localStorage.setItem('token', token)
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    setUser(u)
+    setCompanies(comps || [])
+    if (comps && comps.length > 0) {
+      setSelectedCompany(comps[0])
+      localStorage.setItem('selectedCompanyId', comps[0].id.toString())
+    }
+  }
+
   const pinLogin = async (companyPin: string, userId: number) => {
     const res = await api.post('/auth/pin-login', { companyPin, userId })
     const { token, user: u, companies: comps, selectedCompanyId } = res.data
@@ -107,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, companies, selectedCompany, loading, login, pinLogin, logout, selectCompany }}>
+    <AuthContext.Provider value={{ user, companies, selectedCompany, loading, login, register, pinLogin, logout, selectCompany }}>
       {children}
     </AuthContext.Provider>
   )
