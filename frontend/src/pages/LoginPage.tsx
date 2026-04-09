@@ -292,8 +292,8 @@ export default function LoginPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600 rounded-2xl shadow-lg mb-4">
               <Calendar className="w-9 h-9 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">会社PIN入力</h1>
-            <p className="text-gray-500 mt-1">会社のPINコードを入力してください</p>
+            <h1 className="text-3xl font-bold text-gray-900">スタッフログイン</h1>
+            <p className="text-gray-500 mt-1">店長から共有されたPINコードを入力</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
@@ -433,7 +433,7 @@ export default function LoginPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-lg mb-4">
               <Calendar className="w-9 h-9 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">管理者ログイン</h1>
+            <h1 className="text-3xl font-bold text-gray-900">オーナー・店長ログイン</h1>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
@@ -483,55 +483,11 @@ export default function LoginPage() {
             <Calendar className="w-9 h-9 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">シフトログ</h1>
-          <p className="text-gray-500 mt-1">シフト管理アプリ</p>
+          <p className="text-gray-500 mt-1">かんたんシフト管理アプリ</p>
         </div>
 
         <div className="space-y-4">
-          <button
-            onClick={() => setMode('pin-login')}
-            className="w-full bg-white rounded-2xl shadow-xl p-6 text-left hover:shadow-2xl transition-shadow"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-indigo-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">PINログイン</h2>
-                <p className="text-sm text-gray-500">会社PINでログイン</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setMode('kiosk')}
-            className="w-full bg-white rounded-2xl shadow-xl p-6 text-left hover:shadow-2xl transition-shadow"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                <Clock className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">出退勤</h2>
-                <p className="text-sm text-gray-500">会社PINで出退勤の打刻</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setMode('admin')}
-            className="w-full bg-white rounded-2xl shadow-xl p-6 text-left hover:shadow-2xl transition-shadow"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">管理者ログイン</h2>
-                <p className="text-sm text-gray-500">メール + パスワードでログイン</p>
-              </div>
-            </div>
-          </button>
-
+          {/* 初めての方向け：一番目立つ位置 */}
           <button
             onClick={() => setMode('register')}
             className="w-full bg-emerald-600 rounded-2xl shadow-xl p-6 text-left hover:bg-emerald-700 transition-colors"
@@ -541,8 +497,65 @@ export default function LoginPage() {
                 <UserPlus className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">新規登録（無料）</h2>
-                <p className="text-sm text-emerald-100">1店舗なら完全無料で使えます</p>
+                <h2 className="text-lg font-semibold text-white">初めての方はこちら</h2>
+                <p className="text-sm text-emerald-100">無料でアカウント作成（1分で完了）</p>
+              </div>
+            </div>
+          </button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-gradient-to-br from-blue-50 to-indigo-100 px-3 text-sm text-gray-500">アカウントをお持ちの方</span>
+            </div>
+          </div>
+
+          {/* オーナー・店長向け */}
+          <button
+            onClick={() => setMode('admin')}
+            className="w-full bg-white rounded-2xl shadow-xl p-6 text-left hover:shadow-2xl transition-shadow"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <Calendar className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">オーナー・店長ログイン</h2>
+                <p className="text-sm text-gray-500">メールアドレスとパスワードでログイン</p>
+              </div>
+            </div>
+          </button>
+
+          {/* スタッフ向け */}
+          <button
+            onClick={() => setMode('pin-login')}
+            className="w-full bg-white rounded-2xl shadow-xl p-6 text-left hover:shadow-2xl transition-shadow"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+                <Calendar className="w-6 h-6 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">スタッフログイン</h2>
+                <p className="text-sm text-gray-500">店長から共有されたPINコードでログイン</p>
+              </div>
+            </div>
+          </button>
+
+          {/* 出退勤タブレット用 */}
+          <button
+            onClick={() => setMode('kiosk')}
+            className="w-full bg-white rounded-2xl shadow-xl p-6 text-left hover:shadow-2xl transition-shadow"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                <Clock className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">出退勤タイムレコーダー</h2>
+                <p className="text-sm text-gray-500">店舗に置くタブレットで打刻する方はこちら</p>
               </div>
             </div>
           </button>
