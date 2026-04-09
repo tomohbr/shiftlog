@@ -65,10 +65,21 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
   res.status(403).json({ error: '管理者権限が必要です' });
 }
 
-// Middleware to require a company to be selected
+// Middleware to require a company to be selected AND verify user belongs to it
 export function requireCompany(req: AuthRequest, res: Response, next: NextFunction): void {
   if (!req.companyId) {
     res.status(400).json({ error: '会社を選択してください (X-Company-Id header)' });
+    return;
+  }
+  if (!req.user) {
+    res.status(401).json({ error: '認証が必要です' });
+    return;
+  }
+  const uc = db.prepare(
+    'SELECT 1 FROM user_companies WHERE user_id = ? AND company_id = ?'
+  ).get(req.user.id, req.companyId);
+  if (!uc) {
+    res.status(403).json({ error: 'この会社へのアクセス権限がありません' });
     return;
   }
   next();
