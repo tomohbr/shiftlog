@@ -93,9 +93,14 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   }
 
   // Link to company
-  db.prepare(
-    'INSERT INTO user_companies (user_id, company_id, role, employment_type, color, hourly_wage, phone) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(userId, companyId, role || 'staff', employment_type || 'part_time', color || '#4A90E2', hourly_wage || 0, phone || null);
+  try {
+    db.prepare(
+      'INSERT INTO user_companies (user_id, company_id, role, employment_type, color, hourly_wage, phone) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(userId, companyId, role || 'staff', employment_type || 'part_time', color || '#4A90E2', hourly_wage || 0, phone || null);
+  } catch (err: any) {
+    res.status(400).json({ error: 'スタッフの追加に失敗しました' });
+    return;
+  }
 
   const user = db.prepare(`
     SELECT u.id, u.email, u.name, u.pin, u.role, u.is_active, u.created_at,
