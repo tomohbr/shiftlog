@@ -249,8 +249,32 @@ try {
   }
 } catch (e) { /* tables may not exist yet */ }
 
-// super_admin 自動昇格: 指定メールが登録済みなら role=super_admin に揃える
 export const SUPER_ADMIN_EMAIL = 'shibahara.724@gmail.com';
+
+// 一度だけ実行するマイグレーション管理
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS _migrations (
+    key TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+} catch (e) { /* ignore */ }
+
+// 旧seedで作成された shibahara.724@gmail.com を一度だけ削除し、新規登録できるようにする
+try {
+  const MIG_KEY = 'reset_super_admin_seed_2026_04_14';
+  const done = db.prepare('SELECT 1 FROM _migrations WHERE key = ?').get(MIG_KEY);
+  if (!done) {
+    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(SUPER_ADMIN_EMAIL) as any;
+    if (existing) {
+      db.prepare('DELETE FROM user_companies WHERE user_id = ?').run(existing.id);
+      db.prepare('DELETE FROM users WHERE id = ?').run(existing.id);
+      console.log(`[migration] removed legacy user: ${SUPER_ADMIN_EMAIL}`);
+    }
+    db.prepare('INSERT INTO _migrations (key) VALUES (?)').run(MIG_KEY);
+  }
+} catch (e) { /* ignore */ }
+
+// super_admin 自動昇格: 指定メールが登録済みなら role=super_admin に揃える（安全網）
 try {
   const existingSuper = db.prepare('SELECT id, role FROM users WHERE email = ?').get(SUPER_ADMIN_EMAIL) as any;
   if (existingSuper && existingSuper.role !== 'super_admin') {
