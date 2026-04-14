@@ -249,20 +249,13 @@ try {
   }
 } catch (e) { /* tables may not exist yet */ }
 
-// super_admin アカウント確保（seed有無に関係なく）
+// super_admin 自動昇格: 指定メールが登録済みなら role=super_admin に揃える
+export const SUPER_ADMIN_EMAIL = 'shibahara.724@gmail.com';
 try {
-  const superEmail = 'shibahara.724@gmail.com';
-  const existingSuper = db.prepare('SELECT id FROM users WHERE email = ?').get(superEmail) as any;
-  if (!existingSuper) {
-    const superHash = bcrypt.hashSync('tomo0724', 10);
-    const superResult = db.prepare(
-      'INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)'
-    ).run(superEmail, superHash, '芝原 朋弥', 'super_admin');
-    // 既存の会社があれば紐づけ
-    const firstCompany = db.prepare('SELECT id FROM companies LIMIT 1').get() as any;
-    if (firstCompany) {
-      db.prepare('INSERT INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)').run(superResult.lastInsertRowid, firstCompany.id, 'admin');
-    }
+  const existingSuper = db.prepare('SELECT id, role FROM users WHERE email = ?').get(SUPER_ADMIN_EMAIL) as any;
+  if (existingSuper && existingSuper.role !== 'super_admin') {
+    db.prepare('UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run('super_admin', existingSuper.id);
   }
 } catch (e) { /* ignore */ }
 

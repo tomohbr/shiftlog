@@ -273,6 +273,35 @@ export const csvApi = {
     api.get('/csv/summary', { params: { year, month }, responseType: 'blob' }),
 }
 
+// Admin (super_admin専用)
+export interface AdminUser {
+  id: number
+  email: string | null
+  name: string
+  role: string
+  is_active: boolean
+  created_at: string
+  last_activity: string | null
+  recently_active: boolean
+  in_use: boolean
+  company_count: number
+  companies: { id: number; name: string; role: string }[]
+}
+
+export interface AdminStats {
+  totalUsers: number
+  activeUsers: number
+  totalCompanies: number
+  adminUsers: number
+}
+
+export const adminApi = {
+  getUsers: () => api.get<{ users: AdminUser[] }>('/admin/users'),
+  getStats: () => api.get<AdminStats>('/admin/stats'),
+  setActive: (id: number, is_active: boolean) =>
+    api.patch(`/admin/users/${id}/active`, { is_active }),
+}
+
 // LINE
 export const lineApi = {
   getSettings: () => api.get('/line/settings'),

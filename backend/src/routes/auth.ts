@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import db from '../db';
+import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { JWT_SECRET, authenticateToken, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -246,9 +246,10 @@ router.post('/register', (req: Request, res: Response): void => {
   }
 
   const hash = bcrypt.hashSync(password, 10);
+  const assignedRole = email === SUPER_ADMIN_EMAIL ? 'super_admin' : 'admin';
   const userResult = db.prepare(
     'INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)'
-  ).run(email, hash, name, 'admin');
+  ).run(email, hash, name, assignedRole);
   const userId = userResult.lastInsertRowid as number;
 
   const companyPin = String(Math.floor(100000 + Math.random() * 900000));
@@ -262,14 +263,14 @@ router.post('/register', (req: Request, res: Response): void => {
   ).run(userId, companyId, 'admin');
 
   const token = jwt.sign(
-    { id: userId, email, role: 'admin', name },
+    { id: userId, email, role: assignedRole, name },
     JWT_SECRET,
     { expiresIn: '90d' }
   );
 
   res.status(201).json({
     token,
-    user: { id: userId, email, name, role: 'admin' },
+    user: { id: userId, email, name, role: assignedRole },
     companies: [{ id: companyId, name: companyName, company_role: 'admin' }],
   });
 });

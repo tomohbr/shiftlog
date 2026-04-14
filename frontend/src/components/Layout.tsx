@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Copy,
   MessageCircle,
+  Shield,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -34,7 +35,8 @@ export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false)
 
-  const isStaff = user?.role !== 'admin'
+  const isAdminRole = user?.role === 'admin' || user?.role === 'super_admin'
+  const isStaff = !isAdminRole
 
   const adminNavItems = [
     { path: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
@@ -50,6 +52,9 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/companies', label: '会社管理', icon: Building2 },
     { path: '/line-settings', label: 'LINE通知', icon: MessageCircle },
     { path: '/settings', label: '設定', icon: Settings },
+    ...(user?.role === 'super_admin'
+      ? [{ path: '/admin', label: 'システム管理', icon: Shield }]
+      : []),
   ]
 
   const staffNavItems = [
@@ -58,7 +63,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/absence', label: '欠勤連絡', icon: AlertCircle },
   ]
 
-  const navItems = user?.role === 'admin' ? adminNavItems : staffNavItems
+  const navItems = isAdminRole ? adminNavItems : staffNavItems
   const isActive = (path: string) => location.pathname === path
 
   const getStatusInfo = (record: any) => {

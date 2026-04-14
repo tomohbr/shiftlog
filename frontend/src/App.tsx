@@ -13,6 +13,7 @@ import LaborPage from './pages/LaborPage'
 import AbsencePage from './pages/AbsencePage'
 import TemplatePage from './pages/TemplatePage'
 import LineSettingsPage from './pages/LineSettingsPage'
+import SuperAdminPage from './pages/SuperAdminPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -37,8 +38,10 @@ function AppRoutes() {
     )
   }
 
+  const isAdminRole = user.role === 'admin' || user.role === 'super_admin'
+
   // No company selected - show company selection
-  if (!selectedCompany && user.role === 'admin') {
+  if (!selectedCompany && isAdminRole) {
     return (
       <Layout>
         <Routes>
@@ -61,8 +64,8 @@ function AppRoutes() {
     )
   }
 
-  // Admin gets full access
-  if (user.role === 'admin') {
+  // Admin / Super admin gets full access
+  if (isAdminRole) {
     return (
       <Layout>
         <Routes>
@@ -80,6 +83,9 @@ function AppRoutes() {
           <Route path="/templates" element={<TemplatePage />} />
           <Route path="/line-settings" element={<LineSettingsPage />} />
           <Route path="/settings" element={<ProfilePage />} />
+          {user.role === 'super_admin' && (
+            <Route path="/admin" element={<SuperAdminPage />} />
+          )}
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

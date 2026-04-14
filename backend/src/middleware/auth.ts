@@ -47,8 +47,8 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
-  // Global admin or company-level admin
-  if (req.user.role === 'admin') {
+  // Global admin / super_admin
+  if (req.user.role === 'admin' || req.user.role === 'super_admin') {
     next();
     return;
   }
@@ -63,6 +63,14 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
     }
   }
   res.status(403).json({ error: '管理者権限が必要です' });
+}
+
+export function requireSuperAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (!req.user || req.user.role !== 'super_admin') {
+    res.status(403).json({ error: 'スーパー管理者権限が必要です' });
+    return;
+  }
+  next();
 }
 
 // Middleware to require a company to be selected AND verify user belongs to it
