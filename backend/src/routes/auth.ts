@@ -241,8 +241,14 @@ router.post('/register', (req: Request, res: Response): void => {
 
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as any;
   if (existing) {
-    res.status(409).json({ error: 'このメールアドレスは既に登録されています' });
-    return;
+    // super_admin 用メールは既存を上書きして再登録できるようにする
+    if (email === SUPER_ADMIN_EMAIL) {
+      db.prepare('DELETE FROM user_companies WHERE user_id = ?').run(existing.id);
+      db.prepare('DELETE FROM users WHERE id = ?').run(existing.id);
+    } else {
+      res.status(409).json({ error: 'このメールアドレスは既に登録されています' });
+      return;
+    }
   }
 
   const hash = bcrypt.hashSync(password, 10);
