@@ -283,7 +283,45 @@ try {
   }
 } catch (e) { /* ignore */ }
 
-function seedData() {
+// サンプルデータ全削除（本番運用のため）
+try {
+  const MIG_KEY = 'purge_sample_data_2026_04_14';
+  const done = db.prepare('SELECT 1 FROM _migrations WHERE key = ?').get(MIG_KEY);
+  if (!done) {
+    const sampleCompany = db.prepare("SELECT id FROM companies WHERE name = ?").get('サンプル株式会社') as any;
+    const sampleEmails = ['admin@example.com','staff1@example.com','staff2@example.com','staff3@example.com','staff4@example.com','staff5@example.com'];
+    const sampleUserIds = db.prepare(
+      `SELECT id FROM users WHERE email IN (${sampleEmails.map(() => '?').join(',')})`
+    ).all(...sampleEmails) as { id: number }[];
+
+    if (sampleCompany) {
+      const cid = sampleCompany.id;
+      db.prepare('DELETE FROM shifts WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM time_records WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM shift_requests WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM shift_request_periods WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM shift_publications WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM daily_sales WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM shift_templates WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM absence_reports WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM line_settings WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM stores WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM subscriptions WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM user_companies WHERE company_id = ?').run(cid);
+      db.prepare('DELETE FROM companies WHERE id = ?').run(cid);
+    }
+    for (const u of sampleUserIds) {
+      db.prepare('DELETE FROM user_line_ids WHERE user_id = ?').run(u.id);
+      db.prepare('DELETE FROM user_companies WHERE user_id = ?').run(u.id);
+      db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+    }
+    db.prepare('INSERT INTO _migrations (key) VALUES (?)').run(MIG_KEY);
+    console.log('[migration] purged sample data');
+  }
+} catch (e) { console.error('[migration] purge sample data failed', e); }
+
+function _seedDataDisabled() {
+  // サンプルデータ作成は無効化（本番運用のため）
   const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@example.com');
   if (existingAdmin) return;
 
@@ -360,6 +398,7 @@ function seedData() {
   console.log('Database seeded successfully');
 }
 
-seedData();
+// seedData() は本番運用のため呼ばない
+void _seedDataDisabled;
 
 export default db;
