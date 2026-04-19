@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, X, Store, Crown, AlertTriangle } from 'lucide-react'
-import { storesApi, Store as StoreType, PlanInfo } from '../api/client'
+import { storesApi, billingApi, Store as StoreType, PlanInfo } from '../api/client'
 import toast from 'react-hot-toast'
 
 interface StoreModalProps {
@@ -79,6 +79,25 @@ interface UpgradeModalProps {
 
 function UpgradeModal({ planInfo, onClose }: UpgradeModalProps) {
   const [copied, setCopied] = useState(false)
+  const [stripeConfigured, setStripeConfigured] = useState<boolean | null>(null)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+
+  useEffect(() => {
+    billingApi.getPlan()
+      .then(res => setStripeConfigured(res.data.stripe_configured))
+      .catch(() => setStripeConfigured(false))
+  }, [])
+
+  const handleStripeCheckout = async () => {
+    setCheckoutLoading(true)
+    try {
+      const res = await billingApi.createCheckout(1)
+      window.location.href = res.data.url
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || '決済ページの作成に失敗しました')
+      setCheckoutLoading(false)
+    }
+  }
 
   const handleCopyEmail = () => {
     navigator.clipboard.writeText('shibahara.724@gmail.com')
@@ -119,19 +138,30 @@ function UpgradeModal({ planInfo, onClose }: UpgradeModalProps) {
             </ul>
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm font-medium text-gray-800 mb-2">お申し込み方法</p>
-            <p className="text-sm text-gray-600 mb-3">
-              以下のメールアドレスまで、会社名と追加店舗数をご連絡ください。お振込先をご案内いたします。
-            </p>
+          {stripeConfigured ? (
             <button
-              onClick={handleCopyEmail}
-              className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-lg py-2.5 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+              type="button"
+              onClick={handleStripeCheckout}
+              disabled={checkoutLoading}
+              className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold py-3 px-4 rounded-lg hover:from-yellow-600 hover:to-orange-600 transition disabled:opacity-60"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-              {copied ? 'コピーしました!' : 'shibahara.724@gmail.com'}
+              {checkoutLoading ? '決済ページへ移動中...' : '店舗を1つ追加（月額¥980）'}
             </button>
-          </div>
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="text-sm font-medium text-gray-800 mb-2">お申し込み方法</p>
+              <p className="text-sm text-gray-600 mb-3">
+                以下のメールアドレスまで、会社名と追加店舗数をご連絡ください。お振込先をご案内いたします。
+              </p>
+              <button
+                onClick={handleCopyEmail}
+                className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-lg py-2.5 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                {copied ? 'コピーしました!' : 'shibahara.724@gmail.com'}
+              </button>
+            </div>
+          )}
 
           <div className="pt-2">
             <button type="button" onClick={onClose} className="btn-secondary w-full">閉じる</button>

@@ -268,6 +268,11 @@ router.post('/register', (req: Request, res: Response): void => {
     'INSERT INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)'
   ).run(userId, companyId, 'admin');
 
+  // 新規会社は無料プラン1店舗で初期化
+  db.prepare(
+    'INSERT INTO subscriptions (company_id, plan, max_stores) VALUES (?, ?, ?)'
+  ).run(companyId, 'free', 1);
+
   const token = jwt.sign(
     { id: userId, email, role: assignedRole, name },
     JWT_SECRET,
