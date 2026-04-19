@@ -40,7 +40,7 @@ router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
 router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -83,7 +83,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
 router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -109,7 +109,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
 router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
