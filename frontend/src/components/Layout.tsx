@@ -22,6 +22,8 @@ import {
   Copy,
   MessageCircle,
   Shield,
+  HelpCircle,
+  MessageSquare,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -52,6 +54,8 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/companies', label: '会社管理', icon: Building2 },
     { path: '/line-settings', label: 'LINE通知', icon: MessageCircle },
     { path: '/settings', label: '設定', icon: Settings },
+    { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
+    { path: '/feedback', label: 'フィードバック', icon: MessageSquare },
     ...(user?.role === 'super_admin'
       ? [{ path: '/admin', label: 'システム管理', icon: Shield }]
       : []),
@@ -61,6 +65,8 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/timecards', label: 'タイムカード', icon: Clock },
     { path: '/shift-requests', label: 'シフト希望提出', icon: ClipboardList },
     { path: '/absence', label: '欠勤連絡', icon: AlertCircle },
+    { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
+    { path: '/feedback', label: 'フィードバック', icon: MessageSquare },
   ]
 
   const navItems = isAdminRole ? adminNavItems : staffNavItems

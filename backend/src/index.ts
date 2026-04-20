@@ -15,6 +15,7 @@ import absenceRoutes from './routes/absence';
 import csvRoutes from './routes/csv';
 import lineRoutes from './routes/line';
 import adminRoutes from './routes/admin';
+import feedbackRoutes from './routes/feedback';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +44,7 @@ app.use('/api/absence', absenceRoutes);
 app.use('/api/csv', csvRoutes);
 app.use('/api/line', lineRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

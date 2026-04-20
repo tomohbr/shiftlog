@@ -173,6 +173,19 @@ export const billingApi = {
     api.post<{ url: string }>('/billing/checkout', { additional_stores }),
 }
 
+// Feedback (フィードバック)
+export type FeedbackCategory = 'bug' | 'feature' | 'question' | 'other'
+export interface FeedbackPayload {
+  category: FeedbackCategory
+  message: string
+  email?: string
+}
+
+export const feedbackApi = {
+  submit: (payload: FeedbackPayload) =>
+    api.post<{ message: string }>('/feedback', payload),
+}
+
 // Shift Requests (希望シフト収集)
 export interface ShiftRequest {
   id: number
