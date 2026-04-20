@@ -16,6 +16,7 @@ import LineSettingsPage from './pages/LineSettingsPage'
 import SuperAdminPage from './pages/SuperAdminPage'
 import HelpPage from './pages/HelpPage'
 import FeedbackPage from './pages/FeedbackPage'
+import FeedbackAdminPage from './pages/FeedbackAdminPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -88,7 +89,10 @@ function AppRoutes() {
           <Route path="/help" element={<HelpPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
           {user.role === 'super_admin' && (
-            <Route path="/admin" element={<SuperAdminPage />} />
+            <>
+              <Route path="/admin" element={<SuperAdminPage />} />
+              <Route path="/feedback-admin" element={<FeedbackAdminPage />} />
+            </>
           )}
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

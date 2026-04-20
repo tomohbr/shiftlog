@@ -24,6 +24,7 @@ import {
   Shield,
   HelpCircle,
   MessageSquare,
+  Inbox,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -57,7 +58,10 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
     { path: '/feedback', label: 'フィードバック', icon: MessageSquare },
     ...(user?.role === 'super_admin'
-      ? [{ path: '/admin', label: 'システム管理', icon: Shield }]
+      ? [
+          { path: '/admin', label: 'システム管理', icon: Shield },
+          { path: '/feedback-admin', label: 'フィードバック管理', icon: Inbox },
+        ]
       : []),
   ]
 

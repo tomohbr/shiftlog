@@ -175,15 +175,35 @@ export const billingApi = {
 
 // Feedback (フィードバック)
 export type FeedbackCategory = 'bug' | 'feature' | 'question' | 'other'
+export type FeedbackStatus = 'open' | 'in_progress' | 'closed'
 export interface FeedbackPayload {
   category: FeedbackCategory
   message: string
   email?: string
 }
+export interface FeedbackItem {
+  id: number
+  user_id: number | null
+  company_id: number | null
+  category: FeedbackCategory
+  message: string
+  email: string | null
+  status: FeedbackStatus
+  created_at: string
+  user_email: string | null
+  user_name: string | null
+  company_name: string | null
+}
 
 export const feedbackApi = {
   submit: (payload: FeedbackPayload) =>
     api.post<{ message: string }>('/feedback', payload),
+  list: () =>
+    api.get<{ feedbacks: FeedbackItem[] }>('/feedback'),
+  updateStatus: (id: number, status: FeedbackStatus) =>
+    api.patch<{ message: string }>(`/feedback/${id}/status`, { status }),
+  remove: (id: number) =>
+    api.delete<{ message: string }>(`/feedback/${id}`),
 }
 
 // Shift Requests (希望シフト収集)

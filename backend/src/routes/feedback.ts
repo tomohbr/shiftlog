@@ -50,4 +50,45 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response): void => {
   res.json({ feedbacks });
 });
 
+// PATCH /api/feedback/:id/status - super_admin のみ
+router.patch('/:id/status', authenticateToken, (req: AuthRequest, res: Response): void => {
+  if (req.user?.role !== 'super_admin') {
+    res.status(403).json({ error: '権限がありません' });
+    return;
+  }
+
+  const { status } = req.body;
+  const validStatuses = ['open', 'in_progress', 'closed'];
+  if (!validStatuses.includes(status)) {
+    res.status(400).json({ error: 'ステータスが不正です' });
+    return;
+  }
+
+  const result = db.prepare('UPDATE feedbacks SET status = ? WHERE id = ?')
+    .run(status, req.params.id);
+
+  if (result.changes === 0) {
+    res.status(404).json({ error: 'フィードバックが見つかりません' });
+    return;
+  }
+
+  res.json({ message: '更新しました' });
+});
+
+// DELETE /api/feedback/:id - super_admin のみ
+router.delete('/:id', authenticateToken, (req: AuthRequest, res: Response): void => {
+  if (req.user?.role !== 'super_admin') {
+    res.status(403).json({ error: '権限がありません' });
+    return;
+  }
+
+  const result = db.prepare('DELETE FROM feedbacks WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) {
+    res.status(404).json({ error: 'フィードバックが見つかりません' });
+    return;
+  }
+
+  res.json({ message: '削除しました' });
+});
+
 export default router;
