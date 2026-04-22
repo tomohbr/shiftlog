@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { JWT_SECRET, authenticateToken, AuthRequest } from '../middleware/auth';
+import { logAudit } from '../utils/audit';
 
 const router = Router();
 
@@ -272,6 +273,8 @@ router.post('/register', (req: Request, res: Response): void => {
   db.prepare(
     'INSERT INTO subscriptions (company_id, plan, max_stores) VALUES (?, ?, ?)'
   ).run(companyId, 'free', 1);
+
+  logAudit({ userId: userId, companyId, action: 'create', entity: 'company', entityId: companyId, summary: `会社「${companyName}」を新規作成` });
 
   const token = jwt.sign(
     { id: userId, email, role: assignedRole, name },

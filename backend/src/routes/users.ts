@@ -2,8 +2,86 @@ import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { logAudit } from '../utils/audit';
 
 const router = Router();
+
+function isAdmin(role?: string) {
+  return role === 'admin' || role === 'super_admin';
+}
+
+// POST /api/users/bulk - CSV一括インポート
+// body: { rows: [{name, email?, pin?, hourly_wage?, employment_type?, phone?}] }
+router.post('/bulk', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!isAdmin(req.user?.role)) {
+    res.status(403).json({ error: '管理者権限が必要です' });
+    return;
+  }
+  const companyId = req.companyId!;
+  const rows = req.body?.rows;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    res.status(400).json({ error: 'rows (配列) が必要です' });
+    return;
+  }
+  if (rows.length > 500) {
+    res.status(400).json({ error: '一度に登録できるのは500件までです' });
+    return;
+  }
+
+  const results: Array<{ row: number; status: 'created' | 'skipped' | 'error'; message?: string; user_id?: number }> = [];
+  const txn = db.transaction(() => {
+    rows.forEach((row: any, idx: number) => {
+      const name = (row.name || '').toString().trim();
+      if (!name) {
+        results.push({ row: idx + 1, status: 'error', message: '氏名が空です' });
+        return;
+      }
+      const email = row.email ? String(row.email).trim().toLowerCase() : null;
+      const pin = row.pin ? String(row.pin).trim() : null;
+      const hourlyWage = row.hourly_wage != null ? Number(row.hourly_wage) : 1000;
+      const employmentType = row.employment_type || 'パート';
+      const phone = row.phone ? String(row.phone).trim() : null;
+
+      // 重複チェック（同一会社内で同名+同PINがあればスキップ）
+      let existingUserId: number | null = null;
+      if (email) {
+        const u = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as any;
+        if (u) existingUserId = u.id;
+      }
+      if (existingUserId) {
+        const uc = db.prepare('SELECT 1 FROM user_companies WHERE user_id = ? AND company_id = ?').get(existingUserId, companyId);
+        if (uc) {
+          results.push({ row: idx + 1, status: 'skipped', message: '既に会社に登録済みです', user_id: existingUserId });
+          return;
+        }
+      }
+
+      let userId: number;
+      if (existingUserId) {
+        userId = existingUserId;
+      } else {
+        const defaultPassword = bcrypt.hashSync(Math.random().toString(36).slice(2, 12), 10);
+        const r = db.prepare('INSERT INTO users (email, password, name, pin, role) VALUES (?, ?, ?, ?, ?)').run(email, defaultPassword, name, pin, 'staff');
+        userId = Number(r.lastInsertRowid);
+      }
+
+      db.prepare(`
+        INSERT OR IGNORE INTO user_companies (user_id, company_id, role, hourly_wage, employment_type, phone)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(userId, companyId, 'staff', hourlyWage, employmentType, phone);
+
+      results.push({ row: idx + 1, status: 'created', user_id: userId });
+    });
+  });
+
+  try {
+    txn();
+    logAudit({ userId: req.user!.id, companyId, action: 'bulk_import', entity: 'user', summary: `${results.filter(r => r.status === 'created').length} 名をCSV一括登録` });
+    res.json({ results });
+  } catch (e: any) {
+    res.status(500).json({ error: '一括インポートに失敗しました: ' + e.message });
+  }
+});
 
 // GET /api/users - Get all users for the selected company
 router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { logAudit } from '../utils/audit';
 
 const router = Router();
 
@@ -76,6 +77,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   ).run(companyId, name, address || null, phone || null);
 
   const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(result.lastInsertRowid);
+  logAudit({ userId: req.user!.id, companyId, action: 'create', entity: 'store', entityId: Number(result.lastInsertRowid), summary: `店舗「${name}」を追加` });
   res.status(201).json({ store });
 });
 
@@ -102,6 +104,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   ).run(name, address || null, phone || null, req.params.id, companyId);
 
   const updated = db.prepare('SELECT * FROM stores WHERE id = ?').get(req.params.id);
+  logAudit({ userId: req.user!.id, companyId, action: 'update', entity: 'store', entityId: Number(req.params.id), summary: `店舗「${name}」を更新` });
   res.json({ store: updated });
 });
 
@@ -123,6 +126,7 @@ router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res:
   }
 
   db.prepare('DELETE FROM stores WHERE id = ? AND company_id = ?').run(req.params.id, companyId);
+  logAudit({ userId: req.user!.id, companyId, action: 'delete', entity: 'store', entityId: Number(req.params.id), summary: `店舗「${(store as any).name}」を削除` });
   res.json({ message: '店舗を削除しました' });
 });
 

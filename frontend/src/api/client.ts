@@ -206,6 +206,98 @@ export const feedbackApi = {
     api.delete<{ message: string }>(`/feedback/${id}`),
 }
 
+// 監査ログ
+export interface AuditLogItem {
+  id: number
+  user_id: number | null
+  company_id: number | null
+  action: string
+  entity: string
+  entity_id: number | null
+  summary: string | null
+  detail: string | null
+  created_at: string
+  user_name: string | null
+  user_email: string | null
+  company_name: string | null
+}
+export const auditApi = {
+  list: (params?: { entity?: string; action?: string; limit?: number }) =>
+    api.get<{ logs: AuditLogItem[] }>('/audit-logs', { params }),
+}
+
+// スキル
+export interface Skill {
+  id: number
+  company_id: number
+  name: string
+  color: string
+  user_count?: number
+}
+export const skillsApi = {
+  list: () => api.get<{ skills: Skill[] }>('/skills'),
+  create: (name: string, color?: string) => api.post<{ skill: Skill }>('/skills', { name, color }),
+  remove: (id: number) => api.delete<{ message: string }>(`/skills/${id}`),
+  getUserSkills: (userId: number) => api.get<{ skills: Skill[] }>(`/skills/user/${userId}`),
+  setUserSkills: (userId: number, skillIds: number[]) =>
+    api.put<{ message: string }>(`/skills/user/${userId}`, { skill_ids: skillIds }),
+}
+
+// シフト交代
+export type SwapStatus = 'pending' | 'accepted' | 'rejected'
+export interface ShiftSwap {
+  id: number
+  company_id: number
+  requester_id: number
+  requester_name: string
+  shift_id: number
+  target_user_id: number | null
+  target_user_name: string | null
+  reason: string | null
+  status: SwapStatus
+  responder_id: number | null
+  responder_name: string | null
+  created_at: string
+  resolved_at: string | null
+  date: string
+  start_time: string
+  end_time: string
+}
+export const swapsApi = {
+  list: () => api.get<{ swaps: ShiftSwap[] }>('/swaps'),
+  create: (shiftId: number, targetUserId?: number | null, reason?: string) =>
+    api.post<{ id: number }>('/swaps', { shift_id: shiftId, target_user_id: targetUserId || null, reason }),
+  accept: (id: number) => api.post<{ message: string }>(`/swaps/${id}/accept`),
+  reject: (id: number) => api.post<{ message: string }>(`/swaps/${id}/reject`),
+  remove: (id: number) => api.delete<{ message: string }>(`/swaps/${id}`),
+}
+
+// iCal
+export const icalApi = {
+  getToken: () => api.post<{ url: string; token: string }>('/ical/token'),
+  revoke: () => api.delete<{ message: string }>('/ical/token'),
+}
+
+// ユーザー一括インポート
+export interface BulkImportRow {
+  name: string
+  email?: string
+  pin?: string
+  hourly_wage?: number
+  employment_type?: string
+  phone?: string
+}
+export interface BulkImportResult {
+  row: number
+  status: 'created' | 'skipped' | 'error'
+  message?: string
+  user_id?: number
+}
+export const userBulkApi = {
+  import: (rows: BulkImportRow[]) =>
+    api.post<{ results: BulkImportResult[] }>('/users/bulk', { rows }),
+}
+
 // Shift Requests (希望シフト収集)
 export interface ShiftRequest {
   id: number

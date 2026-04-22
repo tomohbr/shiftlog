@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { logAudit } from '../utils/audit';
 
 const router = Router();
 
@@ -113,8 +114,9 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
     JOIN users u ON s.user_id = u.id
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
     WHERE s.id = ?
-  `).get(result.lastInsertRowid);
+  `).get(result.lastInsertRowid) as any;
 
+  logAudit({ userId: req.user!.id, companyId, action: 'create', entity: 'shift', entityId: Number(result.lastInsertRowid), summary: `${shift?.user_name} ${date} ${start_time}-${end_time} のシフトを追加` });
   res.status(201).json({ shift });
 });
 
@@ -179,6 +181,7 @@ router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res:
   }
 
   db.prepare('DELETE FROM shifts WHERE id = ? AND company_id = ?').run(req.params.id, companyId);
+  logAudit({ userId: req.user!.id, companyId, action: 'delete', entity: 'shift', entityId: Number(req.params.id), summary: `シフト #${req.params.id} を削除` });
   res.json({ message: 'シフトを削除しました' });
 });
 
@@ -280,7 +283,7 @@ router.get('/publication/:year/:month', authenticateToken, requireCompany, (req:
 router.post('/publication', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -307,6 +310,8 @@ router.post('/publication', authenticateToken, requireCompany, (req: AuthRequest
       VALUES (?, ?, ?, ?, CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END)
     `).run(companyId, year, month, is_published ? 1 : 0, is_published ? 1 : 0);
   }
+
+  logAudit({ userId: req.user!.id, companyId, action: is_published ? 'publish' : 'cancel', entity: 'shift_publication', summary: `${year}年${month}月のシフトを${is_published ? '公開' : '非公開化'}` });
 
   const publication = db.prepare(
     'SELECT * FROM shift_publications WHERE company_id = ? AND year = ? AND month = ?'

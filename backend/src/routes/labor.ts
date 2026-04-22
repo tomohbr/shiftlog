@@ -121,20 +121,44 @@ router.get('/alerts', authenticateToken, requireCompany, (req: AuthRequest, res:
       }
     }
 
-    // 月間残業チェック (160時間基準)
+    // 月間合計時間・残業
     let monthlyHours = 0;
+    // 日次8時間超（法定労働時間超過）検出
     for (const s of userShifts) {
       const [sh, sm] = s.start_time.split(':').map(Number);
       const [eh, em] = s.end_time.split(':').map(Number);
-      monthlyHours += Math.max(0, (eh * 60 + em - sh * 60 - sm - (s.break_minutes || 0)) / 60);
+      const dayHours = Math.max(0, (eh * 60 + em - sh * 60 - sm - (s.break_minutes || 0)) / 60);
+      monthlyHours += dayHours;
+      if (dayHours > 8) {
+        alerts.push({
+          type: 'daily_overtime',
+          severity: dayHours > 12 ? 'error' : 'warning',
+          user_id: Number(userId),
+          user_name: userName,
+          message: `${userName}: ${s.date} の勤務が${dayHours.toFixed(1)}時間（法定8時間超過）`,
+          date: s.date,
+          hours: dayHours,
+        });
+      }
     }
-    if (monthlyHours > 160) {
+    // 36協定: 法定労働時間 (月160時間) を超える分を残業時間として計算
+    const overtimeHours = Math.max(0, monthlyHours - 160);
+    if (overtimeHours > 45) {
       alerts.push({
-        type: 'monthly_overtime',
-        severity: monthlyHours > 180 ? 'error' : 'warning',
+        type: 'agreement36_month',
+        severity: overtimeHours > 80 ? 'error' : 'warning',
         user_id: Number(userId),
         user_name: userName,
-        message: `${userName}: 月間${monthlyHours.toFixed(1)}時間（160時間超過）`,
+        message: `${userName}: 月間残業${overtimeHours.toFixed(1)}時間（36協定 月45h上限超過${overtimeHours > 80 ? '・特別条項80h超過' : ''}）`,
+        hours: overtimeHours,
+      });
+    } else if (monthlyHours > 160) {
+      alerts.push({
+        type: 'monthly_overtime',
+        severity: 'warning',
+        user_id: Number(userId),
+        user_name: userName,
+        message: `${userName}: 月間${monthlyHours.toFixed(1)}時間（法定160時間超過、残業${overtimeHours.toFixed(1)}h）`,
         hours: monthlyHours,
       });
     }

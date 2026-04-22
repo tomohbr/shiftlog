@@ -219,6 +219,80 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (company_id) REFERENCES companies(id)
   );
+
+  -- 監査ログ（誰がいつ何を変更したか）
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    company_id INTEGER,
+    action TEXT NOT NULL,
+    entity TEXT NOT NULL,
+    entity_id INTEGER,
+    summary TEXT,
+    detail TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_company ON audit_logs(company_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id, created_at DESC);
+
+  -- スキル/タグ（"閉店できる" "教育担当" などの能力ラベル）
+  CREATE TABLE IF NOT EXISTS skills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT DEFAULT '#6B7280',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id),
+    UNIQUE(company_id, name)
+  );
+  CREATE TABLE IF NOT EXISTS user_skills (
+    user_id INTEGER NOT NULL,
+    skill_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, skill_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
+  );
+
+  -- シフト交代リクエスト（スタッフ→スタッフ）
+  CREATE TABLE IF NOT EXISTS shift_swaps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    requester_id INTEGER NOT NULL,
+    shift_id INTEGER NOT NULL,
+    target_user_id INTEGER,
+    reason TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    responder_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME,
+    FOREIGN KEY (company_id) REFERENCES companies(id),
+    FOREIGN KEY (requester_id) REFERENCES users(id),
+    FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_user_id) REFERENCES users(id),
+    FOREIGN KEY (responder_id) REFERENCES users(id)
+  );
+
+  -- Web Push 購読（将来有効化）
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  -- iCal フィードトークン（ユーザーごとのカレンダー購読用）
+  CREATE TABLE IF NOT EXISTS ical_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    token TEXT NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 // ---- Subscriptions table ----

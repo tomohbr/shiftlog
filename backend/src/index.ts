@@ -16,6 +16,10 @@ import csvRoutes from './routes/csv';
 import lineRoutes from './routes/line';
 import adminRoutes from './routes/admin';
 import feedbackRoutes from './routes/feedback';
+import auditRoutes from './routes/audit';
+import skillsRoutes from './routes/skills';
+import swapsRoutes from './routes/swaps';
+import icalRoutes from './routes/ical';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -45,6 +49,10 @@ app.use('/api/csv', csvRoutes);
 app.use('/api/line', lineRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/audit-logs', auditRoutes);
+app.use('/api/skills', skillsRoutes);
+app.use('/api/swaps', swapsRoutes);
+app.use('/api/ical', icalRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
