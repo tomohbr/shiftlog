@@ -50,7 +50,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
     res.status(404).json({ error: 'シフトが見つかりません' });
     return;
   }
-  if (shift.user_id !== userId && req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
+  if (shift.user_id !== userId && !['admin','super_admin'].includes(req.user!.role) && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '自分のシフトのみ交代リクエスト可能です' });
     return;
   }

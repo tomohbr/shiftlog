@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import ShiftCalendar from '../components/ShiftCalendar'
 import ShiftModal from '../components/ShiftModal'
 import MonthNavigator from '../components/MonthNavigator'
-import { shiftsApi, usersApi, laborApi, swapsApi, Shift, User } from '../api/client'
+import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, Shift, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -121,7 +121,23 @@ export default function DashboardPage() {
                   <span>シフトを作成</span>
                 </Link>
               </div>
-              <Link to="/help" className="inline-block mt-3 text-xs text-blue-700 hover:underline">使い方ヘルプを見る →</Link>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={async () => {
+                    if (!confirm('動作確認用のサンプル店舗・スタッフ4名・今週のシフトを一括投入します。よろしいですか？（あとで削除できます）')) return
+                    try {
+                      const r = await seedApi.demo()
+                      toast.success(`サンプルデータを投入しました（店舗${r.data.created.store}/スタッフ${r.data.created.staff}/シフト${r.data.created.shifts}）`)
+                      loadData()
+                    } catch (e: any) { toast.error(e.response?.data?.error || '失敗') }
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" /> デモデータで試す
+                </button>
+                <Link to="/setup-guide" className="text-xs text-blue-700 hover:underline">導入手順書を見る →</Link>
+                <Link to="/help" className="text-xs text-blue-700 hover:underline">使い方FAQ →</Link>
+              </div>
             </div>
           </div>
         </div>

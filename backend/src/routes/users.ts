@@ -105,7 +105,7 @@ router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   const companyId = req.companyId!;
   const userId = parseInt(req.params.id);
 
-  if (req.user!.role !== 'admin' && req.user!.id !== userId) {
+  if (!['admin','super_admin'].includes(req.user!.role) && req.user!.id !== userId) {
     res.status(403).json({ error: 'アクセス権限がありません' });
     return;
   }
@@ -131,7 +131,7 @@ router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
 router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -197,7 +197,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   const companyId = req.companyId!;
   const userId = parseInt(req.params.id);
 
-  if (req.user!.role !== 'admin' && req.user!.id !== userId) {
+  if (!['admin','super_admin'].includes(req.user!.role) && req.user!.id !== userId) {
     res.status(403).json({ error: 'アクセス権限がありません' });
     return;
   }
@@ -257,7 +257,7 @@ router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res:
   const companyId = req.companyId!;
   const userId = parseInt(req.params.id);
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -285,7 +285,7 @@ router.post('/:id/reset-password', authenticateToken, requireCompany, (req: Auth
   const companyId = req.companyId!;
   const userId = parseInt(req.params.id);
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }

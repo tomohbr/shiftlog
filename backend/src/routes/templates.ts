@@ -14,7 +14,7 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
 
 // POST /api/templates
 router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin') { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   const { name, start_time, end_time, break_minutes, color } = req.body;
   if (!name || !start_time || !end_time) { res.status(400).json({ error: '名前と時間は必須です' }); return; }
 
@@ -28,7 +28,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
 
 // PUT /api/templates/:id
 router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin') { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   const { name, start_time, end_time, break_minutes, color } = req.body;
   db.prepare(
     'UPDATE shift_templates SET name=?, start_time=?, end_time=?, break_minutes=?, color=? WHERE id=? AND company_id=?'
@@ -39,14 +39,14 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
 
 // DELETE /api/templates/:id
 router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin') { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   db.prepare('DELETE FROM shift_templates WHERE id = ? AND company_id = ?').run(req.params.id, req.companyId!);
   res.json({ message: '削除しました' });
 });
 
 // POST /api/templates/:id/apply - Apply template to create shifts
 router.post('/:id/apply', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin') { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   const template = db.prepare(
     'SELECT * FROM shift_templates WHERE id = ? AND company_id = ?'
   ).get(req.params.id, req.companyId!) as any;

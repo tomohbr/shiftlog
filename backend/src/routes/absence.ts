@@ -74,7 +74,7 @@ router.post('/:id/cover', authenticateToken, requireCompany, (req: AuthRequest, 
 
 // PUT /api/absence/:id - Update status (admin)
 router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin') { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   const { status } = req.body;
   db.prepare(
     'UPDATE absence_reports SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?'

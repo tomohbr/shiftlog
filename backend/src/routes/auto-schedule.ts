@@ -9,7 +9,7 @@ const router = Router();
 // body: { year, month, slots: [{ date, start_time, end_time, needed: number, skill_ids?: number[] }] }
 // シフト希望を尊重しつつ、各スロットに needed 人を割り当てる greedy 算法
 router.post('/propose', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
+  if (!['admin','super_admin'].includes(req.user!.role) && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -108,7 +108,7 @@ router.post('/propose', authenticateToken, requireCompany, (req: AuthRequest, re
 
 // POST /api/auto-schedule/apply - 提案をそのまま shifts テーブルに反映
 router.post('/apply', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
+  if (!['admin','super_admin'].includes(req.user!.role) && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }

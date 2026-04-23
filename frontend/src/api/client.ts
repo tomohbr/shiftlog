@@ -342,6 +342,28 @@ export interface PayrollSummary {
   total_wage: number
   hourly_wage: number
 }
+// デモデータ投入
+export const seedApi = {
+  demo: (opts?: { include_store?: boolean; include_staff?: boolean; include_shifts?: boolean; include_skills?: boolean }) =>
+    api.post<{ ok: boolean; created: { store: number; staff: number; skills: number; shifts: number } }>('/seed/demo', opts || {}),
+  removeDemo: () =>
+    api.delete<{ ok: boolean; removed: any }>('/seed/demo'),
+}
+
+// 利用定着ファネル (super_admin)
+export interface ActivationFunnel {
+  total: number
+  withStore: number
+  withStaff: number
+  withShift: number
+  withTimecard: number
+  activeLast7d: number
+  dropoff: { noStore: number; noStaff: number; noShift: number; noTimecard: number }
+}
+export const funnelApi = {
+  get: () => api.get<ActivationFunnel>('/admin/activation-funnel'),
+}
+
 export const payrollApi = {
   getSummary: (year: number, month: number) =>
     api.get<{ summaries: PayrollSummary[]; year: number; month: number }>('/payroll/summary', { params: { year, month } }),

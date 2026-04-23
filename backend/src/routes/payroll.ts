@@ -95,7 +95,7 @@ function summarize(companyId: number, year: number, month: number): WorkSummary[
 
 // GET /api/payroll/export?year=&month=&format=freee|moneyforward|kingoftime|generic
 router.get('/export', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
+  if (!['admin','super_admin'].includes(req.user!.role) && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -153,7 +153,7 @@ router.get('/export', authenticateToken, requireCompany, (req: AuthRequest, res:
 
 // GET /api/payroll/summary?year=&month= (プレビュー用JSON)
 router.get('/summary', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
+  if (!['admin','super_admin'].includes(req.user!.role) && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }

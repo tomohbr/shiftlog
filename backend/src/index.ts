@@ -22,6 +22,7 @@ import swapsRoutes from './routes/swaps';
 import icalRoutes from './routes/ical';
 import autoScheduleRoutes from './routes/auto-schedule';
 import payrollRoutes from './routes/payroll';
+import seedRoutes from './routes/seed';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -57,6 +58,7 @@ app.use('/api/swaps', swapsRoutes);
 app.use('/api/ical', icalRoutes);
 app.use('/api/auto-schedule', autoScheduleRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/seed', seedRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

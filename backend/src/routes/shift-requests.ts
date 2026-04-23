@@ -99,7 +99,7 @@ router.get('/period', authenticateToken, requireCompany, (req: AuthRequest, res:
 
 // POST /api/shift-requests/period - Open/close collection period (admin)
 router.post('/period', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }

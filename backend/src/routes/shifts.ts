@@ -29,7 +29,7 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
     params.push(start_date as string, end_date as string);
   }
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     query += ' AND s.user_id = ?';
     params.push(req.user!.id);
   } else if (user_id) {
@@ -60,7 +60,7 @@ router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     return;
   }
 
-  if (req.user!.role !== 'admin' && shift.user_id !== req.user!.id) {
+  if (!['admin','super_admin'].includes(req.user!.role) && shift.user_id !== req.user!.id) {
     res.status(403).json({ error: 'アクセス権限がありません' });
     return;
   }
@@ -72,7 +72,7 @@ router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
 router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -124,7 +124,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
 router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -169,7 +169,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
 router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -189,7 +189,7 @@ router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res:
 router.post('/bulk', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -249,7 +249,7 @@ router.get('/report/summary', authenticateToken, requireCompany, (req: AuthReque
   `;
   const params: (string | number)[] = [companyId, companyId, startDate, endDate];
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     query += ' AND u.id = ?';
     params.push(req.user!.id);
   }
@@ -283,7 +283,7 @@ router.get('/publication/:year/:month', authenticateToken, requireCompany, (req:
 router.post('/publication', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
+  if (!['admin','super_admin'].includes(req.user!.role) && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }

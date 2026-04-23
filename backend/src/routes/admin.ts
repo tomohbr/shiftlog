@@ -88,6 +88,30 @@ router.get('/companies', (_req: AuthRequest, res: Response): void => {
   res.json({ companies: rows });
 });
 
+// GET /api/admin/activation-funnel - 利用定着ファネル
+router.get('/activation-funnel', (_req: AuthRequest, res: Response): void => {
+  const total = (db.prepare('SELECT COUNT(*) AS c FROM companies').get() as any).c;
+  const withStore = (db.prepare('SELECT COUNT(DISTINCT company_id) AS c FROM stores').get() as any).c;
+  const withStaff = (db.prepare('SELECT COUNT(DISTINCT company_id) AS c FROM user_companies WHERE role = \'staff\'').get() as any).c;
+  const withShift = (db.prepare('SELECT COUNT(DISTINCT company_id) AS c FROM shifts').get() as any).c;
+  const withTimecard = (db.prepare('SELECT COUNT(DISTINCT company_id) AS c FROM time_records').get() as any).c;
+  const activeLast7d = (db.prepare("SELECT COUNT(DISTINCT company_id) AS c FROM time_records WHERE created_at >= datetime('now','-7 days')").get() as any).c;
+  res.json({
+    total,
+    withStore,
+    withStaff,
+    withShift,
+    withTimecard,
+    activeLast7d,
+    dropoff: {
+      noStore: total - withStore,
+      noStaff: withStore - withStaff,
+      noShift: withStaff - withShift,
+      noTimecard: withShift - withTimecard,
+    },
+  });
+});
+
 // PATCH /api/admin/users/:id/active - 有効/無効切替
 router.patch('/users/:id/active', (req: AuthRequest, res: Response): void => {
   const id = parseInt(req.params.id);

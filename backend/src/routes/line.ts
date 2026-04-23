@@ -41,14 +41,14 @@ export async function notifyCompanyStaff(companyId: number, message: string) {
 
 // GET /api/line/settings
 router.get('/settings', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin') { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   const settings = db.prepare('SELECT * FROM line_settings WHERE company_id = ?').get(req.companyId!);
   res.json({ settings: settings || null });
 });
 
 // POST /api/line/settings
 router.post('/settings', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  if (req.user!.role !== 'admin') { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   const { channel_access_token, notify_shift_published, notify_shift_changed, notify_help_request } = req.body;
 
   db.prepare(`
@@ -79,7 +79,7 @@ router.post('/register', authenticateToken, (req: AuthRequest, res: Response): v
 
 // POST /api/line/test - Send test message (admin)
 router.post('/test', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
-  if (req.user!.role !== 'admin') { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   await notifyCompanyStaff(req.companyId!, '【シフトログ】LINE通知のテストです。正常に動作しています。');
   res.json({ message: 'テスト通知を送信しました' });
 });

@@ -30,6 +30,7 @@ import {
   FileText,
   Sparkles,
   FileSpreadsheet,
+  BookOpen,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -65,6 +66,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/line-settings', label: 'LINE通知', icon: MessageCircle },
     { path: '/admin-hub', label: '管理ハブ', icon: Shield },
     { path: '/settings', label: '設定', icon: Settings },
+    { path: '/setup-guide', label: '導入手順書', icon: BookOpen },
     { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
     { path: '/feedback', label: 'フィードバック', icon: MessageSquare },
   ]
@@ -74,6 +76,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/shift-requests', label: 'シフト希望提出', icon: ClipboardList },
     { path: '/swaps', label: 'シフト交代', icon: Repeat },
     { path: '/absence', label: '欠勤連絡', icon: AlertCircle },
+    { path: '/setup-guide', label: '使い方ガイド', icon: BookOpen },
     { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
     { path: '/feedback', label: 'フィードバック', icon: MessageSquare },
   ]

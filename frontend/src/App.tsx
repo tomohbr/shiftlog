@@ -23,6 +23,7 @@ import SwapsPage from './pages/SwapsPage'
 import PayrollPage from './pages/PayrollPage'
 import AutoSchedulePage from './pages/AutoSchedulePage'
 import AdminHubPage from './pages/AdminHubPage'
+import SetupGuidePage from './pages/SetupGuidePage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -100,6 +101,7 @@ function AppRoutes() {
           <Route path="/payroll" element={<PayrollPage />} />
           <Route path="/auto-schedule" element={<AutoSchedulePage />} />
           <Route path="/admin-hub" element={<AdminHubPage />} />
+          <Route path="/setup-guide" element={<SetupGuidePage />} />
           {user.role === 'super_admin' && (
             <>
               <Route path="/admin" element={<SuperAdminPage />} />
@@ -122,6 +124,7 @@ function AppRoutes() {
         <Route path="/shift-requests" element={<ShiftRequestPage />} />
         <Route path="/absence" element={<AbsencePage />} />
         <Route path="/swaps" element={<SwapsPage />} />
+        <Route path="/setup-guide" element={<SetupGuidePage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/feedback" element={<FeedbackPage />} />
         <Route path="/login" element={<Navigate to="/timecards" replace />} />

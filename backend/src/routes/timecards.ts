@@ -26,7 +26,7 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   }
 
   // Staff can only see their own
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     query += ' AND tr.user_id = ?';
     params.push(req.user!.id);
   } else if (user_id) {
@@ -175,7 +175,7 @@ router.get('/today', authenticateToken, requireCompany, (req: AuthRequest, res: 
 router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -215,7 +215,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
 router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
   }
@@ -268,7 +268,7 @@ router.get('/summary', authenticateToken, requireCompany, (req: AuthRequest, res
   `;
   const params: (string | number)[] = [companyId, companyId, startDate, endDate];
 
-  if (req.user!.role !== 'admin') {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
     query += ' AND u.id = ?';
     params.push(req.user!.id);
   }
