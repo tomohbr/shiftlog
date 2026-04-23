@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BookOpen, Store, Users, Calendar, Smartphone, MessageCircle, CreditCard, CheckCircle2, Copy, Download, Sparkles, ExternalLink, ChevronRight } from 'lucide-react'
+import { BookOpen, Store, Users, Calendar, Smartphone, MessageCircle, CreditCard, CheckCircle2, Copy, Download, Sparkles, ExternalLink, ChevronRight, Mail, HeartHandshake } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -231,6 +231,42 @@ export default function SetupGuidePage() {
           <div className="flex-1">
             <h2 className="text-xl font-bold text-gray-900">導入手順書</h2>
             <p className="text-sm text-gray-600 mt-1">シフトログを使い始めるための step-by-step ガイド。オーナー向けとスタッフ向けで切り替え可能です。印刷してスタッフに配布することもできます。</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 導入代行サービスの案内 */}
+      <div className="bg-gradient-to-r from-pink-50 to-rose-50 border-2 border-pink-300 rounded-xl p-5 print:hidden">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-pink-600 rounded-lg flex items-center justify-center shrink-0">
+            <HeartHandshake className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-bold text-gray-900">✨ 導入代行サービスもご用意しています</h3>
+            <p className="text-sm text-gray-700 mt-1">
+              「セットアップが難しい」「スタッフへの共有をまとめて任せたい」という方向けに、
+              <b className="text-pink-700">初期設定〜スタッフ招待までを代行</b>するサービスを行っています。
+            </p>
+            <ul className="text-xs text-gray-600 mt-2 space-y-0.5 list-disc ml-5">
+              <li>会社情報・店舗・スタッフの一括登録</li>
+              <li>各スタッフへの招待メッセージ送付（LINE/メール）</li>
+              <li>初回シフトの作成・公開サポート</li>
+              <li>運用開始後の初期問合せ対応</li>
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                href="mailto:shibahara.724@gmail.com?subject=%E3%82%B7%E3%83%95%E3%83%88%E3%83%AD%E3%82%B0%20%E5%B0%8E%E5%85%A5%E4%BB%A3%E8%A1%8C%E3%81%AE%E7%94%B3%E8%BE%BC&body=%E4%BC%9A%E7%A4%BE%E5%90%8D%EF%BC%9A%0A%E6%8B%85%E5%BD%93%E8%80%85%EF%BC%9A%0A%E3%82%B9%E3%82%BF%E3%83%83%E3%83%95%E6%95%B0%EF%BC%9A%0A%E5%B8%8C%E6%9C%9B%E3%81%99%E3%82%8B%E9%96%8B%E5%A7%8B%E3%82%BF%E3%82%A4%E3%83%9F%E3%83%B3%E3%82%B0%EF%BC%9A%0A%E3%81%94%E8%B3%AA%E5%95%8F%E3%83%BB%E3%81%94%E8%A6%81%E6%9C%9B%EF%BC%9A"
+                className="inline-flex items-center gap-1.5 bg-pink-600 hover:bg-pink-700 text-white font-semibold px-4 py-2 rounded-lg text-sm"
+              >
+                <Mail className="w-4 h-4" /> メールで相談する
+              </a>
+              <button
+                onClick={() => { window.location.href = '/feedback' }}
+                className="inline-flex items-center gap-1.5 bg-white hover:bg-gray-50 border border-gray-300 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm"
+              >
+                <MessageCircle className="w-4 h-4" /> アプリ内から相談
+              </button>
+            </div>
           </div>
         </div>
       </div>

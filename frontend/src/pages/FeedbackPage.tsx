@@ -77,6 +77,14 @@ export default function FeedbackPage() {
         </div>
       </div>
 
+      <div className="bg-pink-50 border border-pink-200 rounded-xl p-4 text-sm">
+        <p className="font-semibold text-pink-900">💡 セットアップにお困りですか？</p>
+        <p className="text-gray-700 mt-1">
+          <b>導入代行サービス</b>で初期設定〜スタッフ招待までまとめてお任せいただけます。
+          「質問」カテゴリで希望を書いてお送りいただくか、直接 <a className="text-pink-700 underline" href="mailto:shibahara.724@gmail.com?subject=導入代行のご相談">shibahara.724@gmail.com</a> へご連絡ください。
+        </p>
+      </div>
+
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <div>
           <label className="block text-sm font-semibold text-gray-800 mb-3">カテゴリ</label>

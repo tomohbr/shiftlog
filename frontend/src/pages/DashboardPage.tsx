@@ -139,6 +139,10 @@ export default function DashboardPage() {
                   導入手順書を見る →
                 </Link>
               </div>
+              <p className="text-xs text-gray-600 mt-3 pt-3 border-t border-red-200">
+                💡 セットアップにお困りの場合は<b className="text-pink-700">導入代行サービス</b>もご利用いただけます。
+                <Link to="/setup-guide" className="text-pink-700 hover:underline font-medium ml-1">詳しくはこちら →</Link>
+              </p>
             </div>
           </div>
         </div>
