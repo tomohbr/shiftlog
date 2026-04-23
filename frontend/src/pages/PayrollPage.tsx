@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Download, FileSpreadsheet, RefreshCw } from 'lucide-react'
-import { payrollApi, PayrollSummary, PayrollFormat } from '../api/client'
-import api from '../api/client'
+import { payrollApi, api, PayrollSummary, PayrollFormat } from '../api/client'
 import toast from 'react-hot-toast'
 
 const FORMATS: { id: PayrollFormat; label: string; desc: string }[] = [
@@ -32,7 +31,7 @@ export default function PayrollPage() {
   const download = async (format: PayrollFormat) => {
     try {
       // axios 経由で認証ヘッダ付きBLOBダウンロード
-      const res = await (api as any).get('/payroll/export', {
+      const res = await api.get('/payroll/export', {
         params: { year, month, format },
         responseType: 'blob',
       })
