@@ -63,16 +63,10 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/stores', label: '店舗管理', icon: Store },
     { path: '/companies', label: '会社管理', icon: Building2 },
     { path: '/line-settings', label: 'LINE通知', icon: MessageCircle },
-    { path: '/audit-logs', label: '監査ログ', icon: FileText },
+    { path: '/admin-hub', label: '管理ハブ', icon: Shield },
     { path: '/settings', label: '設定', icon: Settings },
     { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
     { path: '/feedback', label: 'フィードバック', icon: MessageSquare },
-    ...(user?.role === 'super_admin'
-      ? [
-          { path: '/admin', label: 'システム管理', icon: Shield },
-          { path: '/feedback-admin', label: 'フィードバック管理', icon: Inbox },
-        ]
-      : []),
   ]
 
   const staffNavItems = [

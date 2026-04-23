@@ -22,6 +22,7 @@ import SkillsPage from './pages/SkillsPage'
 import SwapsPage from './pages/SwapsPage'
 import PayrollPage from './pages/PayrollPage'
 import AutoSchedulePage from './pages/AutoSchedulePage'
+import AdminHubPage from './pages/AdminHubPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -98,6 +99,7 @@ function AppRoutes() {
           <Route path="/swaps" element={<SwapsPage />} />
           <Route path="/payroll" element={<PayrollPage />} />
           <Route path="/auto-schedule" element={<AutoSchedulePage />} />
+          <Route path="/admin-hub" element={<AdminHubPage />} />
           {user.role === 'super_admin' && (
             <>
               <Route path="/admin" element={<SuperAdminPage />} />
