@@ -24,6 +24,7 @@ import PayrollPage from './pages/PayrollPage'
 import AutoSchedulePage from './pages/AutoSchedulePage'
 import AdminHubPage from './pages/AdminHubPage'
 import SetupGuidePage from './pages/SetupGuidePage'
+import OrganizationPage from './pages/OrganizationPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -102,6 +103,7 @@ function AppRoutes() {
           <Route path="/auto-schedule" element={<AutoSchedulePage />} />
           <Route path="/admin-hub" element={<AdminHubPage />} />
           <Route path="/setup-guide" element={<SetupGuidePage />} />
+          <Route path="/organization" element={<OrganizationPage />} />
           {user.role === 'super_admin' && (
             <>
               <Route path="/admin" element={<SuperAdminPage />} />
