@@ -17,6 +17,9 @@ import SuperAdminPage from './pages/SuperAdminPage'
 import HelpPage from './pages/HelpPage'
 import FeedbackPage from './pages/FeedbackPage'
 import FeedbackAdminPage from './pages/FeedbackAdminPage'
+import AuditLogPage from './pages/AuditLogPage'
+import SkillsPage from './pages/SkillsPage'
+import SwapsPage from './pages/SwapsPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -88,6 +91,9 @@ function AppRoutes() {
           <Route path="/settings" element={<ProfilePage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
+          <Route path="/audit-logs" element={<AuditLogPage />} />
+          <Route path="/skills" element={<SkillsPage />} />
+          <Route path="/swaps" element={<SwapsPage />} />
           {user.role === 'super_admin' && (
             <>
               <Route path="/admin" element={<SuperAdminPage />} />
@@ -109,6 +115,7 @@ function AppRoutes() {
         <Route path="/timecards" element={<TimecardPage />} />
         <Route path="/shift-requests" element={<ShiftRequestPage />} />
         <Route path="/absence" element={<AbsencePage />} />
+        <Route path="/swaps" element={<SwapsPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/feedback" element={<FeedbackPage />} />
         <Route path="/login" element={<Navigate to="/timecards" replace />} />

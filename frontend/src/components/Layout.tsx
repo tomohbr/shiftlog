@@ -25,6 +25,9 @@ import {
   HelpCircle,
   MessageSquare,
   Inbox,
+  Tag,
+  Repeat,
+  FileText,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -51,9 +54,12 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/labor', label: '人件費・売上', icon: DollarSign },
     { path: '/report', label: '勤務集計', icon: BarChart2 },
     { path: '/absence', label: '欠勤・ヘルプ', icon: AlertCircle },
+    { path: '/swaps', label: 'シフト交代', icon: Repeat },
+    { path: '/skills', label: 'スキル管理', icon: Tag },
     { path: '/stores', label: '店舗管理', icon: Store },
     { path: '/companies', label: '会社管理', icon: Building2 },
     { path: '/line-settings', label: 'LINE通知', icon: MessageCircle },
+    { path: '/audit-logs', label: '監査ログ', icon: FileText },
     { path: '/settings', label: '設定', icon: Settings },
     { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
     { path: '/feedback', label: 'フィードバック', icon: MessageSquare },
@@ -68,6 +74,7 @@ export default function Layout({ children }: LayoutProps) {
   const staffNavItems = [
     { path: '/timecards', label: 'タイムカード', icon: Clock },
     { path: '/shift-requests', label: 'シフト希望提出', icon: ClipboardList },
+    { path: '/swaps', label: 'シフト交代', icon: Repeat },
     { path: '/absence', label: '欠勤連絡', icon: AlertCircle },
     { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
     { path: '/feedback', label: 'フィードバック', icon: MessageSquare },

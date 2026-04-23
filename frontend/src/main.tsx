@@ -5,6 +5,12 @@ import App from './App.tsx'
 import './index.css'
 import { Toaster } from 'react-hot-toast'
 
+// ダークモード初期化（FOUCを避けるため最初に実行）
+try {
+  const t = localStorage.getItem('theme')
+  if (t === 'dark') document.documentElement.classList.add('dark')
+} catch {}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

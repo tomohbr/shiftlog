@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, X, Eye, EyeOff } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload } from 'lucide-react'
 import { usersApi, User } from '../api/client'
+import BulkImportModal from '../components/BulkImportModal'
 import toast from 'react-hot-toast'
 
 const COLORS = [
@@ -181,6 +182,7 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null)
   const [newPassword, setNewPassword] = useState('')
 
@@ -228,14 +230,24 @@ export default function StaffPage() {
           <h2 className="text-lg font-semibold text-gray-900">スタッフ一覧</h2>
           <p className="text-sm text-gray-500 mt-0.5">{users.length}名登録中</p>
         </div>
-        <button
-          onClick={() => { setEditingUser(null); setModalOpen(true) }}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          スタッフ追加
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setBulkOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+          >
+            <Upload className="w-4 h-4" />
+            CSV一括登録
+          </button>
+          <button
+            onClick={() => { setEditingUser(null); setModalOpen(true) }}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            スタッフ追加
+          </button>
+        </div>
       </div>
+      {bulkOpen && <BulkImportModal onClose={() => setBulkOpen(false)} onDone={loadUsers} />}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
