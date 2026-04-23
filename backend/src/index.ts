@@ -20,6 +20,8 @@ import auditRoutes from './routes/audit';
 import skillsRoutes from './routes/skills';
 import swapsRoutes from './routes/swaps';
 import icalRoutes from './routes/ical';
+import autoScheduleRoutes from './routes/auto-schedule';
+import payrollRoutes from './routes/payroll';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -53,6 +55,8 @@ app.use('/api/audit-logs', auditRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/swaps', swapsRoutes);
 app.use('/api/ical', icalRoutes);
+app.use('/api/auto-schedule', autoScheduleRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

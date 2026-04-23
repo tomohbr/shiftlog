@@ -28,6 +28,8 @@ import {
   Tag,
   Repeat,
   FileText,
+  Sparkles,
+  FileSpreadsheet,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -47,12 +49,14 @@ export default function Layout({ children }: LayoutProps) {
   const adminNavItems = [
     { path: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
     { path: '/shifts', label: 'シフト管理', icon: Calendar },
+    { path: '/auto-schedule', label: 'シフト自動生成', icon: Sparkles },
     { path: '/shift-requests', label: '希望シフト収集', icon: ClipboardList },
     { path: '/templates', label: 'テンプレート', icon: Copy },
     { path: '/timecards', label: 'タイムカード', icon: Clock },
     { path: '/staff', label: 'スタッフ管理', icon: Users },
     { path: '/labor', label: '人件費・売上', icon: DollarSign },
     { path: '/report', label: '勤務集計', icon: BarChart2 },
+    { path: '/payroll', label: '給与エクスポート', icon: FileSpreadsheet },
     { path: '/absence', label: '欠勤・ヘルプ', icon: AlertCircle },
     { path: '/swaps', label: 'シフト交代', icon: Repeat },
     { path: '/skills', label: 'スキル管理', icon: Tag },

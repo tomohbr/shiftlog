@@ -298,6 +298,60 @@ export const userBulkApi = {
     api.post<{ results: BulkImportResult[] }>('/users/bulk', { rows }),
 }
 
+// 自動シフト生成
+export interface AutoSlot {
+  date: string
+  start_time: string
+  end_time: string
+  needed: number
+  skill_ids?: number[]
+}
+export interface AutoAssignment {
+  date: string
+  start_time: string
+  end_time: string
+  user_id: number
+  user_name: string
+  availability: string | null
+}
+export interface AutoUnfilled {
+  date: string
+  start_time: string
+  end_time: string
+  needed: number
+  assigned: number
+}
+export const autoScheduleApi = {
+  propose: (year: number, month: number, slots: AutoSlot[]) =>
+    api.post<{ assignments: AutoAssignment[]; unfilled: AutoUnfilled[] }>('/auto-schedule/propose', { year, month, slots }),
+  apply: (assignments: AutoAssignment[]) =>
+    api.post<{ created: number; skipped: number }>('/auto-schedule/apply', { assignments }),
+}
+
+// 給与ソフト連携
+export type PayrollFormat = 'generic' | 'freee' | 'moneyforward' | 'kingoftime'
+export interface PayrollSummary {
+  user_id: number
+  user_name: string
+  email: string | null
+  days: number
+  total_minutes: number
+  overtime_minutes: number
+  night_minutes: number
+  holiday_minutes: number
+  total_wage: number
+  hourly_wage: number
+}
+export const payrollApi = {
+  getSummary: (year: number, month: number) =>
+    api.get<{ summaries: PayrollSummary[]; year: number; month: number }>('/payroll/summary', { params: { year, month } }),
+  exportUrl: (year: number, month: number, format: PayrollFormat) => {
+    const token = localStorage.getItem('token') || ''
+    const companyId = localStorage.getItem('selectedCompanyId') || ''
+    return `/api/payroll/export?year=${year}&month=${month}&format=${format}&access_token=${encodeURIComponent(token)}&company_id=${companyId}`
+  },
+}
+
 // Shift Requests (希望シフト収集)
 export interface ShiftRequest {
   id: number

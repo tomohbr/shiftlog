@@ -20,6 +20,8 @@ import FeedbackAdminPage from './pages/FeedbackAdminPage'
 import AuditLogPage from './pages/AuditLogPage'
 import SkillsPage from './pages/SkillsPage'
 import SwapsPage from './pages/SwapsPage'
+import PayrollPage from './pages/PayrollPage'
+import AutoSchedulePage from './pages/AutoSchedulePage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -94,6 +96,8 @@ function AppRoutes() {
           <Route path="/audit-logs" element={<AuditLogPage />} />
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/swaps" element={<SwapsPage />} />
+          <Route path="/payroll" element={<PayrollPage />} />
+          <Route path="/auto-schedule" element={<AutoSchedulePage />} />
           {user.role === 'super_admin' && (
             <>
               <Route path="/admin" element={<SuperAdminPage />} />
