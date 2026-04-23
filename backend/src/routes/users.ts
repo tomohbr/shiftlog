@@ -90,12 +90,14 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   const users = db.prepare(`
     SELECT u.id, u.email, u.name, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
-           uc.employment_type
+           uc.employment_type,
+           (SELECT MAX(tr.updated_at) FROM time_records tr WHERE tr.user_id = u.id AND tr.company_id = ?) as last_timecard_at,
+           (SELECT COUNT(*) FROM time_records tr WHERE tr.user_id = u.id AND tr.company_id = ?) as timecard_count
     FROM users u
     JOIN user_companies uc ON u.id = uc.user_id AND uc.company_id = ?
     WHERE u.is_active = 1
     ORDER BY u.role DESC, u.name ASC
-  `).all(companyId);
+  `).all(companyId, companyId, companyId);
 
   res.json({ users });
 });

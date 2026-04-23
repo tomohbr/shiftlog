@@ -67,6 +67,8 @@ export interface User {
   company_role?: string
   is_active: number
   created_at: string
+  last_timecard_at?: string | null
+  timecard_count?: number
 }
 
 export interface Store {

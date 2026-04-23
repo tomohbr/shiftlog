@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy } from 'lucide-react'
 import { usersApi, User } from '../api/client'
+import { useAuth } from '../contexts/AuthContext'
 import BulkImportModal from '../components/BulkImportModal'
 import toast from 'react-hot-toast'
 
@@ -177,12 +178,52 @@ function UserModal({ user, onClose, onSave }: UserModalProps) {
   )
 }
 
+function isNeverLoggedIn(u: User): boolean {
+  if (u.role === 'admin') return false
+  // 打刻がなく、登録から24時間以上経過
+  if (u.timecard_count && u.timecard_count > 0) return false
+  if (!u.created_at) return false
+  const created = new Date(u.created_at.replace(' ', 'T') + 'Z').getTime()
+  return Date.now() - created > 24 * 60 * 60 * 1000
+}
+
+function generateInviteMessage(u: User, companyName: string, companyPin: string): string {
+  const url = 'https://shiftlog-production.up.railway.app/'
+  return `【シフトログご案内】${companyName}
+${u.name}さん、スタッフ管理アプリ「シフトログ」のアカウントを作成しました。
+スマホ・PCどちらでも使えます。
+
+▼ アプリURL
+${url}
+
+▼ ログイン手順
+1. 上のURLを開く
+2. 「スタッフログイン」をタップ
+3. 会社PIN: ${companyPin}
+4. 一覧から「${u.name}」をタップ
+${u.pin ? `5. 個人PIN: ${u.pin}` : '5. 個人PIN（4桁）を入力'}
+
+▼ できること
+・出退勤の打刻
+・シフト確認・希望提出
+・シフト交代の依頼
+・急な欠勤連絡
+
+▼ スマホ: ホーム画面に追加すると便利です
+iPhone(Safari): 共有 → ホーム画面に追加
+Android(Chrome): メニュー → ホーム画面に追加
+
+ご不明な点があればお気軽に。`
+}
+
 export default function StaffPage() {
+  const { selectedCompany } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [inviteUser, setInviteUser] = useState<User | null>(null)
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null)
   const [newPassword, setNewPassword] = useState('')
 
@@ -249,6 +290,24 @@ export default function StaffPage() {
       </div>
       {bulkOpen && <BulkImportModal onClose={() => setBulkOpen(false)} onDone={loadUsers} />}
 
+      {(() => {
+        const neverCount = users.filter(isNeverLoggedIn).length
+        if (neverCount === 0) return null
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900">
+                {neverCount}名のスタッフがまだ一度もログインしていません
+              </p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                右の「招待」ボタンから会社PIN入りの招待メッセージを表示・コピーして、LINEやメールで送ってください。
+              </p>
+            </div>
+          </div>
+        )
+      })()}
+
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -278,7 +337,14 @@ export default function StaffPage() {
                         {u.name.charAt(0)}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                          {isNeverLoggedIn(u) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                              <AlertCircle className="w-2.5 h-2.5" />未ログイン
+                            </span>
+                          )}
+                        </div>
                         {u.phone && <p className="text-xs text-gray-400">{u.phone}</p>}
                       </div>
                     </div>
@@ -301,6 +367,16 @@ export default function StaffPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 justify-end">
+                      {u.role === 'staff' && (
+                        <button
+                          onClick={() => setInviteUser(u)}
+                          className="text-xs text-green-700 hover:text-green-900 px-2 py-1 rounded hover:bg-green-50 flex items-center gap-1 border border-green-200"
+                          title="招待メッセージを表示"
+                        >
+                          <Send className="w-3 h-3" />
+                          招待
+                        </button>
+                      )}
                       <button
                         onClick={() => setResetPasswordUser(u)}
                         className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
@@ -359,6 +435,51 @@ export default function StaffPage() {
             <div className="flex gap-2">
               <button onClick={() => { setResetPasswordUser(null); setNewPassword('') }} className="btn-secondary flex-1">キャンセル</button>
               <button onClick={handleResetPassword} className="btn-primary flex-1">変更</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {inviteUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setInviteUser(null)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Send className="w-5 h-5 text-green-600" />
+                招待メッセージ
+              </h3>
+              <button onClick={() => setInviteUser(null)}>
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto space-y-3">
+              <p className="text-sm text-gray-700">
+                <b className="text-gray-900">{inviteUser.name}</b> さんに下記メッセージを LINE やメールで送ってください。コピーボタン1タップで貼り付けられます。
+              </p>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 relative">
+                <pre className="text-xs text-gray-800 whitespace-pre-wrap font-sans pr-20">
+                  {generateInviteMessage(inviteUser, selectedCompany?.name || '', (selectedCompany as any)?.company_pin || '')}
+                </pre>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(generateInviteMessage(inviteUser, selectedCompany?.name || '', (selectedCompany as any)?.company_pin || ''))
+                    toast.success('メッセージをコピーしました')
+                  }}
+                  className="absolute top-2 right-2 px-3 py-1.5 text-xs bg-white border border-green-300 rounded hover:bg-green-50 flex items-center gap-1 font-semibold"
+                >
+                  <Copy className="w-3 h-3" /> コピー
+                </button>
+              </div>
+              {isNeverLoggedIn(inviteUser) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                  <p className="font-semibold mb-1">⚠️ この方はまだ一度もログインしていません</p>
+                  <p>登録から24時間以上経過しています。上のメッセージを再度送ってアクセスを促してください。</p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end px-5 py-3 border-t border-gray-200 bg-gray-50">
+              <button onClick={() => setInviteUser(null)} className="btn-secondary">閉じる</button>
             </div>
           </div>
         </div>

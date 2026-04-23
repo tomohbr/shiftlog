@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format, addMonths, subMonths } from 'date-fns'
-import { Users, Calendar, Clock, CheckCircle, AlertTriangle, DollarSign, Repeat } from 'lucide-react'
+import { Users, Calendar, Clock, CheckCircle, AlertTriangle, DollarSign, Repeat, Store as StoreIcon, ArrowRight, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ShiftCalendar from '../components/ShiftCalendar'
 import ShiftModal from '../components/ShiftModal'
 import MonthNavigator from '../components/MonthNavigator'
-import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, Shift, User } from '../api/client'
+import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, storesApi, Shift, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -27,15 +27,17 @@ export default function DashboardPage() {
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth() + 1
 
-      const [shiftsRes, usersRes, pubRes] = await Promise.all([
+      const [shiftsRes, usersRes, pubRes, storesRes] = await Promise.all([
         shiftsApi.getAll({ year, month }),
         usersApi.getAll(),
         shiftsApi.getPublication(year, month),
+        storesApi.getAll().catch(() => ({ data: { stores: [] } })),
       ])
 
       setShifts(shiftsRes.data.shifts)
       setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
       setIsPublished(pubRes.data.publication?.is_published === 1)
+      setStoreCount((storesRes.data as any)?.stores?.length || 0)
     } catch {
       toast.error('データの読み込みに失敗しました')
     } finally {
@@ -79,6 +81,7 @@ export default function DashboardPage() {
   const [monthlyLabor, setMonthlyLabor] = useState<number>(0)
   const [alertCount, setAlertCount] = useState<number>(0)
   const [pendingSwaps, setPendingSwaps] = useState<number>(0)
+  const [storeCount, setStoreCount] = useState<number>(0)
 
   useEffect(() => {
     if (!selectedCompany) return
@@ -95,11 +98,52 @@ export default function DashboardPage() {
     })
   }, [currentDate, selectedCompany, shifts])
 
-  const showOnboarding = users.length === 0 || shifts.length === 0
+  const noStore = storeCount === 0
+  const noStaff = users.length === 0
+  const noShift = shifts.length === 0
+  const criticalEmpty = noStore && noShift // 店舗もシフトもない = ほぼ未使用
+  const showOnboarding = noStore || noStaff || noShift
 
   return (
     <div className="space-y-6">
-      {showOnboarding && (
+      {criticalEmpty && (
+        <div className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-gray-900 mb-1">まだシフトログを使い始めていません</h3>
+              <p className="text-sm text-gray-700 mb-3">
+                店舗もシフトも未登録のため、スタッフの打刻やシフト管理ができない状態です。
+                <b className="text-red-700">3分でセットアップ</b>できます:
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (!confirm('サンプル店舗1件、スタッフ4名、今週のシフトを一括投入します。動作確認後に削除できます。よろしいですか？')) return
+                    try {
+                      const r = await seedApi.demo()
+                      toast.success(`投入完了: 店舗${r.data.created.store} / スタッフ${r.data.created.staff} / シフト${r.data.created.shifts}`)
+                      loadData()
+                    } catch (e: any) { toast.error(e.response?.data?.error || '失敗') }
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2 shadow-md"
+                >
+                  <Sparkles className="w-4 h-4" /> デモデータで今すぐ試す
+                </button>
+                <Link to="/stores" className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-800 font-semibold px-4 py-2.5 rounded-lg text-sm flex items-center gap-1.5">
+                  <StoreIcon className="w-4 h-4" /> 手動で店舗を追加 <ArrowRight className="w-3 h-3" />
+                </Link>
+                <Link to="/setup-guide" className="text-sm text-red-700 hover:underline font-medium">
+                  導入手順書を見る →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showOnboarding && !criticalEmpty && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">

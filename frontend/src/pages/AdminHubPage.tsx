@@ -1,13 +1,15 @@
 import { useState, useMemo } from 'react'
-import { Shield, Inbox, FileText, Users } from 'lucide-react'
+import { Shield, Inbox, FileText, Users, TrendingUp } from 'lucide-react'
 import SuperAdminPage from './SuperAdminPage'
 import FeedbackAdminPage from './FeedbackAdminPage'
 import AuditLogPage from './AuditLogPage'
+import CompanyActivityPage from './CompanyActivityPage'
 import { useAuth } from '../contexts/AuthContext'
 
-type Tab = 'users' | 'feedback' | 'audit'
+type Tab = 'activity' | 'users' | 'feedback' | 'audit'
 
 const TABS: { id: Tab; label: string; icon: any; superOnly: boolean }[] = [
+  { id: 'activity', label: '利用状況', icon: TrendingUp, superOnly: true },
   { id: 'users', label: 'ユーザー管理', icon: Users, superOnly: true },
   { id: 'feedback', label: 'フィードバック', icon: Inbox, superOnly: true },
   { id: 'audit', label: '監査ログ', icon: FileText, superOnly: false },
@@ -44,6 +46,7 @@ export default function AdminHubPage() {
       </div>
 
       <div>
+        {tab === 'activity' && isSuper && <CompanyActivityPage />}
         {tab === 'users' && isSuper && <SuperAdminPage />}
         {tab === 'feedback' && isSuper && <FeedbackAdminPage />}
         {tab === 'audit' && <AuditLogPage />}
