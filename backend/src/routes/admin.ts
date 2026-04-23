@@ -68,6 +68,26 @@ router.get('/stats', (_req: AuthRequest, res: Response): void => {
   res.json({ totalUsers, activeUsers, totalCompanies, adminUsers });
 });
 
+// GET /api/admin/companies - 会社別の利用状況詳細
+router.get('/companies', (_req: AuthRequest, res: Response): void => {
+  const rows = db.prepare(`
+    SELECT
+      c.id, c.name, c.company_pin, c.created_at,
+      (SELECT COUNT(*) FROM user_companies uc WHERE uc.company_id = c.id) AS user_count,
+      (SELECT COUNT(*) FROM stores s WHERE s.company_id = c.id) AS store_count,
+      (SELECT COUNT(*) FROM shifts sh WHERE sh.company_id = c.id) AS shift_count,
+      (SELECT COUNT(*) FROM time_records tr WHERE tr.company_id = c.id) AS timecard_count,
+      (SELECT MAX(tr.updated_at) FROM time_records tr WHERE tr.company_id = c.id) AS last_timecard_at,
+      (SELECT MAX(sh.created_at) FROM shifts sh WHERE sh.company_id = c.id) AS last_shift_at,
+      (SELECT COUNT(*) FROM shifts sh WHERE sh.company_id = c.id AND sh.date >= date('now','-7 days')) AS shifts_last_7d,
+      (SELECT COUNT(*) FROM time_records tr WHERE tr.company_id = c.id AND tr.created_at >= datetime('now','-7 days')) AS clockins_last_7d,
+      (SELECT s.plan FROM subscriptions s WHERE s.company_id = c.id) AS plan
+    FROM companies c
+    ORDER BY c.created_at DESC
+  `).all();
+  res.json({ companies: rows });
+});
+
 // PATCH /api/admin/users/:id/active - 有効/無効切替
 router.patch('/users/:id/active', (req: AuthRequest, res: Response): void => {
   const id = parseInt(req.params.id);
