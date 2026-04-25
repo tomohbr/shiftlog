@@ -91,7 +91,7 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex bg-gray-50 app-shell">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-20 bg-black bg-opacity-50 lg:hidden"
@@ -100,7 +100,7 @@ export default function Layout({ children }: LayoutProps) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-auto lg:z-auto flex flex-col ${
+        className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-auto lg:z-auto flex flex-col overflow-y-auto app-sidebar ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -244,12 +244,12 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4 sticky top-0 z-10">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-500 hover:text-gray-700">
+      <div className="flex-1 flex flex-col min-w-0 app-main">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-4 sm:px-6 gap-3 sticky top-0 z-10">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-500 hover:text-gray-700 p-1 -ml-1">
             <Menu className="w-6 h-6" />
           </button>
-          <h1 className="text-lg font-semibold text-gray-900">
+          <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
             {isStaff
               ? (selectedStaff ? `${selectedStaff.name} - タイムカード` : 'タイムカード')
               : (navItems.find(i => isActive(i.path))?.label || 'シフトログ')
@@ -257,7 +257,7 @@ export default function Layout({ children }: LayoutProps) {
           </h1>
         </header>
 
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 p-4 sm:p-6 pb-20 sm:pb-6">
           {children}
         </main>
       </div>
