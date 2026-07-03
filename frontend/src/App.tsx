@@ -1,5 +1,7 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
+import LandingPage from './pages/LandingPage'
+import TokushohoPage from './pages/TokushohoPage'
 import DashboardPage from './pages/DashboardPage'
 import StaffPage from './pages/StaffPage'
 import ShiftEditPage from './pages/ShiftEditPage'
@@ -31,6 +33,12 @@ import { KioskProvider } from './contexts/KioskContext'
 
 function AppRoutes() {
   const { user, selectedCompany, loading } = useAuth()
+  const location = useLocation()
+
+  // 法的ページはログイン状態に関係なく表示
+  if (location.pathname === '/legal/tokusho') {
+    return <TokushohoPage />
+  }
 
   if (loading) {
     return (
@@ -43,6 +51,7 @@ function AppRoutes() {
   if (!user) {
     return (
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

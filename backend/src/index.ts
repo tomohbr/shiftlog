@@ -23,6 +23,7 @@ import icalRoutes from './routes/ical';
 import autoScheduleRoutes from './routes/auto-schedule';
 import payrollRoutes from './routes/payroll';
 import seedRoutes from './routes/seed';
+import { startTrialNotifier } from './utils/trial-notify';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -76,5 +77,8 @@ app.get('*', (_req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// トライアル終了前後のメール通知（SMTP未設定時は自動スキップ）
+startTrialNotifier();
 
 export default app;

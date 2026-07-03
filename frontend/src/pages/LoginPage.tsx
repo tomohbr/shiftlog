@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Calendar, Eye, EyeOff, Clock, Coffee, LogOut, ArrowLeft, UserPlus } from 'lucide-react'
 import { api } from '../api/client'
@@ -22,7 +23,9 @@ interface TodayRecord {
 
 export default function LoginPage() {
   const { login, register, pinLogin } = useAuth()
-  const [mode, setMode] = useState<'select' | 'admin' | 'kiosk' | 'pin-login' | 'register'>('select')
+  const [searchParams] = useSearchParams()
+  const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'select'
+  const [mode, setMode] = useState<'select' | 'admin' | 'kiosk' | 'pin-login' | 'register'>(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -392,8 +395,8 @@ export default function LoginPage() {
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="mb-5 rounded-xl bg-emerald-50 border border-emerald-100 p-3">
-              <p className="text-sm font-semibold text-emerald-900">1店舗は完全無料</p>
-              <p className="text-xs text-emerald-700 mt-1">登録後すぐにデモ店舗で操作感を確認できます。スタッフへのログイン案内はあとからでOKです。</p>
+              <p className="text-sm font-semibold text-emerald-900">30日間Proの全機能を無料でお試し・クレジットカード不要</p>
+              <p className="text-xs text-emerald-700 mt-1">終了後も1店舗の打刻・シフト管理はずっと無料。登録後すぐにデモ店舗で操作感を確認できます。</p>
             </div>
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div>
@@ -580,6 +583,11 @@ export default function LoginPage() {
               </div>
             </div>
           </button>
+        </div>
+
+        <div className="mt-8 flex items-center justify-center gap-5 text-xs text-gray-400">
+          <Link to="/" className="hover:text-gray-600">シフトログについて</Link>
+          <Link to="/legal/tokusho" className="hover:text-gray-600">特定商取引法に基づく表記</Link>
         </div>
       </div>
     </div>

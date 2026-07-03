@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "shiftlog-local",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["backend/dist/index.js"],
+      "port": 3459,
+      "env": {
+        "PORT": "3459",
+        "DB_PATH": "C:\\Users\\shiba\\AppData\\Local\\Temp\\claude\\C--Users-shiba-OneDrive-Desktop------\\fd7d416a-a565-4a98-ad3b-ac442af060ac\\scratchpad\\shiftlog_preview.db"
+      }
+    }
+  ]
+}
