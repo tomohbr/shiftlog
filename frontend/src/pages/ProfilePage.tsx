@@ -1,11 +1,65 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { authApi, usersApi, icalApi } from '../api/client'
-import { User, Mail, Lock, Save, Calendar, Copy, Trash2, Sun, Moon } from 'lucide-react'
+import { authApi, usersApi, icalApi, billingApi, BillingPlan } from '../api/client'
+import { User, Mail, Lock, Save, Calendar, Copy, Trash2, Sun, Moon, Crown, CreditCard, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function ProfilePage() {
-  const { user } = useAuth()
+  const { user, selectedCompany } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [plan, setPlan] = useState<BillingPlan | null>(null)
+  const [billingLoading, setBillingLoading] = useState(false)
+  const isAdminRole = user?.role === 'admin' || user?.role === 'super_admin'
+
+  // 決済からの戻り: success=お礼+プラン再取得(Webhook反映に数秒かかるためリトライ)
+  useEffect(() => {
+    const checkout = searchParams.get('checkout')
+    if (!checkout) return
+    if (checkout === 'success') {
+      toast.success('お支払いありがとうございます！Proプランが有効になりました', { duration: 6000 })
+      let attempts = 0
+      const poll = setInterval(async () => {
+        attempts++
+        try {
+          const res = await billingApi.getPlan()
+          setPlan(res.data)
+          if (res.data.plan === 'pro' || attempts >= 5) clearInterval(poll)
+        } catch { if (attempts >= 5) clearInterval(poll) }
+      }, 2000)
+    } else if (checkout === 'cancel') {
+      toast('お支払いはキャンセルされました。いつでも再開できます', { icon: 'ℹ️' })
+    }
+    searchParams.delete('checkout')
+    setSearchParams(searchParams, { replace: true })
+  }, [])
+
+  useEffect(() => {
+    if (!isAdminRole || !selectedCompany) return
+    billingApi.getPlan().then(res => setPlan(res.data)).catch(() => {})
+  }, [isAdminRole, selectedCompany?.id])
+
+  const handleUpgrade = async () => {
+    setBillingLoading(true)
+    try {
+      const res = await billingApi.createCheckout()
+      window.location.href = res.data.url
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '決済ページの作成に失敗しました')
+      setBillingLoading(false)
+    }
+  }
+
+  const handlePortal = async () => {
+    setBillingLoading(true)
+    try {
+      const res = await billingApi.createPortal()
+      window.location.href = res.data.url
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'お支払い管理ページの作成に失敗しました')
+      setBillingLoading(false)
+    }
+  }
   const [email, setEmail] = useState(user?.email || '')
   const [name, setName] = useState(user?.name || '')
   const [currentPassword, setCurrentPassword] = useState('')
@@ -89,6 +143,68 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {/* Plan / Billing */}
+      {isAdminRole && plan && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Crown className="w-6 h-6 text-amber-500" />
+            <h2 className="text-lg font-bold text-gray-900">プラン</h2>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {plan.plan === 'pro' ? (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-sm font-semibold">
+                <Sparkles className="w-3.5 h-3.5" /> Proプラン
+              </span>
+            ) : plan.in_trial ? (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-sm font-semibold">
+                Proトライアル中（残り{plan.trial_days_left}日）
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm font-semibold">
+                Freeプラン
+              </span>
+            )}
+            <span className="text-sm text-gray-500">
+              店舗 {plan.current_stores}/{plan.max_stores} ・ スタッフ {plan.current_staff}名
+            </span>
+          </div>
+
+          {plan.plan !== 'pro' && (
+            <div className="text-sm text-gray-600 mb-4 space-y-1">
+              <p>Free: 打刻・シフト管理・当月の勤務集計（1店舗・スタッフ{plan.max_free_staff}名まで）</p>
+              <p>Pro（月額¥{plan.price_per_store.toLocaleString()}）: 過去月の集計・CSV出力・給与ソフト連携・スタッフ無制限</p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            {plan.plan !== 'pro' && (
+              <button
+                onClick={handleUpgrade}
+                disabled={billingLoading}
+                className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium disabled:opacity-50"
+              >
+                <Sparkles className="w-4 h-4" />
+                {plan.in_trial ? 'Proを続ける' : 'Proにアップグレード'}（月額¥{plan.price_per_store.toLocaleString()}）
+              </button>
+            )}
+            {plan.plan === 'pro' && (
+              <button
+                onClick={handlePortal}
+                disabled={billingLoading}
+                className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50"
+              >
+                <CreditCard className="w-4 h-4" />
+                お支払い・解約の管理
+              </button>
+            )}
+          </div>
+          {plan.plan === 'pro' && (
+            <p className="text-xs text-gray-400 mt-3">解約してもデータは削除されません。Freeプランとして引き続き打刻・シフト管理をご利用いただけます。</p>
+          )}
+        </div>
+      )}
+
       {/* Profile Info */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center gap-3 mb-6">

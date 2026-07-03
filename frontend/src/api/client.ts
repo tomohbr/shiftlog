@@ -179,6 +179,7 @@ export const billingApi = {
   getPlan: () => api.get<BillingPlan>('/billing/plan'),
   createCheckout: (additional_stores: number = 0) =>
     api.post<{ url: string }>('/billing/checkout', { additional_stores }),
+  createPortal: () => api.post<{ url: string }>('/billing/portal'),
 }
 
 // Feedback (フィードバック)

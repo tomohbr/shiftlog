@@ -60,11 +60,19 @@ router.post('/checkout', authenticateToken, requireCompany, async (req: AuthRequ
       'SELECT * FROM subscriptions WHERE company_id = ?'
     ).get(companyId) as any;
 
+    // 二重課金防止: 既にPro契約中の会社がProプラン(店舗追加ではない)を再購入するのを防ぐ
+    if (checkoutType === 'pro' && subscription?.plan === 'pro' && subscription?.status !== 'canceled' && subscription?.stripe_subscription_id) {
+      res.status(400).json({ error: '既にProプランをご契約中です。お支払いの変更は設定ページの「お支払い・解約の管理」から行えます。' });
+      return;
+    }
+
     let customerId = subscription?.stripe_customer_id;
     if (!customerId) {
       const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(companyId) as any;
+      const adminUser = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user!.id) as any;
       const customer = await stripe.customers.create({
         name: company.name,
+        email: adminUser?.email || undefined,
         metadata: { company_id: String(companyId) },
       });
       customerId = customer.id;
@@ -97,14 +105,68 @@ router.post('/checkout', authenticateToken, requireCompany, async (req: AuthRequ
         additional_stores: String(addStores),
         checkout_type: checkoutType,
       },
-      success_url: `${baseUrl}/stores?checkout=success`,
-      cancel_url: `${baseUrl}/stores?checkout=cancel`,
+      success_url: `${baseUrl}/settings?checkout=success`,
+      cancel_url: `${baseUrl}/settings?checkout=cancel`,
     });
 
     res.json({ url: session.url });
   } catch (err: any) {
     console.error('Stripe checkout error:', err);
     res.status(500).json({ error: '決済セッションの作成に失敗しました' });
+  }
+});
+
+// POST /api/billing/portal - Stripe Billing Portal（支払い方法変更・解約・請求履歴）
+router.post('/portal', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
+  const companyId = req.companyId!;
+  const stripe = getStripe();
+
+  if (!stripe) {
+    res.status(503).json({ error: '決済システムが設定されていません。管理者にお問い合わせください。' });
+    return;
+  }
+
+  const subscription = db.prepare(
+    'SELECT * FROM subscriptions WHERE company_id = ?'
+  ).get(companyId) as any;
+
+  if (!subscription?.stripe_customer_id) {
+    res.status(400).json({ error: 'お支払い情報がまだ登録されていません' });
+    return;
+  }
+
+  const baseUrl = process.env.APP_URL || req.headers.origin || 'http://localhost:5173';
+
+  try {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: subscription.stripe_customer_id,
+      return_url: `${baseUrl}/settings`,
+    });
+    res.json({ url: session.url });
+  } catch (err: any) {
+    // ポータル設定未作成の場合はデフォルト設定を自動作成してリトライ
+    if (err?.message?.includes('configuration')) {
+      try {
+        await stripe.billingPortal.configurations.create({
+          business_profile: { headline: 'シフトログ — お支払いの管理' },
+          features: {
+            invoice_history: { enabled: true },
+            payment_method_update: { enabled: true },
+            subscription_cancel: { enabled: true, mode: 'at_period_end' },
+          },
+        });
+        const session = await stripe.billingPortal.sessions.create({
+          customer: subscription.stripe_customer_id,
+          return_url: `${baseUrl}/settings`,
+        });
+        res.json({ url: session.url });
+        return;
+      } catch (err2: any) {
+        console.error('Stripe portal config error:', err2);
+      }
+    }
+    console.error('Stripe portal error:', err);
+    res.status(500).json({ error: 'お支払い管理ページの作成に失敗しました' });
   }
 });
 
@@ -171,6 +233,44 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
         `).run(companyId);
 
         console.log(`Company ${companyId} subscription canceled, reverted to free`);
+        break;
+      }
+
+      case 'customer.subscription.updated': {
+        // 支払い失敗(past_due/unpaid)や復活(active)の状態を同期する。
+        // 解約予約(cancel_at_period_end)は期末まで active のままなので何もしない。
+        const subscription = event.data.object;
+        const customer = await stripe.customers.retrieve(subscription.customer);
+        const companyId = parseInt(customer.metadata.company_id);
+        const status = ['active', 'trialing'].includes(subscription.status) ? 'active' : subscription.status;
+
+        db.prepare(`
+          UPDATE subscriptions
+          SET status = ?, current_period_end = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE company_id = ? AND stripe_subscription_id = ?
+        `).run(
+          status,
+          subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+          companyId,
+          subscription.id,
+        );
+
+        console.log(`Company ${companyId} subscription status synced: ${subscription.status}`);
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object;
+        if (invoice.customer) {
+          const customer = await stripe.customers.retrieve(invoice.customer);
+          const companyId = parseInt(customer.metadata.company_id);
+          // 即ダウングレードせず past_due で記録（Stripe側のリトライ/督促に任せ、最終的に deleted で降格）
+          db.prepare(`
+            UPDATE subscriptions SET status = 'past_due', updated_at = CURRENT_TIMESTAMP
+            WHERE company_id = ? AND plan = 'pro'
+          `).run(companyId);
+          console.log(`Company ${companyId} invoice payment failed (past_due)`);
+        }
         break;
       }
     }
