@@ -33,7 +33,7 @@ function parseCsv(text: string): string[][] {
   return rows
 }
 
-const TEMPLATE = `氏名,メール,PIN,時給,雇用形態,電話
+const TEMPLATE = `氏名,メール,打刻用PIN(Pro任意),時給,雇用形態,電話
 山田太郎,taro@example.com,1234,1100,パート,090-1234-5678
 佐藤花子,,5678,1500,アルバイト,
 `
@@ -67,7 +67,7 @@ export default function BulkImportModal({ onClose, onDone }: Props) {
       const row: BulkImportRow = {
         name: (r[idx('氏名')] || r[0] || '').trim(),
         email: (r[idx('メール')] || '').trim() || undefined,
-        pin: (r[idx('PIN')] || '').trim() || undefined,
+        pin: (r[idx('打刻用PIN(Pro任意)')] || r[idx('PIN')] || '').trim() || undefined,
         hourly_wage: r[idx('時給')] ? Number(r[idx('時給')]) : undefined,
         employment_type: (r[idx('雇用形態')] || '').trim() || undefined,
         phone: (r[idx('電話')] || '').trim() || undefined,
@@ -135,7 +135,7 @@ export default function BulkImportModal({ onClose, onDone }: Props) {
                   value={text}
                   onChange={e => { setText(e.target.value); buildPreview(e.target.value) }}
                   rows={6}
-                  placeholder="氏名,メール,PIN,時給,雇用形態,電話..."
+                  placeholder="氏名,メール,打刻用PIN(Pro任意),時給,雇用形態,電話..."
                   className="w-full border border-gray-300 rounded px-3 py-2 text-xs font-mono"
                 />
               </div>
@@ -151,7 +151,7 @@ export default function BulkImportModal({ onClose, onDone }: Props) {
                         <tr>
                           <th className="text-left px-2 py-1.5">氏名</th>
                           <th className="text-left px-2 py-1.5">メール</th>
-                          <th className="text-left px-2 py-1.5">PIN</th>
+                          <th className="text-left px-2 py-1.5">打刻用PIN</th>
                           <th className="text-left px-2 py-1.5">時給</th>
                           <th className="text-left px-2 py-1.5">形態</th>
                         </tr>

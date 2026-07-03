@@ -39,6 +39,7 @@ export default function LoginPage() {
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regCompanyName, setRegCompanyName] = useState('')
+  const [regIndustry, setRegIndustry] = useState('restaurant')
 
   // PIN login state
   const [pinLoginCompanyPin, setPinLoginCompanyPin] = useState('')
@@ -385,11 +386,15 @@ export default function LoginPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-600 rounded-2xl shadow-lg mb-4">
               <UserPlus className="w-9 h-9 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">新規登録</h1>
-            <p className="text-gray-500 mt-1">1店舗なら完全無料で使えます</p>
+            <h1 className="text-3xl font-bold text-gray-900">まず1店舗を3分で作成</h1>
+            <p className="text-gray-500 mt-1">出退勤打刻・シフト・勤務集計をまとめて確認できます</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="mb-5 rounded-xl bg-emerald-50 border border-emerald-100 p-3">
+              <p className="text-sm font-semibold text-emerald-900">1店舗は完全無料</p>
+              <p className="text-xs text-emerald-700 mt-1">登録後すぐにデモ店舗で操作感を確認できます。スタッフへのログイン案内はあとからでOKです。</p>
+            </div>
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">お名前</label>
@@ -400,6 +405,16 @@ export default function LoginPage() {
                 <input type="text" value={regCompanyName} onChange={e => setRegCompanyName(e.target.value)} className="input-field" required placeholder="〇〇レストラン" />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">業種</label>
+                <select value={regIndustry} onChange={e => setRegIndustry(e.target.value)} className="input-field">
+                  <option value="restaurant">飲食店</option>
+                  <option value="salon">美容室・サロン</option>
+                  <option value="retail">小売</option>
+                  <option value="other">その他</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">業種に合わせて初期シフトの見方を案内します。</p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
                 <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="input-field" required placeholder="example@email.com" />
               </div>
@@ -408,7 +423,7 @@ export default function LoginPage() {
                 <input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="input-field" required placeholder="4文字以上" minLength={4} />
               </div>
               <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl text-base transition-colors">
-                {loading ? '登録中...' : '無料で始める'}
+                {loading ? '登録中...' : '無料で店舗を作成する'}
               </button>
             </form>
 
@@ -483,7 +498,13 @@ export default function LoginPage() {
             <Calendar className="w-9 h-9 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">シフトログ</h1>
-          <p className="text-gray-500 mt-1">かんたんシフト管理アプリ</p>
+          <p className="text-gray-600 mt-2 font-medium leading-relaxed">打刻とシフトを、オーナーが毎日見える状態に</p>
+          <p className="text-sm text-gray-500 mt-2 leading-relaxed">飲食店・サロンの出退勤打刻、今日のシフト、勤務集計を1画面で確認。1店舗なら無料で始められます。</p>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-semibold text-gray-700">
+            <div className="rounded-lg bg-white/80 border border-blue-100 py-2">出退勤打刻</div>
+            <div className="rounded-lg bg-white/80 border border-blue-100 py-2">シフト管理</div>
+            <div className="rounded-lg bg-white/80 border border-blue-100 py-2">勤務集計</div>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -497,8 +518,8 @@ export default function LoginPage() {
                 <UserPlus className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">初めての方はこちら</h2>
-                <p className="text-sm text-emerald-100">無料でアカウント作成（1分で完了）</p>
+                <h2 className="text-lg font-semibold text-white">無料で店舗を作成する</h2>
+                <p className="text-sm text-emerald-100">まずは打刻とシフトの動きを確認できます</p>
               </div>
             </div>
           </button>

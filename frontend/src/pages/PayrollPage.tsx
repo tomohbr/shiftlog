@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Download, FileSpreadsheet, RefreshCw } from 'lucide-react'
-import { payrollApi, api, PayrollSummary, PayrollFormat } from '../api/client'
+import { Crown, Download, FileSpreadsheet, RefreshCw } from 'lucide-react'
+import { payrollApi, api, billingApi, PayrollSummary, PayrollFormat } from '../api/client'
 import toast from 'react-hot-toast'
 
 const FORMATS: { id: PayrollFormat; label: string; desc: string }[] = [
@@ -16,14 +16,32 @@ export default function PayrollPage() {
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [summaries, setSummaries] = useState<PayrollSummary[]>([])
   const [loading, setLoading] = useState(false)
+  const [upgradeRequired, setUpgradeRequired] = useState(false)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+
+  const startProCheckout = async () => {
+    setCheckoutLoading(true)
+    try {
+      const res = await billingApi.createCheckout()
+      window.location.href = res.data.url
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '決済ページの作成に失敗しました')
+      setCheckoutLoading(false)
+    }
+  }
 
   const load = async () => {
     setLoading(true)
     try {
       const r = await payrollApi.getSummary(year, month)
       setSummaries(r.data.summaries)
+      setUpgradeRequired(false)
     } catch (e: any) {
-      toast.error(e.response?.data?.error || '読み込みに失敗しました')
+      if (e.response?.data?.code === 'UPGRADE_REQUIRED') {
+        setUpgradeRequired(true)
+      } else {
+        toast.error(e.response?.data?.error || '読み込みに失敗しました')
+      }
     } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [year, month])
@@ -44,7 +62,12 @@ export default function PayrollPage() {
       URL.revokeObjectURL(url)
       toast.success('ダウンロードを開始しました')
     } catch (e: any) {
-      toast.error('ダウンロードに失敗しました')
+      if (e.response?.data?.code === 'UPGRADE_REQUIRED') {
+        setUpgradeRequired(true)
+        toast.error('給与CSV出力はProプランで利用できます')
+      } else {
+        toast.error('ダウンロードに失敗しました')
+      }
     }
   }
 
@@ -70,6 +93,23 @@ export default function PayrollPage() {
           </button>
         </div>
       </div>
+
+      {upgradeRequired && (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-yellow-900">給与CSVエクスポート・過去月の集計はPro機能です</p>
+            <p className="text-sm text-yellow-800 mt-1">打刻・シフト・当月の集計プレビューは無料のまま使えます。給与ソフト向けCSV出力と過去月の履歴は月額¥980で利用できます。</p>
+          </div>
+          <button
+            onClick={startProCheckout}
+            disabled={checkoutLoading}
+            className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-600 disabled:opacity-60"
+          >
+            <Crown className="w-4 h-4" />
+            {checkoutLoading ? '決済ページへ移動中...' : 'Proにする（月額¥980）'}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-lg border border-gray-200 p-4">

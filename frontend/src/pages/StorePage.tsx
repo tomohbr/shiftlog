@@ -128,12 +128,12 @@ function UpgradeModal({ planInfo, onClose }: UpgradeModalProps) {
           <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg p-4 border border-yellow-200">
             <div className="flex items-center gap-2 mb-2">
               <Crown className="w-4 h-4 text-yellow-600" />
-              <p className="text-sm font-bold text-gray-900">追加店舗プラン</p>
+              <p className="text-sm font-bold text-gray-900">Proプラン</p>
             </div>
             <p className="text-2xl font-bold text-gray-900">¥980<span className="text-sm font-normal text-gray-500">/月/店舗</span></p>
             <ul className="mt-3 space-y-1 text-sm text-gray-600">
-              <li>・ 店舗を追加するごとに月額980円</li>
-              <li>・ 全機能利用可能</li>
+              <li>・ 1店舗目はずっと無料、2店舗目から月額980円</li>
+              <li>・ スタッフ31名以上、月次集計、CSV出力が利用可能</li>
               <li>・ いつでもキャンセル可能</li>
             </ul>
           </div>

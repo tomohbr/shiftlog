@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { requireProFeature, requireProForPastMonths } from '../utils/billing';
 
 const router = Router();
 
@@ -95,6 +96,7 @@ function summarize(companyId: number, year: number, month: number): WorkSummary[
 
 // GET /api/payroll/export?year=&month=&format=freee|moneyforward|kingoftime|generic
 router.get('/export', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!requireProFeature(req, res, '給与ソフト向けCSV出力')) return;
   if (!['admin','super_admin'].includes(req.user!.role) && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
@@ -160,6 +162,8 @@ router.get('/summary', authenticateToken, requireCompany, (req: AuthRequest, res
   const companyId = req.companyId!;
   const year = Number(req.query.year) || new Date().getFullYear();
   const month = Number(req.query.month) || new Date().getMonth() + 1;
+  // 当月の集計プレビューはFreeでも閲覧可。過去月の履歴はPro。
+  if (!requireProForPastMonths(req, res, year, month, '過去月の勤怠集計')) return;
   res.json({ summaries: summarize(companyId, year, month), year, month });
 });
 

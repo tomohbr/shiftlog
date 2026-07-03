@@ -269,9 +269,9 @@ router.post('/register', (req: Request, res: Response): void => {
     'INSERT INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)'
   ).run(userId, companyId, 'admin');
 
-  // 新規会社は無料プラン1店舗で初期化
+  // 新規会社は無料プラン1店舗＋30日Proトライアルで初期化
   db.prepare(
-    'INSERT INTO subscriptions (company_id, plan, max_stores) VALUES (?, ?, ?)'
+    "INSERT INTO subscriptions (company_id, plan, max_stores, trial_ends_at) VALUES (?, ?, ?, datetime('now', '+30 days'))"
   ).run(companyId, 'free', 1);
 
   logAudit({ userId: userId, companyId, action: 'create', entity: 'company', entityId: companyId, summary: `会社「${companyName}」を新規作成` });

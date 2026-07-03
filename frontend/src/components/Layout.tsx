@@ -2,6 +2,7 @@ import { ReactNode, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useKiosk } from '../contexts/KioskContext'
+import PlanBanner from './PlanBanner'
 import {
   LayoutDashboard,
   Users,
@@ -256,6 +257,8 @@ export default function Layout({ children }: LayoutProps) {
             }
           </h1>
         </header>
+
+        <PlanBanner />
 
         <main className="flex-1 p-4 sm:p-6 pb-20 sm:pb-6">
           {children}

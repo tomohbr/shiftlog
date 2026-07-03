@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format, addMonths, subMonths } from 'date-fns'
-import { Download, TrendingUp, Clock, DollarSign } from 'lucide-react'
-import { shiftsApi, usersApi, csvApi, Shift, User } from '../api/client'
+import { Crown, Download, TrendingUp, Clock, DollarSign } from 'lucide-react'
+import { shiftsApi, csvApi, billingApi, Shift } from '../api/client'
 import MonthNavigator from '../components/MonthNavigator'
 import toast from 'react-hot-toast'
 
@@ -22,6 +22,19 @@ export default function ReportPage() {
   const [summary, setSummary] = useState<SummaryRow[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
+  const [upgradeRequired, setUpgradeRequired] = useState(false)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+
+  const startProCheckout = async () => {
+    setCheckoutLoading(true)
+    try {
+      const res = await billingApi.createCheckout()
+      window.location.href = res.data.url
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '決済ページの作成に失敗しました')
+      setCheckoutLoading(false)
+    }
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -34,8 +47,13 @@ export default function ReportPage() {
       ])
       setSummary(summaryRes.data.summary)
       setShifts(shiftsRes.data.shifts)
-    } catch {
-      toast.error('データの取得に失敗しました')
+      setUpgradeRequired(false)
+    } catch (e: any) {
+      if (e.response?.data?.code === 'UPGRADE_REQUIRED') {
+        setUpgradeRequired(true)
+      } else {
+        toast.error('データの取得に失敗しました')
+      }
     } finally {
       setLoading(false)
     }
@@ -65,8 +83,13 @@ export default function ReportPage() {
       const names = { shifts: 'シフト一覧', timecards: 'タイムカード', summary: '勤務集計' }
       downloadBlob(res.data, `${names[type]}_${year}年${month}月.csv`)
       toast.success('CSVをダウンロードしました')
-    } catch {
-      toast.error('ダウンロードに失敗しました')
+    } catch (e: any) {
+      if (e.response?.data?.code === 'UPGRADE_REQUIRED') {
+        setUpgradeRequired(true)
+        toast.error('CSV出力はProプランで利用できます')
+      } else {
+        toast.error('ダウンロードに失敗しました')
+      }
     }
   }
 
@@ -100,6 +123,23 @@ export default function ReportPage() {
           </button>
         </div>
       </div>
+
+      {upgradeRequired && (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-yellow-900">過去月の集計・CSV出力はPro機能です</p>
+            <p className="text-sm text-yellow-800 mt-1">打刻・シフト管理・当月の集計は無料のまま使えます。過去月の履歴、CSV出力、スタッフ31名以上は月額¥980で利用できます。</p>
+          </div>
+          <button
+            onClick={startProCheckout}
+            disabled={checkoutLoading}
+            className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-600 disabled:opacity-60"
+          >
+            <Crown className="w-4 h-4" />
+            {checkoutLoading ? '決済ページへ移動中...' : 'Proにする（月額¥980）'}
+          </button>
+        </div>
+      )}
 
       {/* Summary stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

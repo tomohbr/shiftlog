@@ -48,15 +48,15 @@ export default function SetupGuidePage() {
         <div className="space-y-2">
           <div className="bg-gray-50 rounded p-3">
             <p className="font-semibold text-sm">A. 1人ずつ追加（少人数向け）</p>
-            <p className="text-xs text-gray-600">スタッフ管理 →「+ スタッフ追加」で氏名・個人PIN（4桁）・時給を入力</p>
+            <p className="text-xs text-gray-600">スタッフ管理 →「+ スタッフ追加」で氏名を入力。時給などは必要に応じて設定</p>
           </div>
           <div className="bg-gray-50 rounded p-3">
-            <p className="font-semibold text-sm">B. CSV一括登録（10名以上の場合推奨）</p>
+            <p className="font-semibold text-sm">B. CSV一括登録（複数名をまとめて登録する場合）</p>
             <p className="text-xs text-gray-600">スタッフ管理 →「CSV一括登録」→ テンプレートをダウンロード → Excel編集 → アップロード</p>
           </div>
           <div className="bg-gray-50 rounded p-3">
-            <p className="font-semibold text-sm">C. 既存スタッフにメール招待（今後追加予定）</p>
-            <p className="text-xs text-gray-500">本人がメール経由で自己登録</p>
+            <p className="font-semibold text-sm">C. 既存スタッフにログイン案内を送る</p>
+            <p className="text-xs text-gray-500">ログイン案内文をコピーして、LINEやメールで共有</p>
           </div>
           <Link to="/staff" className="inline-flex items-center gap-1 mt-1 text-blue-600 hover:underline text-sm">
             スタッフ管理へ <ChevronRight className="w-3 h-3" />
@@ -161,7 +161,7 @@ export default function SetupGuidePage() {
           <ol className="list-decimal ml-5 space-y-1 text-sm">
             <li>会社PIN（管理者から受け取った6桁の数字）を入力</li>
             <li>スタッフ一覧から自分の名前をタップ</li>
-            <li>個人PIN（4桁）を入力</li>
+            <li>一覧から自分の名前を選択</li>
           </ol>
         </div>
       ),
@@ -245,11 +245,11 @@ export default function SetupGuidePage() {
             <h3 className="text-base font-bold text-gray-900">✨ 導入代行サービスもご用意しています</h3>
             <p className="text-sm text-gray-700 mt-1">
               「セットアップが難しい」「スタッフへの共有をまとめて任せたい」という方向けに、
-              <b className="text-pink-700">初期設定〜スタッフ招待までを代行</b>するサービスを行っています。
+              <b className="text-pink-700">初期設定〜スタッフへのログイン案内までを代行</b>するサービスを行っています。
             </p>
             <ul className="text-xs text-gray-600 mt-2 space-y-0.5 list-disc ml-5">
               <li>会社情報・店舗・スタッフの一括登録</li>
-              <li>各スタッフへの招待メッセージ送付（LINE/メール）</li>
+              <li>各スタッフへのログイン案内文作成（LINE/メール向け）</li>
               <li>初回シフトの作成・公開サポート</li>
               <li>運用開始後の初期問合せ対応</li>
             </ul>
@@ -351,7 +351,6 @@ ${appUrl}
 2. 「スタッフログイン」をタップ
 3. 会社PIN: ${companyPin} を入力
 4. スタッフ一覧から自分の名前をタップ
-5. 個人PIN（4桁・別途お伝えします）を入力
 
 ▼ 使える機能
 ・出退勤の打刻

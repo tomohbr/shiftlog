@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { FREE_STAFF_LIMIT, canAddStaff, hasProAccess, sendUpgradeRequired } from '../utils/billing';
 
 const router = Router();
 
@@ -27,6 +28,10 @@ router.post('/bulk', authenticateToken, requireCompany, (req: AuthRequest, res: 
     res.status(400).json({ error: '一度に登録できるのは500件までです' });
     return;
   }
+  if (!canAddStaff(companyId, rows.length)) {
+    sendUpgradeRequired(res, `スタッフ${FREE_STAFF_LIMIT + 1}名以上の登録`);
+    return;
+  }
 
   const results: Array<{ row: number; status: 'created' | 'skipped' | 'error'; message?: string; user_id?: number }> = [];
   const txn = db.transaction(() => {
@@ -37,7 +42,7 @@ router.post('/bulk', authenticateToken, requireCompany, (req: AuthRequest, res: 
         return;
       }
       const email = row.email ? String(row.email).trim().toLowerCase() : null;
-      const pin = row.pin ? String(row.pin).trim() : null;
+      const pin = hasProAccess(companyId) && row.pin ? String(row.pin).trim() : null;
       const hourlyWage = row.hourly_wage != null ? Number(row.hourly_wage) : 1000;
       const employmentType = row.employment_type || 'パート';
       const phone = row.phone ? String(row.phone).trim() : null;
@@ -139,9 +144,14 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   }
 
   const { email, password, name, pin, role, color, hourly_wage, phone, employment_type } = req.body;
+  const staffPin = hasProAccess(companyId) ? (pin || null) : null;
 
   if (!name) {
     res.status(400).json({ error: '名前を入力してください' });
+    return;
+  }
+  if ((role || 'staff') !== 'admin' && !canAddStaff(companyId, 1)) {
+    sendUpgradeRequired(res, `スタッフ${FREE_STAFF_LIMIT + 1}名以上の登録`);
     return;
   }
 
@@ -168,7 +178,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
     const hash = password ? bcrypt.hashSync(password, 10) : null;
     const result = db.prepare(
       'INSERT INTO users (email, password, name, pin, role) VALUES (?, ?, ?, ?, ?)'
-    ).run(email || null, hash, name, pin || null, role || 'staff');
+    ).run(email || null, hash, name, staffPin, role || 'staff');
     userId = result.lastInsertRowid as number;
   }
 
@@ -213,13 +223,14 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   }
 
   const { name, email, password, pin, color, hourly_wage, phone, role, employment_type } = req.body;
+  const staffPin = hasProAccess(companyId) ? pin : undefined;
 
   // Update user table
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
-  if (name !== undefined || email !== undefined || pin !== undefined || role !== undefined) {
+  if (name !== undefined || email !== undefined || staffPin !== undefined || role !== undefined) {
     db.prepare(
       'UPDATE users SET name = ?, email = ?, pin = ?, role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).run(name !== undefined ? name : user.name, email !== undefined ? email : user.email, pin !== undefined ? pin : user.pin, role !== undefined ? role : user.role, userId);
+    ).run(name !== undefined ? name : user.name, email !== undefined ? email : user.email, staffPin !== undefined ? staffPin : user.pin, role !== undefined ? role : user.role, userId);
   }
 
   // Update password if provided

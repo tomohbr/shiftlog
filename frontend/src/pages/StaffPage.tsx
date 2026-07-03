@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy } from 'lucide-react'
-import { usersApi, User } from '../api/client'
+import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy, Crown } from 'lucide-react'
+import { usersApi, billingApi, BillingPlan, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import BulkImportModal from '../components/BulkImportModal'
 import toast from 'react-hot-toast'
@@ -15,9 +15,10 @@ interface UserModalProps {
   user?: User | null
   onClose: () => void
   onSave: () => void
+  isPro: boolean
 }
 
-function UserModal({ user, onClose, onSave }: UserModalProps) {
+function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
   const [name, setName] = useState(user?.name || '')
   const [email, setEmail] = useState(user?.email || '')
   const [pin, setPin] = useState((user as any)?.pin || '')
@@ -75,18 +76,21 @@ function UserModal({ user, onClose, onSave }: UserModalProps) {
             <input value={name} onChange={e => setName(e.target.value)} className="input-field" required />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">個人PIN（ログイン用）</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={pin}
-              onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
-              className="input-field"
-              placeholder="4桁の数字"
-              maxLength={8}
-            />
-          </div>
+          {isPro && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">打刻用PIN（Pro・任意）</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={pin}
+                onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+                className="input-field"
+                placeholder="必要な場合だけ設定"
+                maxLength={8}
+              />
+              <p className="text-xs text-gray-500 mt-1">通常は会社PINと名前選択だけで打刻できます。なりすまし防止を強めたい店舗だけ設定してください。</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -187,7 +191,7 @@ function isNeverLoggedIn(u: User): boolean {
   return Date.now() - created > 24 * 60 * 60 * 1000
 }
 
-function generateInviteMessage(u: User, companyName: string, companyPin: string): string {
+function generateInviteMessage(u: User, companyName: string, companyPin: string, includePin: boolean): string {
   const url = 'https://shiftlog-production.up.railway.app/'
   return `【シフトログご案内】${companyName}
 ${u.name}さん、スタッフ管理アプリ「シフトログ」のアカウントを作成しました。
@@ -201,7 +205,7 @@ ${url}
 2. 「スタッフログイン」をタップ
 3. 会社PIN: ${companyPin}
 4. 一覧から「${u.name}」をタップ
-${u.pin ? `5. 個人PIN: ${u.pin}` : '5. 個人PIN（4桁）を入力'}
+${includePin && u.pin ? `5. 打刻用PIN: ${u.pin}` : ''}
 
 ▼ できること
 ・出退勤の打刻
@@ -226,12 +230,29 @@ export default function StaffPage() {
   const [inviteUser, setInviteUser] = useState<User | null>(null)
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null)
   const [newPassword, setNewPassword] = useState('')
+  const [billingPlan, setBillingPlan] = useState<BillingPlan | null>(null)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+
+  const startProCheckout = async () => {
+    setCheckoutLoading(true)
+    try {
+      const res = await billingApi.createCheckout()
+      window.location.href = res.data.url
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '決済ページの作成に失敗しました')
+      setCheckoutLoading(false)
+    }
+  }
 
   const loadUsers = async () => {
     setLoading(true)
     try {
-      const res = await usersApi.getAll()
+      const [res, planRes] = await Promise.all([
+        usersApi.getAll(),
+        billingApi.getPlan().catch(() => null),
+      ])
       setUsers(res.data.users)
+      if (planRes) setBillingPlan(planRes.data)
     } catch {
       toast.error('スタッフ一覧の取得に失敗しました')
     } finally {
@@ -264,6 +285,9 @@ export default function StaffPage() {
     }
   }
 
+  const isPro = billingPlan?.plan === 'pro'
+  const freeStaffLimitReached = !isPro && users.filter(u => u.role !== 'admin').length >= 30
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -273,14 +297,21 @@ export default function StaffPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setBulkOpen(true)}
+            onClick={() => freeStaffLimitReached ? startProCheckout() : setBulkOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
           >
             <Upload className="w-4 h-4" />
             CSV一括登録
           </button>
           <button
-            onClick={() => { setEditingUser(null); setModalOpen(true) }}
+            onClick={() => {
+              if (freeStaffLimitReached) {
+                startProCheckout()
+              } else {
+                setEditingUser(null)
+                setModalOpen(true)
+              }
+            }}
             className="btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -289,6 +320,23 @@ export default function StaffPage() {
         </div>
       </div>
       {bulkOpen && <BulkImportModal onClose={() => setBulkOpen(false)} onDone={loadUsers} />}
+
+      {freeStaffLimitReached && (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-yellow-900">無料プランのスタッフ上限に達しています</p>
+            <p className="text-sm text-yellow-800 mt-1">30名までは無料です。31名以上のスタッフ登録、月次集計、CSV出力はPro（月額¥980）で利用できます。</p>
+          </div>
+          <button
+            onClick={startProCheckout}
+            disabled={checkoutLoading}
+            className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-600 disabled:opacity-60"
+          >
+            <Crown className="w-4 h-4" />
+            {checkoutLoading ? '決済ページへ移動中...' : 'Proにする（月額¥980）'}
+          </button>
+        </div>
+      )}
 
       {(() => {
         const neverCount = users.filter(isNeverLoggedIn).length
@@ -301,7 +349,7 @@ export default function StaffPage() {
                 {neverCount}名のスタッフがまだ一度もログインしていません
               </p>
               <p className="text-xs text-amber-800 mt-0.5">
-                右の「招待」ボタンから会社PIN入りの招待メッセージを表示・コピーして、LINEやメールで送ってください。
+                右の「ログイン案内」ボタンから会社PIN入りの案内文を表示・コピーして、LINEやメールで送ってください。
               </p>
             </div>
           </div>
@@ -318,7 +366,7 @@ export default function StaffPage() {
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">スタッフ</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">PIN</th>
+                {isPro && <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">打刻用PIN</th>}
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">時給</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">形態</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">役割</th>
@@ -349,9 +397,11 @@ export default function StaffPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 hidden md:table-cell">
-                    <span className="text-sm text-gray-600 font-mono">{(u as any).pin || '-'}</span>
-                  </td>
+                  {isPro && (
+                    <td className="px-6 py-4 hidden md:table-cell">
+                      <span className="text-sm text-gray-600 font-mono">{(u as any).pin || '-'}</span>
+                    </td>
+                  )}
                   <td className="px-6 py-4 hidden lg:table-cell">
                     <span className="text-sm text-gray-600">¥{(u.hourly_wage || 0).toLocaleString()}</span>
                   </td>
@@ -371,10 +421,10 @@ export default function StaffPage() {
                         <button
                           onClick={() => setInviteUser(u)}
                           className="text-xs text-green-700 hover:text-green-900 px-2 py-1 rounded hover:bg-green-50 flex items-center gap-1 border border-green-200"
-                          title="招待メッセージを表示"
+                          title="ログイン案内を表示"
                         >
                           <Send className="w-3 h-3" />
-                          招待
+                          ログイン案内
                         </button>
                       )}
                       <button
@@ -415,6 +465,7 @@ export default function StaffPage() {
           user={editingUser}
           onClose={() => { setModalOpen(false); setEditingUser(null) }}
           onSave={loadUsers}
+          isPro={isPro}
         />
       )}
 
@@ -447,7 +498,7 @@ export default function StaffPage() {
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <Send className="w-5 h-5 text-green-600" />
-                招待メッセージ
+                ログイン案内文
               </h3>
               <button onClick={() => setInviteUser(null)}>
                 <X className="w-5 h-5 text-gray-500" />
@@ -455,15 +506,15 @@ export default function StaffPage() {
             </div>
             <div className="p-5 overflow-y-auto space-y-3">
               <p className="text-sm text-gray-700">
-                <b className="text-gray-900">{inviteUser.name}</b> さんに下記メッセージを LINE やメールで送ってください。コピーボタン1タップで貼り付けられます。
+                <b className="text-gray-900">{inviteUser.name}</b> さんに下記のログイン案内を LINE やメールで送ってください。コピーボタン1タップで貼り付けられます。
               </p>
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 relative">
                 <pre className="text-xs text-gray-800 whitespace-pre-wrap font-sans pr-20">
-                  {generateInviteMessage(inviteUser, selectedCompany?.name || '', (selectedCompany as any)?.company_pin || '')}
+                  {generateInviteMessage(inviteUser, selectedCompany?.name || '', (selectedCompany as any)?.company_pin || '', isPro)}
                 </pre>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(generateInviteMessage(inviteUser, selectedCompany?.name || '', (selectedCompany as any)?.company_pin || ''))
+                    navigator.clipboard.writeText(generateInviteMessage(inviteUser, selectedCompany?.name || '', (selectedCompany as any)?.company_pin || '', isPro))
                     toast.success('メッセージをコピーしました')
                   }}
                   className="absolute top-2 right-2 px-3 py-1.5 text-xs bg-white border border-green-300 rounded hover:bg-green-50 flex items-center gap-1 font-semibold"

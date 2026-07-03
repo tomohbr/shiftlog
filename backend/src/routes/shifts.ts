@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { requireProForPastMonths } from '../utils/billing';
 
 const router = Router();
 
@@ -223,6 +224,9 @@ router.get('/report/summary', authenticateToken, requireCompany, (req: AuthReque
     res.status(400).json({ error: '年と月を指定してください' });
     return;
   }
+
+  // 当月の集計はFreeでも閲覧可（毎日見る価値を残す）。過去月の履歴はPro。
+  if (!requireProForPastMonths(req, res, Number(year), Number(month), '過去月の勤務集計')) return;
 
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
   const endDate = `${year}-${String(month).padStart(2, '0')}-31`;

@@ -326,6 +326,10 @@ try {
   if (!ucCols.includes('employment_type')) {
     db.exec("ALTER TABLE user_companies ADD COLUMN employment_type TEXT NOT NULL DEFAULT 'part_time'");
   }
+  const subCols = db.prepare("PRAGMA table_info(subscriptions)").all().map((c: any) => c.name);
+  if (!subCols.includes('trial_ends_at')) {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN trial_ends_at TEXT");
+  }
   // Ensure existing companies have a subscription record (free plan)
   const companiesWithoutSub = db.prepare(`
     SELECT c.id FROM companies c
@@ -333,7 +337,7 @@ try {
     WHERE s.id IS NULL
   `).all() as { id: number }[];
   for (const comp of companiesWithoutSub) {
-    db.prepare('INSERT INTO subscriptions (company_id, plan, max_stores) VALUES (?, ?, ?)').run(comp.id, 'free', 1);
+    db.prepare("INSERT INTO subscriptions (company_id, plan, max_stores, trial_ends_at) VALUES (?, ?, ?, datetime('now', '+30 days'))").run(comp.id, 'free', 1);
   }
 } catch (e) { /* tables may not exist yet */ }
 
@@ -361,6 +365,21 @@ try {
     db.prepare('INSERT INTO _migrations (key) VALUES (?)').run(MIG_KEY);
   }
 } catch (e) { /* ignore */ }
+
+// 既存の無料プラン会社に30日Proトライアルを一度だけ付与（課金タイミング再設計 2026-07-03）
+try {
+  const MIG_KEY = 'grant_pro_trial_existing_2026_07_03';
+  const done = db.prepare('SELECT 1 FROM _migrations WHERE key = ?').get(MIG_KEY);
+  if (!done) {
+    const result = db.prepare(`
+      UPDATE subscriptions
+      SET trial_ends_at = datetime('now', '+30 days'), updated_at = CURRENT_TIMESTAMP
+      WHERE plan = 'free' AND trial_ends_at IS NULL
+    `).run();
+    db.prepare('INSERT INTO _migrations (key) VALUES (?)').run(MIG_KEY);
+    console.log(`[migration] granted 30-day pro trial to ${result.changes} existing companies`);
+  }
+} catch (e) { console.error('[migration] grant trial failed', e); }
 
 // super_admin 自動昇格: 指定メールが登録済みなら role=super_admin に揃える（安全網）
 try {

@@ -113,11 +113,29 @@ export default function DashboardPage() {
               <AlertTriangle className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-bold text-gray-900 mb-1">まだシフトログを使い始めていません</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">今日の店舗状況を見える状態にしましょう</h3>
               <p className="text-sm text-gray-700 mb-3">
-                店舗もシフトも未登録のため、スタッフの打刻やシフト管理ができない状態です。
-                <b className="text-red-700">3分でセットアップ</b>できます:
+                まだ店舗とシフトが未登録です。最初にサンプル店舗を入れると、出勤中の人数・本日のシフト・未打刻スタッフの見え方をすぐ確認できます。
+                <b className="text-red-700">3分で初回セットアップ</b>できます:
               </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                <div className="rounded-lg bg-white/80 border border-red-100 px-3 py-2">
+                  <p className="text-xs text-gray-500">出勤中</p>
+                  <p className="text-lg font-bold text-gray-900">2人</p>
+                </div>
+                <div className="rounded-lg bg-white/80 border border-red-100 px-3 py-2">
+                  <p className="text-xs text-gray-500">本日のシフト</p>
+                  <p className="text-lg font-bold text-gray-900">5件</p>
+                </div>
+                <div className="rounded-lg bg-white/80 border border-red-100 px-3 py-2">
+                  <p className="text-xs text-gray-500">未打刻</p>
+                  <p className="text-lg font-bold text-gray-900">1件</p>
+                </div>
+                <div className="rounded-lg bg-white/80 border border-red-100 px-3 py-2">
+                  <p className="text-xs text-gray-500">明日の不足</p>
+                  <p className="text-lg font-bold text-gray-900">あり</p>
+                </div>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={async () => {
@@ -130,17 +148,18 @@ export default function DashboardPage() {
                   }}
                   className="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2 shadow-md"
                 >
-                  <Sparkles className="w-4 h-4" /> デモデータで今すぐ試す
+                  <Sparkles className="w-4 h-4" /> サンプル店舗で今すぐ試す
                 </button>
                 <Link to="/stores" className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-800 font-semibold px-4 py-2.5 rounded-lg text-sm flex items-center gap-1.5">
                   <StoreIcon className="w-4 h-4" /> 手動で店舗を追加 <ArrowRight className="w-3 h-3" />
                 </Link>
-                <Link to="/setup-guide" className="text-sm text-red-700 hover:underline font-medium">
-                  導入手順書を見る →
+                <Link to="/staff" className="text-sm text-red-700 hover:underline font-medium">
+                  スタッフにログイン案内を送る →
                 </Link>
               </div>
               <p className="text-xs text-gray-600 mt-3 pt-3 border-t border-red-200">
-                💡 セットアップにお困りの場合は<b className="text-pink-700">導入代行サービス</b>もご利用いただけます。
+                まだスタッフが登録されていません。1人にログイン案内を送ると、出勤状況とシフトがここに表示されます。
+                セットアップにお困りの場合は<b className="text-pink-700">導入代行サービス</b>もご利用いただけます。
                 <Link to="/setup-guide" className="text-pink-700 hover:underline font-medium ml-1">詳しくはこちら →</Link>
               </p>
             </div>
@@ -154,7 +173,8 @@ export default function DashboardPage() {
               <CheckCircle className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1">
-              <h3 className="text-base font-bold text-gray-900 mb-2">はじめの3ステップ</h3>
+              <h3 className="text-base font-bold text-gray-900 mb-2">定着までの3ステップ</h3>
+              <p className="text-xs text-gray-600 mb-3">店舗・スタッフ・シフトがそろうと、毎日の打刻状況と出勤状況をダッシュボードで確認できます。</p>
               <div className="grid sm:grid-cols-3 gap-2 text-sm">
                 <Link to="/stores" className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${true ? 'bg-white border-gray-200 hover:border-blue-400' : 'opacity-50'}`}>
                   <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">1</span>
@@ -181,12 +201,63 @@ export default function DashboardPage() {
                   }}
                   className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5"
                 >
-                  <CheckCircle className="w-3.5 h-3.5" /> デモデータで試す
+                  <CheckCircle className="w-3.5 h-3.5" /> サンプル店舗で試す
                 </button>
                 <Link to="/setup-guide" className="text-xs text-blue-700 hover:underline">導入手順書を見る →</Link>
                 <Link to="/help" className="text-xs text-blue-700 hover:underline">使い方FAQ →</Link>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showOnboarding && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
+            <div>
+              <p className="text-xs font-semibold text-blue-700 mb-1">今日から打刻を始める</p>
+              <h3 className="text-lg font-bold text-gray-900">スタッフ1人にログイン案内を送り、最初の出勤打刻まで進めましょう</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                競合のような多機能設定より先に、まず店舗で毎日使う「打刻」を動かします。会社PINを共有するとスタッフがスマホからログインできます。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const pin = (selectedCompany as any)?.company_pin || ''
+                  if (!pin) {
+                    toast.error('会社PINを取得できませんでした')
+                    return
+                  }
+                  navigator.clipboard.writeText(pin)
+                  toast.success('会社PINをコピーしました')
+                }}
+                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                会社PINをコピー
+              </button>
+              <Link to="/staff" className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
+                ログイン案内を送る
+              </Link>
+              <Link to="/timecards" className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700">
+                打刻画面を開く
+              </Link>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-4 gap-3 mt-4">
+            {[
+              ['1', 'スタッフ登録', '名前だけでも開始できます'],
+              ['2', '案内文コピー', 'LINEやメールで会社PINを送ります'],
+              ['3', '出勤打刻', 'スマホまたは店舗タブレットで打刻します'],
+              ['4', '未打刻確認', '管理者が今日の状況を確認します'],
+            ].map(([step, title, body]) => (
+              <div key={step} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+                <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mb-2">{step}</div>
+                <p className="text-sm font-bold text-gray-900">{title}</p>
+                <p className="text-xs text-gray-600 mt-1">{body}</p>
+              </div>
+            ))}
           </div>
         </div>
       )}

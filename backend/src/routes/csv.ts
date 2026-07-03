@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { requireProFeature } from '../utils/billing';
 
 const router = Router();
 
@@ -13,6 +14,7 @@ function toCsv(headers: string[], rows: any[][]): string {
 
 // GET /api/csv/shifts?year=2026&month=3
 router.get('/shifts', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!requireProFeature(req, res, 'CSV出力')) return;
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const datePrefix = `${year}-${String(Number(month as string)).padStart(2, '0')}`;
@@ -35,6 +37,7 @@ router.get('/shifts', authenticateToken, requireCompany, (req: AuthRequest, res:
 
 // GET /api/csv/timecards?year=2026&month=3
 router.get('/timecards', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!requireProFeature(req, res, 'CSV出力')) return;
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const datePrefix = `${year}-${String(Number(month as string)).padStart(2, '0')}`;
@@ -57,6 +60,7 @@ router.get('/timecards', authenticateToken, requireCompany, (req: AuthRequest, r
 
 // GET /api/csv/summary?year=2026&month=3
 router.get('/summary', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!requireProFeature(req, res, 'CSV出力')) return;
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const datePrefix = `${year}-${String(Number(month as string)).padStart(2, '0')}`;

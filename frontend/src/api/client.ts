@@ -166,12 +166,18 @@ export interface BillingPlan {
   max_stores: number
   current_stores: number
   price_per_store: number
+  max_free_staff: number
+  current_staff: number
   stripe_configured: boolean
+  trial_days_total: number
+  in_trial: boolean
+  trial_ends_at: string | null
+  trial_days_left: number | null
 }
 
 export const billingApi = {
   getPlan: () => api.get<BillingPlan>('/billing/plan'),
-  createCheckout: (additional_stores: number) =>
+  createCheckout: (additional_stores: number = 0) =>
     api.post<{ url: string }>('/billing/checkout', { additional_stores }),
 }
 

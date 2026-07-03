@@ -63,6 +63,11 @@ router.post('/', authenticateToken, requireAdmin, (req: AuthRequest, res: Respon
     'INSERT INTO user_companies (user_id, company_id, role) VALUES (?, ?, ?)'
   ).run(req.user!.id, result.lastInsertRowid, 'admin');
 
+  // subscription行をこの場で作成（再起動時のバックフィル頼みだと作成直後にプラン情報が無い）
+  db.prepare(
+    "INSERT INTO subscriptions (company_id, plan, max_stores, trial_ends_at) VALUES (?, 'free', 1, datetime('now', '+30 days'))"
+  ).run(result.lastInsertRowid);
+
   const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json({ company });
 });

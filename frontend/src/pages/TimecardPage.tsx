@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { timecardsApi, usersApi, TimeRecord, User } from '../api/client'
+import { billingApi, timecardsApi, usersApi, TimeRecord, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { useKiosk } from '../contexts/KioskContext'
 import { Clock, Play, Square, Coffee, Edit2, ChevronLeft, ChevronRight, Download } from 'lucide-react'
@@ -20,6 +20,7 @@ export default function TimecardPage() {
   const [editingRecord, setEditingRecord] = useState<TimeRecord | null>(null)
   const [editForm, setEditForm] = useState({ date: '', clock_in: '', clock_out: '', break_minutes: 0, notes: '' })
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
 
   const now = new Date()
 
@@ -156,7 +157,21 @@ export default function TimecardPage() {
     return `${h}時間${m > 0 ? m + '分' : ''}`
   }
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
+    try {
+      const plan = await billingApi.getPlan()
+      if (plan.data.plan !== 'pro' && !plan.data.in_trial) {
+        setCheckoutLoading(true)
+        const checkout = await billingApi.createCheckout()
+        window.location.href = checkout.data.url
+        return
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'CSV出力はProプランで利用できます')
+      setCheckoutLoading(false)
+      return
+    }
+
     const header = '日付,氏名,出勤,退勤,休憩(分),実労働時間\n'
     const rows = records.map(r => {
       const hours = r.clock_in && r.clock_out
@@ -312,10 +327,11 @@ export default function TimecardPage() {
             )}
             <button
               onClick={exportCSV}
+              disabled={checkoutLoading}
               className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
             >
               <Download className="w-4 h-4" />
-              CSV
+              {checkoutLoading ? 'Proへ移動中...' : 'CSV'}
             </button>
           </div>
         </div>

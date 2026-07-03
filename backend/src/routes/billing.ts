@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { FREE_STAFF_LIMIT, PRICE_PER_MONTH, TRIAL_DAYS, getStaffCount, getTrialInfo } from '../utils/billing';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ function getStripe() {
   return new Stripe(key, { apiVersion: '2024-12-18.acacia' });
 }
 
-const PRICE_PER_STORE = 980; // ¥980/月/店舗
+const PRICE_PER_STORE = PRICE_PER_MONTH; // ¥980/月
 
 // GET /api/billing/plan - Get current plan info
 router.get('/plan', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
@@ -24,12 +25,19 @@ router.get('/plan', authenticateToken, requireCompany, (req: AuthRequest, res: R
     'SELECT COUNT(*) as count FROM stores WHERE company_id = ?'
   ).get(companyId) as any).count;
 
+  const trial = getTrialInfo(companyId);
   res.json({
     plan: subscription?.plan || 'free',
     max_stores: subscription?.max_stores || 1,
     current_stores: storeCount,
     price_per_store: PRICE_PER_STORE,
+    max_free_staff: FREE_STAFF_LIMIT,
+    current_staff: getStaffCount(companyId),
     stripe_configured: !!process.env.STRIPE_SECRET_KEY,
+    trial_days_total: TRIAL_DAYS,
+    in_trial: trial.in_trial,
+    trial_ends_at: trial.trial_ends_at,
+    trial_days_left: trial.trial_days_left,
   });
 });
 
@@ -43,8 +51,8 @@ router.post('/checkout', authenticateToken, requireCompany, async (req: AuthRequ
     return;
   }
 
-  const { additional_stores } = req.body;
-  const addStores = additional_stores || 1;
+  const addStores = Math.max(0, Number(req.body.additional_stores ?? 0));
+  const checkoutType = addStores > 0 ? 'additional_store' : 'pro';
 
   try {
     // Get or create Stripe customer
@@ -76,15 +84,18 @@ router.post('/checkout', authenticateToken, requireCompany, async (req: AuthRequ
           unit_amount: PRICE_PER_STORE,
           recurring: { interval: 'month' },
           product_data: {
-            name: `シフトログ 追加店舗プラン（${addStores}店舗）`,
-            description: `月額${PRICE_PER_STORE}円 × ${addStores}店舗`,
+            name: addStores > 0 ? `シフトログ 追加店舗プラン（${addStores}店舗）` : 'シフトログ Proプラン',
+            description: addStores > 0
+              ? `追加店舗 ${addStores}店舗 / 月額¥${PRICE_PER_STORE}`
+              : `CSV出力・月次集計・スタッフ31名以上 / 月額¥${PRICE_PER_STORE}`,
           },
         },
-        quantity: addStores,
+        quantity: Math.max(1, addStores),
       }],
       metadata: {
         company_id: String(companyId),
         additional_stores: String(addStores),
+        checkout_type: checkoutType,
       },
       success_url: `${baseUrl}/stores?checkout=success`,
       cancel_url: `${baseUrl}/stores?checkout=cancel`,
@@ -110,10 +121,17 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
 
   let event;
   try {
-    if (webhookSecret && sig) {
+    if (webhookSecret) {
+      if (!sig) {
+        res.status(400).json({ error: 'Missing stripe-signature header' });
+        return;
+      }
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } else {
-      event = req.body;
+      // 本番ではSTRIPE_WEBHOOK_SECRET必須。未設定時は偽イベントで無償Pro化できてしまう。
+      console.warn('STRIPE_WEBHOOK_SECRET not set — rejecting unverified webhook');
+      res.status(503).json({ error: 'Webhook secret not configured' });
+      return;
     }
   } catch (err: any) {
     console.error('Webhook signature verification failed:', err.message);
@@ -126,7 +144,7 @@ router.post('/webhook', async (req: Request, res: Response): Promise<void> => {
       case 'checkout.session.completed': {
         const session = event.data.object;
         const companyId = parseInt(session.metadata.company_id);
-        const additionalStores = parseInt(session.metadata.additional_stores || '1');
+        const additionalStores = parseInt(session.metadata.additional_stores || '0');
 
         const sub = db.prepare('SELECT * FROM subscriptions WHERE company_id = ?').get(companyId) as any;
         const newMax = (sub?.max_stores || 1) + additionalStores;

@@ -1,7 +1,7 @@
 {
   "name": "シフトログ",
   "short_name": "シフトログ",
-  "description": "無料で使えるシフト管理アプリ。1店舗完全無料。AirShiftの代替に。",
+  "description": "飲食店・サロンの出退勤打刻、今日のシフト、勤務集計を1画面で確認。1店舗なら無料で始められる店舗管理アプリ。",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
