@@ -5,7 +5,8 @@ import { Link } from 'react-router-dom'
 import ShiftCalendar from '../components/ShiftCalendar'
 import ShiftModal from '../components/ShiftModal'
 import MonthNavigator from '../components/MonthNavigator'
-import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, storesApi, Shift, User } from '../api/client'
+import StaffLoginQR from '../components/StaffLoginQR'
+import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, storesApi, timecardsApi, Shift, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -27,17 +28,19 @@ export default function DashboardPage() {
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth() + 1
 
-      const [shiftsRes, usersRes, pubRes, storesRes] = await Promise.all([
+      const [shiftsRes, usersRes, pubRes, storesRes, timecardsRes] = await Promise.all([
         shiftsApi.getAll({ year, month }),
         usersApi.getAll(),
         shiftsApi.getPublication(year, month),
         storesApi.getAll().catch(() => ({ data: { stores: [] } })),
+        timecardsApi.getAll().catch(() => ({ data: { records: [] } })),
       ])
 
       setShifts(shiftsRes.data.shifts)
       setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
       setIsPublished(pubRes.data.publication?.is_published === 1)
       setStoreCount((storesRes.data as any)?.stores?.length || 0)
+      setHasAnyTimecard(((timecardsRes.data as any)?.records?.length || 0) > 0)
     } catch {
       toast.error('データの読み込みに失敗しました')
     } finally {
@@ -82,6 +85,7 @@ export default function DashboardPage() {
   const [alertCount, setAlertCount] = useState<number>(0)
   const [pendingSwaps, setPendingSwaps] = useState<number>(0)
   const [storeCount, setStoreCount] = useState<number>(0)
+  const [hasAnyTimecard, setHasAnyTimecard] = useState<boolean>(true)
 
   useEffect(() => {
     if (!selectedCompany) return
@@ -101,8 +105,12 @@ export default function DashboardPage() {
   const noStore = storeCount === 0
   const noStaff = users.length === 0
   const noShift = shifts.length === 0
+  const noTimecard = !hasAnyTimecard
   const criticalEmpty = noStore && noShift // 店舗もシフトもない = ほぼ未使用
-  const showOnboarding = noStore || noStaff || noShift
+  // 店舗・スタッフ・シフトが揃っても、スタッフが一度も打刻していなければ「定着」できていない。
+  // 実データで全社がこの段階で止まっていたため、打刻ゼロの間は案内を消さない。
+  const setupStepsDone = !noStore && !noStaff && !noShift
+  const companyPin = (selectedCompany as any)?.company_pin || ''
 
   return (
     <div className="space-y-6">
@@ -166,7 +174,7 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-      {showOnboarding && !criticalEmpty && (
+      {!setupStepsDone && !criticalEmpty && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
@@ -176,8 +184,8 @@ export default function DashboardPage() {
               <h3 className="text-base font-bold text-gray-900 mb-2">定着までの3ステップ</h3>
               <p className="text-xs text-gray-600 mb-3">店舗・スタッフ・シフトがそろうと、毎日の打刻状況と出勤状況をダッシュボードで確認できます。</p>
               <div className="grid sm:grid-cols-3 gap-2 text-sm">
-                <Link to="/stores" className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${true ? 'bg-white border-gray-200 hover:border-blue-400' : 'opacity-50'}`}>
-                  <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">1</span>
+                <Link to="/stores" className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${!noStore ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
+                  <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${!noStore ? 'bg-green-600 text-white' : 'bg-blue-100 text-blue-700'}`}>{!noStore ? '✓' : '1'}</span>
                   <span>店舗を追加</span>
                 </Link>
                 <Link to="/staff" className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${users.length > 0 ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
@@ -211,44 +219,54 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showOnboarding && (
+      {noTimecard && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
-            <div>
-              <p className="text-xs font-semibold text-blue-700 mb-1">今日から打刻を始める</p>
-              <h3 className="text-lg font-bold text-gray-900">スタッフ1人にログイン案内を送り、最初の出勤打刻まで進めましょう</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                競合のような多機能設定より先に、まず店舗で毎日使う「打刻」を動かします。会社PINを共有するとスタッフがスマホからログインできます。
+          <div className="flex flex-col lg:flex-row lg:items-start gap-5 justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-blue-700 mb-1">
+                {setupStepsDone ? 'あと一歩：まだ誰も打刻していません' : '今日から打刻を始める'}
               </p>
+              <h3 className="text-lg font-bold text-gray-900">
+                {setupStepsDone
+                  ? 'スタッフに下のQRを見せる（または案内を送る）と、その場で打刻が始まります'
+                  : 'スタッフ1人にログイン案内を送り、最初の出勤打刻まで進めましょう'}
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                会社PINを入力する代わりに、QRコードを1回スキャンするだけでスタッフはログインできます。レジ横やバックヤードに貼っておくのがおすすめです。
+              </p>
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Link to="/staff" className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
+                  ログイン案内を送る
+                </Link>
+                <Link to="/timecards" className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700">
+                  打刻画面を開く
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!companyPin) {
+                      toast.error('会社PINを取得できませんでした')
+                      return
+                    }
+                    navigator.clipboard.writeText(companyPin)
+                    toast.success('会社PINをコピーしました')
+                  }}
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  会社PINをコピー
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const pin = (selectedCompany as any)?.company_pin || ''
-                  if (!pin) {
-                    toast.error('会社PINを取得できませんでした')
-                    return
-                  }
-                  navigator.clipboard.writeText(pin)
-                  toast.success('会社PINをコピーしました')
-                }}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                会社PINをコピー
-              </button>
-              <Link to="/staff" className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
-                ログイン案内を送る
-              </Link>
-              <Link to="/timecards" className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700">
-                打刻画面を開く
-              </Link>
-            </div>
+            {companyPin && (
+              <div className="shrink-0 mx-auto lg:mx-0">
+                <StaffLoginQR companyPin={companyPin} />
+              </div>
+            )}
           </div>
           <div className="grid md:grid-cols-4 gap-3 mt-4">
             {[
               ['1', 'スタッフ登録', '名前だけでも開始できます'],
-              ['2', '案内文コピー', 'LINEやメールで会社PINを送ります'],
+              ['2', 'QR表示 or 案内文コピー', 'その場でスキャン、またはLINE・メールで送ります'],
               ['3', '出勤打刻', 'スマホまたは店舗タブレットで打刻します'],
               ['4', '未打刻確認', '管理者が今日の状況を確認します'],
             ].map(([step, title, body]) => (

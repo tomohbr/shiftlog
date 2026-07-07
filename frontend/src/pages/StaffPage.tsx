@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy, Crown } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy, Crown, Share2, QrCode } from 'lucide-react'
 import { usersApi, billingApi, BillingPlan, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import BulkImportModal from '../components/BulkImportModal'
+import StaffLoginQR, { staffLoginUrl } from '../components/StaffLoginQR'
 import toast from 'react-hot-toast'
 
 const COLORS = [
@@ -192,20 +193,14 @@ function isNeverLoggedIn(u: User): boolean {
 }
 
 function generateInviteMessage(u: User, companyName: string, companyPin: string, includePin: boolean): string {
-  const url = 'https://shiftlog-production.up.railway.app/'
+  const url = staffLoginUrl(companyPin)
   return `【シフトログご案内】${companyName}
 ${u.name}さん、スタッフ管理アプリ「シフトログ」のアカウントを作成しました。
 スマホ・PCどちらでも使えます。
 
-▼ アプリURL
+▼ 下のURLを開いて「${u.name}」をタップするだけでログインできます
 ${url}
-
-▼ ログイン手順
-1. 上のURLを開く
-2. 「スタッフログイン」をタップ
-3. 会社PIN: ${companyPin}
-4. 一覧から「${u.name}」をタップ
-${includePin && u.pin ? `5. 打刻用PIN: ${u.pin}` : ''}
+${includePin && u.pin ? `\n▼ 打刻用PIN: ${u.pin}` : ''}
 
 ▼ できること
 ・出退勤の打刻
@@ -232,6 +227,8 @@ export default function StaffPage() {
   const [newPassword, setNewPassword] = useState('')
   const [billingPlan, setBillingPlan] = useState<BillingPlan | null>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [qrOpen, setQrOpen] = useState(false)
+  const companyPin = (selectedCompany as any)?.company_pin || ''
 
   const startProCheckout = async () => {
     setCheckoutLoading(true)
@@ -296,6 +293,15 @@ export default function StaffPage() {
           <p className="text-sm text-gray-500 mt-0.5">{users.length}名登録中</p>
         </div>
         <div className="flex items-center gap-2">
+          {companyPin && (
+            <button
+              onClick={() => setQrOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+            >
+              <QrCode className="w-4 h-4" />
+              店舗共通QRを表示
+            </button>
+          )}
           <button
             onClick={() => freeStaffLimitReached ? startProCheckout() : setBulkOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
@@ -320,6 +326,22 @@ export default function StaffPage() {
         </div>
       </div>
       {bulkOpen && <BulkImportModal onClose={() => setBulkOpen(false)} onDone={loadUsers} />}
+
+      {qrOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setQrOpen(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900">店舗共通ログインQR</h3>
+              <button onClick={() => setQrOpen(false)}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">レジ横やバックヤードに貼っておくと、スタッフ全員がPIN入力なしでスマホをかざすだけでログインできます。</p>
+            <div className="flex justify-center">
+              <StaffLoginQR companyPin={companyPin} size={200} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {freeStaffLimitReached && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 flex flex-wrap items-center justify-between gap-3">
@@ -508,19 +530,37 @@ export default function StaffPage() {
               <p className="text-sm text-gray-700">
                 <b className="text-gray-900">{inviteUser.name}</b> さんに下記のログイン案内を LINE やメールで送ってください。コピーボタン1タップで貼り付けられます。
               </p>
+              <div className="flex justify-center">
+                <StaffLoginQR companyPin={companyPin} />
+              </div>
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 relative">
                 <pre className="text-xs text-gray-800 whitespace-pre-wrap font-sans pr-20">
-                  {generateInviteMessage(inviteUser, selectedCompany?.name || '', (selectedCompany as any)?.company_pin || '', isPro)}
+                  {generateInviteMessage(inviteUser, selectedCompany?.name || '', companyPin, isPro)}
                 </pre>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(generateInviteMessage(inviteUser, selectedCompany?.name || '', (selectedCompany as any)?.company_pin || '', isPro))
-                    toast.success('メッセージをコピーしました')
-                  }}
-                  className="absolute top-2 right-2 px-3 py-1.5 text-xs bg-white border border-green-300 rounded hover:bg-green-50 flex items-center gap-1 font-semibold"
-                >
-                  <Copy className="w-3 h-3" /> コピー
-                </button>
+                <div className="absolute top-2 right-2 flex gap-1.5">
+                  {typeof navigator !== 'undefined' && !!(navigator as any).share && (
+                    <button
+                      onClick={() => {
+                        (navigator as any).share({
+                          title: 'シフトログ ログイン案内',
+                          text: generateInviteMessage(inviteUser, selectedCompany?.name || '', companyPin, isPro),
+                        }).catch(() => {})
+                      }}
+                      className="px-3 py-1.5 text-xs bg-white border border-green-300 rounded hover:bg-green-50 flex items-center gap-1 font-semibold"
+                    >
+                      <Share2 className="w-3 h-3" /> LINEで送る
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(generateInviteMessage(inviteUser, selectedCompany?.name || '', companyPin, isPro))
+                      toast.success('メッセージをコピーしました')
+                    }}
+                    className="px-3 py-1.5 text-xs bg-white border border-green-300 rounded hover:bg-green-50 flex items-center gap-1 font-semibold"
+                  >
+                    <Copy className="w-3 h-3" /> コピー
+                  </button>
+                </div>
               </div>
               {isNeverLoggedIn(inviteUser) && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">

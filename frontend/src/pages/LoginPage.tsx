@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Calendar, Eye, EyeOff, Clock, Coffee, LogOut, ArrowLeft, UserPlus } from 'lucide-react'
@@ -23,7 +23,7 @@ interface TodayRecord {
 
 export default function LoginPage() {
   const { login, register, pinLogin } = useAuth()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'select'
   const [mode, setMode] = useState<'select' | 'admin' | 'kiosk' | 'pin-login' | 'register'>(initialMode)
   const [email, setEmail] = useState('')
@@ -49,6 +49,24 @@ export default function LoginPage() {
   const [pinLoginCompanyName, setPinLoginCompanyName] = useState('')
   const [pinLoginStaff, setPinLoginStaff] = useState<StaffMember[]>([])
   const [pinLoginStep, setPinLoginStep] = useState<1 | 2>(1)
+
+  // QRコード/招待リンクの ?pin= を踏んだ場合、PIN入力を省略して名前選択まで自動で進める
+  useEffect(() => {
+    const pinFromUrl = searchParams.get('pin')?.replace(/\D/g, '')
+    if (!pinFromUrl) return
+    setMode('pin-login')
+    setPinLoginCompanyPin(pinFromUrl)
+    api.post('/auth/kiosk', { companyPin: pinFromUrl })
+      .then(res => {
+        setPinLoginCompanyName(res.data.company.name)
+        setPinLoginStaff(res.data.staff)
+        setPinLoginStep(2)
+      })
+      .catch(() => toast.error('QRコードの読み取りに失敗しました。会社PINを入力してください'))
+    searchParams.delete('pin')
+    setSearchParams(searchParams, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

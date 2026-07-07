@@ -31,7 +31,7 @@ router.post('/login', (req: Request, res: Response): void => {
 
   // Get companies this user belongs to
   const companies = db.prepare(`
-    SELECT c.id, c.name, uc.role as company_role
+    SELECT c.id, c.name, c.company_pin, uc.role as company_role
     FROM user_companies uc
     JOIN companies c ON uc.company_id = c.id
     WHERE uc.user_id = ?
@@ -206,7 +206,7 @@ router.post('/pin-login', (req: Request, res: Response): void => {
 
   // Get all companies this user belongs to
   const companies = db.prepare(`
-    SELECT c.id, c.name, uc.role as company_role
+    SELECT c.id, c.name, c.company_pin, uc.role as company_role
     FROM user_companies uc
     JOIN companies c ON uc.company_id = c.id
     WHERE uc.user_id = ?
@@ -285,7 +285,7 @@ router.post('/register', (req: Request, res: Response): void => {
   res.status(201).json({
     token,
     user: { id: userId, email, name, role: assignedRole },
-    companies: [{ id: companyId, name: companyName, company_role: 'admin' }],
+    companies: [{ id: companyId, name: companyName, company_pin: companyPin, company_role: 'admin' }],
   });
 });
 
@@ -301,7 +301,7 @@ router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => 
   }
 
   const companies = db.prepare(`
-    SELECT c.id, c.name, uc.role as company_role
+    SELECT c.id, c.name, c.company_pin, uc.role as company_role
     FROM user_companies uc
     JOIN companies c ON uc.company_id = c.id
     WHERE uc.user_id = ?
