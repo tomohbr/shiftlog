@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /legal/tokusho
+Disallow: /dashboard
+Disallow: /shifts
+Disallow: /staff
+Disallow: /timecards
+Disallow: /report
+Disallow: /payroll
+Disallow: /settings
+Disallow: /admin-hub
+Disallow: /api/
+
+Sitemap: https://shiftlog-production.up.railway.app/sitemap.xml
