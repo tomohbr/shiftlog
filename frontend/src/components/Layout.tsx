@@ -73,6 +73,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const staffNavItems = [
     { path: '/timecards', label: 'タイムカード', icon: Clock },
+    { path: '/my-shifts', label: '自分のシフト', icon: Calendar },
     { path: '/shift-requests', label: 'シフト希望提出', icon: ClipboardList },
     { path: '/swaps', label: 'シフト交代', icon: Repeat },
     { path: '/absence', label: '欠勤連絡', icon: AlertCircle },
@@ -252,7 +253,9 @@ export default function Layout({ children }: LayoutProps) {
           </button>
           <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
             {isStaff
-              ? (selectedStaff ? `${selectedStaff.name} - タイムカード` : 'タイムカード')
+              ? (isActive('/timecards') && selectedStaff
+                  ? `${selectedStaff.name} - タイムカード`
+                  : (navItems.find(i => isActive(i.path))?.label || 'シフトログ'))
               : (navItems.find(i => isActive(i.path))?.label || 'シフトログ')
             }
           </h1>

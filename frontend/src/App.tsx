@@ -11,6 +11,7 @@ import CompanyPage from './pages/CompanyPage'
 import TimecardPage from './pages/TimecardPage'
 import ProfilePage from './pages/ProfilePage'
 import ShiftRequestPage from './pages/ShiftRequestPage'
+import MyShiftsPage from './pages/MyShiftsPage'
 import LaborPage from './pages/LaborPage'
 import AbsencePage from './pages/AbsencePage'
 import TemplatePage from './pages/TemplatePage'
@@ -132,6 +133,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Navigate to="/timecards" replace />} />
         <Route path="/timecards" element={<TimecardPage />} />
+        <Route path="/my-shifts" element={<MyShiftsPage />} />
         <Route path="/shift-requests" element={<ShiftRequestPage />} />
         <Route path="/absence" element={<AbsencePage />} />
         <Route path="/swaps" element={<SwapsPage />} />
