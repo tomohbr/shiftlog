@@ -117,12 +117,13 @@ function AdminView({
       }
       setStaffSummary(Object.values(staffMap))
 
-      const pData = periodRes.data
+      // APIは { period: {...} | null } を返す
+      const pData = periodRes.data.period
       setPeriod({
-        status: pData.status || 'closed',
-        deadline: pData.deadline || null,
+        status: pData?.status || 'closed',
+        deadline: pData?.deadline || null,
       })
-      setDeadlineInput(pData.deadline || '')
+      setDeadlineInput(pData?.deadline || '')
     } catch {
       toast.error('データの取得に失敗しました')
     } finally {
@@ -409,10 +410,11 @@ function StaffView({
       setEntries(map)
       setDirty(false)
 
-      const pData = periodRes.data
+      // APIは { period: {...} | null } を返す
+      const pData = periodRes.data.period
       setPeriod({
-        status: pData.status || 'closed',
-        deadline: pData.deadline || null,
+        status: pData?.status || 'closed',
+        deadline: pData?.deadline || null,
       })
     } catch {
       toast.error('データの取得に失敗しました')
@@ -697,7 +699,7 @@ function StaffView({
 
 export default function ShiftRequestPage() {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
