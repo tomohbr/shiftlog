@@ -49,17 +49,18 @@ router.get('/settings', authenticateToken, requireCompany, (req: AuthRequest, re
 // POST /api/line/settings
 router.post('/settings', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
-  const { channel_access_token, notify_shift_published, notify_shift_changed, notify_help_request } = req.body;
+  const { channel_access_token, notify_shift_published, notify_shift_changed, notify_help_request, notify_request_open } = req.body;
 
   db.prepare(`
-    INSERT INTO line_settings (company_id, channel_access_token, notify_shift_published, notify_shift_changed, notify_help_request)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO line_settings (company_id, channel_access_token, notify_shift_published, notify_shift_changed, notify_help_request, notify_request_open)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(company_id) DO UPDATE SET
       channel_access_token = excluded.channel_access_token,
       notify_shift_published = excluded.notify_shift_published,
       notify_shift_changed = excluded.notify_shift_changed,
-      notify_help_request = excluded.notify_help_request
-  `).run(req.companyId!, channel_access_token, notify_shift_published ? 1 : 0, notify_shift_changed ? 1 : 0, notify_help_request ? 1 : 0);
+      notify_help_request = excluded.notify_help_request,
+      notify_request_open = excluded.notify_request_open
+  `).run(req.companyId!, channel_access_token, notify_shift_published ? 1 : 0, notify_shift_changed ? 1 : 0, notify_help_request ? 1 : 0, notify_request_open === undefined ? 1 : (notify_request_open ? 1 : 0));
 
   res.json({ message: 'LINE設定を保存しました' });
 });

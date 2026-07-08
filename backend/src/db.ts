@@ -330,6 +330,19 @@ try {
   if (!subCols.includes('trial_ends_at')) {
     db.exec("ALTER TABLE subscriptions ADD COLUMN trial_ends_at TEXT");
   }
+  // 希望シフト収集の任意期間指定（null = 従来どおり月全体）
+  const periodCols = db.prepare("PRAGMA table_info(shift_request_periods)").all().map((c: any) => c.name);
+  if (!periodCols.includes('start_date')) {
+    db.exec("ALTER TABLE shift_request_periods ADD COLUMN start_date TEXT");
+  }
+  if (!periodCols.includes('end_date')) {
+    db.exec("ALTER TABLE shift_request_periods ADD COLUMN end_date TEXT");
+  }
+  // 希望シフト収集開始のLINE通知フラグ
+  const lineCols = db.prepare("PRAGMA table_info(line_settings)").all().map((c: any) => c.name);
+  if (!lineCols.includes('notify_request_open')) {
+    db.exec("ALTER TABLE line_settings ADD COLUMN notify_request_open INTEGER DEFAULT 1");
+  }
   // Ensure existing companies have a subscription record (free plan)
   const companiesWithoutSub = db.prepare(`
     SELECT c.id FROM companies c

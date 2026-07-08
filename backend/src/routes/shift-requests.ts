@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { notifyCompanyStaff } from './line';
 
 const router = Router();
 
@@ -104,15 +105,41 @@ router.post('/period', authenticateToken, requireCompany, (req: AuthRequest, res
     return;
   }
   const companyId = req.companyId!;
-  const { year, month, deadline, status } = req.body;
+  const { year, month, deadline, status, start_date, end_date } = req.body;
+
+  if (start_date && end_date && start_date > end_date) {
+    res.status(400).json({ error: '収集期間の開始日は終了日より前にしてください' });
+    return;
+  }
+
+  const prev = db.prepare(
+    'SELECT status FROM shift_request_periods WHERE company_id = ? AND year = ? AND month = ?'
+  ).get(companyId, year, month) as any;
 
   db.prepare(`
-    INSERT INTO shift_request_periods (company_id, year, month, deadline, status)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO shift_request_periods (company_id, year, month, deadline, status, start_date, end_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(company_id, year, month) DO UPDATE SET
       deadline = excluded.deadline,
-      status = excluded.status
-  `).run(companyId, year, month, deadline || null, status || 'open');
+      status = excluded.status,
+      start_date = excluded.start_date,
+      end_date = excluded.end_date
+  `).run(companyId, year, month, deadline || null, status || 'open', start_date || null, end_date || null);
+
+  // closed → open に変わった時だけスタッフへLINE通知（設定済みの会社のみ）
+  const nowOpen = (status || 'open') === 'open';
+  const wasOpen = prev?.status === 'open';
+  if (nowOpen && !wasOpen) {
+    const lineSettings = db.prepare('SELECT notify_request_open FROM line_settings WHERE company_id = ?').get(companyId) as any;
+    if (lineSettings?.notify_request_open) {
+      const rangeText = start_date && end_date
+        ? `対象期間: ${start_date} 〜 ${end_date}`
+        : `対象: ${year}年${month}月`;
+      const deadlineText = deadline ? `\n締切: ${deadline}` : '';
+      const msg = `【シフトログ】シフト希望の受付が始まりました。\n${rangeText}${deadlineText}\n\n提出はこちら:\nhttps://shiftlog-production.up.railway.app/`;
+      notifyCompanyStaff(companyId, msg).catch(() => {});
+    }
+  }
 
   res.json({ message: '収集期間を設定しました' });
 });

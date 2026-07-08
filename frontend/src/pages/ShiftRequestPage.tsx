@@ -12,16 +12,24 @@ interface DayEntry {
   dayOfWeek: number
 }
 
+interface StaffEntry {
+  availability: Availability
+  preferred_start?: string | null
+  preferred_end?: string | null
+}
+
 interface StaffSummaryRow {
   user_id: number
   user_name: string
   user_color: string
-  entries: Record<string, Availability>
+  entries: Record<string, StaffEntry>
 }
 
 interface CollectionPeriod {
   status: 'open' | 'closed'
   deadline: string | null
+  start_date: string | null
+  end_date: string | null
 }
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
@@ -84,10 +92,15 @@ function AdminView({
   days: DayEntry[]
 }) {
   const [staffSummary, setStaffSummary] = useState<StaffSummaryRow[]>([])
-  const [period, setPeriod] = useState<CollectionPeriod>({ status: 'closed', deadline: null })
+  const [period, setPeriod] = useState<CollectionPeriod>({ status: 'closed', deadline: null, start_date: null, end_date: null })
   const [loading, setLoading] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
   const [deadlineInput, setDeadlineInput] = useState('')
+  const [startInput, setStartInput] = useState('')
+  const [endInput, setEndInput] = useState('')
+
+  const monthFirst = formatDate(year, month, 1)
+  const monthLast = formatDate(year, month, getDaysInMonth(year, month))
 
   useEffect(() => {
     loadData()
@@ -113,7 +126,11 @@ function AdminView({
             entries: {},
           }
         }
-        staffMap[req.user_id].entries[req.date] = req.availability
+        staffMap[req.user_id].entries[req.date] = {
+          availability: req.availability,
+          preferred_start: req.preferred_start,
+          preferred_end: req.preferred_end,
+        }
       }
       setStaffSummary(Object.values(staffMap))
 
@@ -122,8 +139,12 @@ function AdminView({
       setPeriod({
         status: pData?.status || 'closed',
         deadline: pData?.deadline || null,
+        start_date: pData?.start_date || null,
+        end_date: pData?.end_date || null,
       })
       setDeadlineInput(pData?.deadline || '')
+      setStartInput(pData?.start_date || '')
+      setEndInput(pData?.end_date || '')
     } catch {
       toast.error('データの取得に失敗しました')
     } finally {
@@ -137,26 +158,42 @@ function AdminView({
       await shiftRequestsApi.setPeriod(
         year,
         month,
-        newStatus === 'open' ? deadlineInput || undefined : undefined,
-        newStatus
+        deadlineInput || undefined,
+        newStatus,
+        startInput || undefined,
+        endInput || undefined
       )
-      setPeriod(prev => ({ ...prev, status: newStatus }))
+      setPeriod(prev => ({
+        ...prev,
+        status: newStatus,
+        start_date: startInput || null,
+        end_date: endInput || null,
+      }))
       toast.success(
         newStatus === 'open' ? '希望シフト収集を開始しました' : '希望シフト収集を締め切りました'
       )
-    } catch {
-      toast.error('操作に失敗しました')
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '操作に失敗しました')
     }
   }
 
-  const updateDeadline = async () => {
+  const updateSettings = async () => {
+    if (startInput && endInput && startInput > endInput) {
+      toast.error('開始日は終了日より前にしてください')
+      return
+    }
     try {
-      await shiftRequestsApi.setPeriod(year, month, deadlineInput || undefined, period.status)
-      setPeriod(prev => ({ ...prev, deadline: deadlineInput || null }))
-      toast.success('締切日を更新しました')
+      await shiftRequestsApi.setPeriod(year, month, deadlineInput || undefined, period.status, startInput || undefined, endInput || undefined)
+      setPeriod(prev => ({
+        ...prev,
+        deadline: deadlineInput || null,
+        start_date: startInput || null,
+        end_date: endInput || null,
+      }))
+      toast.success('収集設定を更新しました')
       setShowSettings(false)
-    } catch {
-      toast.error('締切日の更新に失敗しました')
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '設定の更新に失敗しました')
     }
   }
 
@@ -190,6 +227,11 @@ function AdminView({
               />
               {period.status === 'open' ? '収集中' : '締切済み'}
             </div>
+            {period.start_date && period.end_date && (
+              <span className="text-sm text-gray-600 font-medium">
+                対象: {period.start_date.slice(5).replace('-', '/')} 〜 {period.end_date.slice(5).replace('-', '/')}
+              </span>
+            )}
             {period.deadline && (
               <span className="text-sm text-gray-500">
                 締切: {period.deadline}
@@ -221,6 +263,28 @@ function AdminView({
           <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="flex flex-wrap items-end gap-3">
               <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">収集対象の開始日</label>
+                <input
+                  type="date"
+                  value={startInput}
+                  min={monthFirst}
+                  max={monthLast}
+                  onChange={e => setStartInput(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">収集対象の終了日</label>
+                <input
+                  type="date"
+                  value={endInput}
+                  min={monthFirst}
+                  max={monthLast}
+                  onChange={e => setEndInput(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">締切日</label>
                 <input
                   type="date"
@@ -230,12 +294,15 @@ function AdminView({
                 />
               </div>
               <button
-                onClick={updateDeadline}
+                onClick={updateSettings}
                 className="px-4 py-1.5 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
               >
                 保存
               </button>
             </div>
+            <p className="text-xs text-gray-400 mt-2">
+              対象期間を指定すると、スタッフはその期間の日付だけ提出できます（週単位・2週間単位の収集に）。指定しない場合は月全体が対象です。
+            </p>
           </div>
         )}
       </div>
@@ -322,7 +389,12 @@ function AdminView({
                       </div>
                     </td>
                     {days.map(day => {
-                      const av = staff.entries[day.date]
+                      const entry = staff.entries[day.date]
+                      const av = entry?.availability
+                      const compact = (t: string) => t.slice(0, 5).replace(/:00$/, '')
+                      const timeText = entry?.preferred_start && entry?.preferred_end
+                        ? `${compact(entry.preferred_start)}-${compact(entry.preferred_end)}`
+                        : ''
                       const isSun = day.dayOfWeek === 0
                       const isSat = day.dayOfWeek === 6
                       const isToday = day.date === todayStr
@@ -335,15 +407,18 @@ function AdminView({
                           }`}
                         >
                           {av ? (
-                            <div className="flex items-center justify-center">
+                            <div className="flex flex-col items-center justify-center">
                               <div
                                 className={`w-6 h-6 rounded flex items-center justify-center ${AVAILABILITY_COLORS[av]}`}
-                                title={AVAILABILITY_LABELS[av]}
+                                title={`${AVAILABILITY_LABELS[av]}${timeText ? ` ${timeText}` : ''}`}
                               >
                                 {av === 'available' && <Check className="w-3.5 h-3.5 text-white" />}
                                 {av === 'unavailable' && <XIcon className="w-3.5 h-3.5 text-white" />}
                                 {av === 'preferred' && <Clock className="w-3.5 h-3.5 text-white" />}
                               </div>
+                              {timeText && (
+                                <span className="text-[9px] leading-tight text-gray-500 mt-0.5">{timeText}</span>
+                              )}
                             </div>
                           ) : (
                             <span className="text-gray-200 text-xs">-</span>
@@ -385,7 +460,8 @@ function StaffView({
   userId: number
 }) {
   const [entries, setEntries] = useState<Record<string, Availability>>({})
-  const [period, setPeriod] = useState<CollectionPeriod>({ status: 'closed', deadline: null })
+  const [times, setTimes] = useState<Record<string, { start: string; end: string }>>({})
+  const [period, setPeriod] = useState<CollectionPeriod>({ status: 'closed', deadline: null, start_date: null, end_date: null })
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -404,10 +480,18 @@ function StaffView({
 
       const requests = reqRes.data.requests || []
       const map: Record<string, Availability> = {}
+      const timeMap: Record<string, { start: string; end: string }> = {}
       for (const r of requests) {
         map[r.date] = r.availability
+        if (r.preferred_start || r.preferred_end) {
+          timeMap[r.date] = {
+            start: (r.preferred_start || '').slice(0, 5),
+            end: (r.preferred_end || '').slice(0, 5),
+          }
+        }
       }
       setEntries(map)
+      setTimes(timeMap)
       setDirty(false)
 
       // APIは { period: {...} | null } を返す
@@ -415,6 +499,8 @@ function StaffView({
       setPeriod({
         status: pData?.status || 'closed',
         deadline: pData?.deadline || null,
+        start_date: pData?.start_date || null,
+        end_date: pData?.end_date || null,
       })
     } catch {
       toast.error('データの取得に失敗しました')
@@ -423,9 +509,17 @@ function StaffView({
     }
   }
 
+  // 収集対象期間の判定（期間未指定なら月全体が対象）
+  const inRange = (date: string) =>
+    (!period.start_date || date >= period.start_date) && (!period.end_date || date <= period.end_date)
+
   const toggleDay = (date: string) => {
     if (period.status !== 'open') {
       toast.error('現在は希望シフトの提出期間外です')
+      return
+    }
+    if (!inRange(date)) {
+      toast.error('この日は今回の収集対象外です')
       return
     }
     setEntries(prev => {
@@ -436,18 +530,42 @@ function StaffView({
     setDirty(true)
   }
 
+  const setTime = (date: string, field: 'start' | 'end', value: string) => {
+    setTimes(prev => {
+      const current = prev[date] || { start: '', end: '' }
+      return { ...prev, [date]: { ...current, [field]: value } }
+    })
+    setDirty(true)
+  }
+
   const handleSubmit = async () => {
     if (period.status !== 'open') {
       toast.error('現在は希望シフトの提出期間外です')
       return
     }
 
+    // 時間の片側だけ入力されている日をチェック
+    for (const [date, t] of Object.entries(times)) {
+      if (entries[date] && entries[date] !== 'unavailable') {
+        if ((t.start && !t.end) || (!t.start && t.end)) {
+          const [, m, d] = date.split('-').map(Number)
+          toast.error(`${m}/${d} の時間は開始と終了の両方を入力してください`)
+          return
+        }
+      }
+    }
+
     setSubmitting(true)
     try {
-      const requests = Object.entries(entries).map(([date, availability]) => ({
-        date,
-        availability,
-      }))
+      const requests = Object.entries(entries).map(([date, availability]) => {
+        const t = availability !== 'unavailable' ? times[date] : undefined
+        return {
+          date,
+          availability,
+          preferred_start: t?.start || undefined,
+          preferred_end: t?.end || undefined,
+        }
+      })
       await shiftRequestsApi.submitBulk(requests)
       toast.success('希望シフトを提出しました')
       setDirty(false)
@@ -463,9 +581,9 @@ function StaffView({
       toast.error('現在は希望シフトの提出期間外です')
       return
     }
-    const newEntries: Record<string, Availability> = {}
+    const newEntries: Record<string, Availability> = { ...entries }
     for (const day of days) {
-      newEntries[day.date] = availability
+      if (inRange(day.date)) newEntries[day.date] = availability
     }
     setEntries(newEntries)
     setDirty(true)
@@ -506,6 +624,11 @@ function StaffView({
                 ? '現在は希望シフトの提出期間外です'
                 : '希望シフトを提出してください'}
             </p>
+            {!isClosed && (period.start_date && period.end_date) && (
+              <p className="text-xs text-green-700 mt-0.5 font-medium">
+                対象期間: {period.start_date.slice(5).replace('-', '/')} 〜 {period.end_date.slice(5).replace('-', '/')}
+              </p>
+            )}
             {period.deadline && !isClosed && (
               <p className="text-xs text-green-600 mt-0.5">
                 締切: {period.deadline}
@@ -585,7 +708,8 @@ function StaffView({
 
           {/* Day cells */}
           {days.map(day => {
-            const av = entries[day.date]
+            const outOfRange = !inRange(day.date)
+            const av = outOfRange ? undefined : entries[day.date]
             const isSun = day.dayOfWeek === 0
             const isSat = day.dayOfWeek === 6
             const isToday = day.date === todayStr
@@ -595,14 +719,15 @@ function StaffView({
             if (av === 'available') bgClass = 'bg-green-100 hover:bg-green-200 ring-1 ring-green-300'
             else if (av === 'unavailable') bgClass = 'bg-red-100 hover:bg-red-200 ring-1 ring-red-300'
             else if (av === 'preferred') bgClass = 'bg-yellow-100 hover:bg-yellow-200 ring-1 ring-yellow-300'
+            if (outOfRange) bgClass = 'bg-gray-50'
 
             return (
               <button
                 key={day.date}
                 onClick={() => toggleDay(day.date)}
-                disabled={isClosed}
+                disabled={isClosed || outOfRange}
                 className={`aspect-square rounded-lg flex flex-col items-center justify-center transition-all ${bgClass} ${
-                  isClosed ? 'cursor-not-allowed opacity-60' : 'cursor-pointer active:scale-95'
+                  isClosed || outOfRange ? 'cursor-not-allowed opacity-40' : 'cursor-pointer active:scale-95'
                 } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
               >
                 <span
@@ -634,6 +759,56 @@ function StaffView({
           })}
         </div>
       </div>
+
+      {/* Time preferences (optional) */}
+      {!isClosed && (() => {
+        const timeDays = days.filter(d => inRange(d.date) && (entries[d.date] === 'available' || entries[d.date] === 'preferred'))
+        if (timeDays.length === 0) return null
+        return (
+          <div className="card">
+            <h3 className="text-sm font-semibold text-gray-700">時間帯の希望（任意）</h3>
+            <p className="text-xs text-gray-400 mt-0.5 mb-3">「この日は18:00〜21:00なら入れる」など、日ごとに指定できます。空欄のままなら終日OKの意味になります。</p>
+            <div className="space-y-2">
+              {timeDays.map(day => {
+                const t = times[day.date] || { start: '', end: '' }
+                const av = entries[day.date]
+                return (
+                  <div key={day.date} className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-sm font-medium w-20 shrink-0 ${day.dayOfWeek === 0 ? 'text-red-500' : day.dayOfWeek === 6 ? 'text-blue-500' : 'text-gray-700'}`}>
+                      {month}/{day.label}（{DAY_LABELS[day.dayOfWeek]}）
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${av === 'preferred' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                      {av === 'preferred' ? '希望' : '出勤可'}
+                    </span>
+                    <input
+                      type="time"
+                      value={t.start}
+                      onChange={e => setTime(day.date, 'start', e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2 py-1 text-sm"
+                    />
+                    <span className="text-gray-400 text-sm">〜</span>
+                    <input
+                      type="time"
+                      value={t.end}
+                      onChange={e => setTime(day.date, 'end', e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2 py-1 text-sm"
+                    />
+                    {(t.start || t.end) && (
+                      <button
+                        type="button"
+                        onClick={() => { setTimes(prev => ({ ...prev, [day.date]: { start: '', end: '' } })); setDirty(true) }}
+                        className="text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        クリア
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Submit button */}
       {!isClosed && (

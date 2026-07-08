@@ -408,8 +408,8 @@ export const shiftRequestsApi = {
     api.get('/shift-requests/summary', { params: { year, month } }),
   getPeriod: (year: number, month: number) =>
     api.get('/shift-requests/period', { params: { year, month } }),
-  setPeriod: (year: number, month: number, deadline?: string, status?: string) =>
-    api.post('/shift-requests/period', { year, month, deadline, status }),
+  setPeriod: (year: number, month: number, deadline?: string, status?: string, start_date?: string, end_date?: string) =>
+    api.post('/shift-requests/period', { year, month, deadline, status, start_date, end_date }),
 }
 
 // Labor costs & alerts
