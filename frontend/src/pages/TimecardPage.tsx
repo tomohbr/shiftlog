@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { billingApi, timecardsApi, usersApi, TimeRecord, User } from '../api/client'
+import { billingApi, timecardsApi, usersApi, TimeRecord, TimeRecordEdit, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { useKiosk } from '../contexts/KioskContext'
 import { Clock, Play, Square, Coffee, Edit2, ChevronLeft, ChevronRight, Download } from 'lucide-react'
@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 export default function TimecardPage() {
   const { user } = useAuth()
   const { selectedStaff, refreshStaffStatus } = useKiosk()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
   const [todayRecord, setTodayRecord] = useState<TimeRecord | null>(null)
   const [records, setRecords] = useState<TimeRecord[]>([])
@@ -19,6 +19,7 @@ export default function TimecardPage() {
   const [loading, setLoading] = useState(true)
   const [editingRecord, setEditingRecord] = useState<TimeRecord | null>(null)
   const [editForm, setEditForm] = useState({ date: '', clock_in: '', clock_out: '', break_minutes: 0, notes: '' })
+  const [editHistory, setEditHistory] = useState<TimeRecordEdit[]>([])
   const [currentTime, setCurrentTime] = useState(new Date())
   const [checkoutLoading, setCheckoutLoading] = useState(false)
 
@@ -124,6 +125,23 @@ export default function TimecardPage() {
       break_minutes: rec.break_minutes || 0,
       notes: rec.notes || '',
     })
+    // 変更履歴を取得（管理者のみのモーダルなので常に取得可）
+    setEditHistory([])
+    timecardsApi.getEdits(rec.id)
+      .then(res => setEditHistory(res.data.edits || []))
+      .catch(() => setEditHistory([]))
+  }
+
+  // スナップショットJSONを「出 07:49 / 退 17:00 / 休60分」形式に整形
+  const fmtSnap = (json: string | null) => {
+    if (!json) return ''
+    try {
+      const s = JSON.parse(json)
+      const parts = [`出 ${s.clock_in || '-'}`, `退 ${s.clock_out || '-'}`]
+      if (s.break_minutes) parts.push(`休${s.break_minutes}分`)
+      if (s.date) parts.unshift(s.date)
+      return parts.join(' ')
+    } catch { return '' }
   }
 
   const handleEditSave = async () => {
@@ -451,9 +469,36 @@ export default function TimecardPage() {
                 />
               </div>
             </div>
+            {editHistory.length > 0 && (
+              <div className="mt-5 pt-4 border-t border-gray-200">
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">変更履歴</h4>
+                <div className="max-h-40 overflow-y-auto space-y-2">
+                  {editHistory.map(h => (
+                    <div key={h.id} className="text-xs bg-gray-50 rounded-lg p-2">
+                      <div className="flex items-center justify-between text-gray-500 mb-0.5">
+                        <span>
+                          {h.action === 'update' ? '✏️ 編集' : h.action === 'create' ? '➕ 追加' : '🗑 削除'}
+                          {h.edited_by_name ? `（${h.edited_by_name}）` : ''}
+                        </span>
+                        <span>{h.created_at}</span>
+                      </div>
+                      {h.action === 'update' ? (
+                        <div className="text-gray-700">
+                          <span className="line-through text-gray-400">{fmtSnap(h.before_json)}</span>
+                          <span className="mx-1">→</span>
+                          <span className="font-medium">{fmtSnap(h.after_json)}</span>
+                        </div>
+                      ) : (
+                        <div className="text-gray-700">{fmtSnap(h.after_json || h.before_json)}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-3 mt-6">
               <button onClick={() => setEditingRecord(null)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
-                キャンセル
+                閉じる
               </button>
               <button onClick={handleEditSave} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 保存

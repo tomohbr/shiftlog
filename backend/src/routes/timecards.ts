@@ -4,6 +4,65 @@ import { authenticateToken, requireCompany, AuthRequest } from '../middleware/au
 
 const router = Router();
 
+// 日本時間ヘルパー（サーバーTZに依存せず常にJSTを返す）
+// 旧実装は toISOString(UTC日付) + toTimeString(サーバーローカル時刻) で、
+// Railway(UTC)上では打刻が9時間ズレ・深夜〜朝は前日扱いになる事故があった
+function jstNow(): Date {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000);
+}
+function getJSTDate(): string {
+  return jstNow().toISOString().split('T')[0];
+}
+function getJSTTime(): string {
+  return jstNow().toISOString().split('T')[1].slice(0, 5);
+}
+
+// 打刻変更履歴の記録（編集/削除の前後スナップショット）
+function snapshotRecord(rec: any): string | null {
+  if (!rec) return null;
+  return JSON.stringify({
+    date: rec.date,
+    clock_in: rec.clock_in ?? null,
+    clock_out: rec.clock_out ?? null,
+    break_minutes: rec.break_minutes ?? 0,
+    notes: rec.notes ?? null,
+  });
+}
+
+function logTimeRecordEdit(opts: {
+  companyId: number;
+  timeRecordId: number | bigint;
+  action: 'create' | 'update' | 'delete';
+  before: any;
+  after: any;
+  editor: { id: number; name: string } | undefined;
+}): void {
+  try {
+    const target = opts.after || opts.before || {};
+    const targetUser = target.user_id
+      ? (db.prepare('SELECT name FROM users WHERE id = ?').get(target.user_id) as any)
+      : null;
+    db.prepare(`
+      INSERT INTO time_record_edits
+        (company_id, time_record_id, target_user_id, target_user_name, target_date, action, before_json, after_json, edited_by, edited_by_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      opts.companyId,
+      Number(opts.timeRecordId),
+      target.user_id ?? null,
+      targetUser?.name ?? null,
+      target.date ?? null,
+      opts.action,
+      snapshotRecord(opts.before),
+      snapshotRecord(opts.after),
+      opts.editor?.id ?? null,
+      opts.editor?.name ?? null
+    );
+  } catch (e) {
+    console.error('[time_record_edits] 記録失敗:', (e as Error).message);
+  }
+}
+
 // GET /api/timecards - 月別タイムカード一覧
 router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
@@ -45,9 +104,8 @@ router.post('/clock-in', authenticateToken, requireCompany, (req: AuthRequest, r
   const companyId = req.companyId!;
   // user_idが指定されていればそのユーザーの打刻（キオスクモード）
   const userId = req.body.user_id || req.user!.id;
-  const now = new Date();
-  const date = now.toISOString().split('T')[0];
-  const time = now.toTimeString().slice(0, 5);
+  const date = getJSTDate();
+  const time = getJSTTime();
 
   // Check if already clocked in today
   const existing = db.prepare(
@@ -71,9 +129,8 @@ router.post('/clock-in', authenticateToken, requireCompany, (req: AuthRequest, r
 router.post('/clock-out', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const userId = req.body.user_id || req.user!.id;
-  const now = new Date();
-  const date = now.toISOString().split('T')[0];
-  const time = now.toTimeString().slice(0, 5);
+  const date = getJSTDate();
+  const time = getJSTTime();
 
   const existing = db.prepare(
     'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
@@ -104,9 +161,8 @@ router.post('/clock-out', authenticateToken, requireCompany, (req: AuthRequest, 
 router.post('/break-start', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const userId = req.body.user_id || req.user!.id;
-  const now = new Date();
-  const date = now.toISOString().split('T')[0];
-  const time = now.toTimeString().slice(0, 5);
+  const date = getJSTDate();
+  const time = getJSTTime();
 
   const existing = db.prepare(
     'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
@@ -129,9 +185,8 @@ router.post('/break-start', authenticateToken, requireCompany, (req: AuthRequest
 router.post('/break-end', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const userId = req.body.user_id || req.user!.id;
-  const now = new Date();
-  const date = now.toISOString().split('T')[0];
-  const time = now.toTimeString().slice(0, 5);
+  const date = getJSTDate();
+  const time = getJSTTime();
 
   const existing = db.prepare(
     'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
@@ -161,8 +216,7 @@ router.post('/break-end', authenticateToken, requireCompany, (req: AuthRequest, 
 router.get('/today', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const userId = req.query.user_id ? parseInt(req.query.user_id as string) : req.user!.id;
-  const now = new Date();
-  const date = now.toISOString().split('T')[0];
+  const date = getJSTDate();
 
   const record = db.prepare(
     'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? ORDER BY id DESC LIMIT 1'
@@ -208,6 +262,14 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   );
 
   const updated = db.prepare('SELECT * FROM time_records WHERE id = ?').get(req.params.id);
+  logTimeRecordEdit({
+    companyId,
+    timeRecordId: Number(req.params.id),
+    action: 'update',
+    before: record,
+    after: updated,
+    editor: req.user ? { id: req.user.id, name: req.user.name } : undefined,
+  });
   res.json({ record: updated });
 });
 
@@ -230,7 +292,34 @@ router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res:
   }
 
   db.prepare('DELETE FROM time_records WHERE id = ? AND company_id = ?').run(req.params.id, companyId);
+  logTimeRecordEdit({
+    companyId,
+    timeRecordId: Number(req.params.id),
+    action: 'delete',
+    before: record,
+    after: null,
+    editor: req.user ? { id: req.user.id, name: req.user.name } : undefined,
+  });
   res.json({ message: 'タイムカードを削除しました' });
+});
+
+// GET /api/timecards/:id/edits - 打刻変更履歴（管理者）
+router.get('/:id/edits', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  const companyId = req.companyId!;
+
+  if (!['admin','super_admin'].includes(req.user!.role)) {
+    res.status(403).json({ error: '管理者権限が必要です' });
+    return;
+  }
+
+  const edits = db.prepare(`
+    SELECT id, time_record_id, target_user_name, target_date, action, before_json, after_json, edited_by_name, created_at
+    FROM time_record_edits
+    WHERE company_id = ? AND time_record_id = ?
+    ORDER BY created_at DESC, id DESC
+  `).all(companyId, parseInt(req.params.id));
+
+  res.json({ edits });
 });
 
 // GET /api/timecards/summary - 月別集計

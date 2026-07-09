@@ -96,6 +96,18 @@ export interface TimeRecord {
   status: 'open' | 'closed'
 }
 
+export interface TimeRecordEdit {
+  id: number
+  time_record_id: number
+  target_user_name: string | null
+  target_date: string | null
+  action: 'create' | 'update' | 'delete'
+  before_json: string | null
+  after_json: string | null
+  edited_by_name: string | null
+  created_at: string
+}
+
 // API functions
 export const companiesApi = {
   getAll: () => api.get<{ companies: Company[] }>('/companies'),
@@ -139,6 +151,7 @@ export const storesApi = {
 export const timecardsApi = {
   getAll: (params?: { year?: number; month?: number; user_id?: number }) =>
     api.get<{ records: TimeRecord[] }>('/timecards', { params }),
+  getEdits: (id: number) => api.get<{ edits: TimeRecordEdit[] }>(`/timecards/${id}/edits`),
   clockIn: (user_id?: number) => api.post<{ record: TimeRecord }>('/timecards/clock-in', { user_id }),
   clockOut: (user_id?: number) => api.post<{ record: TimeRecord }>('/timecards/clock-out', { user_id }),
   breakStart: (user_id?: number) => api.post<{ record: TimeRecord }>('/timecards/break-start', { user_id }),

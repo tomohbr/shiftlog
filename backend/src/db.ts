@@ -97,6 +97,24 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
+  CREATE TABLE IF NOT EXISTS time_record_edits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    time_record_id INTEGER NOT NULL,
+    target_user_id INTEGER,
+    target_user_name TEXT,
+    target_date TEXT,
+    action TEXT NOT NULL,
+    before_json TEXT,
+    after_json TEXT,
+    edited_by INTEGER,
+    edited_by_name TEXT,
+    created_at DATETIME DEFAULT (datetime('now', '+9 hours')),
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_tre_record ON time_record_edits(time_record_id);
+  CREATE INDEX IF NOT EXISTS idx_tre_company ON time_record_edits(company_id, created_at);
+
   CREATE TABLE IF NOT EXISTS shift_publications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id INTEGER NOT NULL,
