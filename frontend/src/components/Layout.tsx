@@ -48,16 +48,23 @@ export default function Layout({ children }: LayoutProps) {
   const isAdminRole = user?.role === 'admin' || user?.role === 'super_admin'
   const isStaff = !isAdminRole
 
-  const adminNavItems = [
+  // 毎日使う基本機能（新規登録した店長が最初に見るべきもの）
+  const adminNavCore = [
     { path: '/dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
     { path: '/shifts', label: 'シフト管理', icon: Calendar },
+    { path: '/timecards', label: 'タイムカード', icon: Clock },
+    { path: '/staff', label: 'スタッフ管理', icon: Users },
+    { path: '/report', label: '勤務集計', icon: BarChart2 },
+    { path: '/setup-guide', label: '導入手順書', icon: BookOpen },
+    { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
+  ]
+
+  // 使い込むほど使う詳細機能（デフォルトは折りたたみ）
+  const adminNavMore = [
     { path: '/auto-schedule', label: 'シフト自動生成', icon: Sparkles },
     { path: '/shift-requests', label: '希望シフト収集', icon: ClipboardList },
     { path: '/templates', label: 'テンプレート', icon: Copy },
-    { path: '/timecards', label: 'タイムカード', icon: Clock },
-    { path: '/staff', label: 'スタッフ管理', icon: Users },
     { path: '/labor', label: '人件費・売上', icon: DollarSign },
-    { path: '/report', label: '勤務集計', icon: BarChart2 },
     { path: '/payroll', label: '給与エクスポート', icon: FileSpreadsheet },
     { path: '/absence', label: '欠勤・ヘルプ', icon: AlertCircle },
     { path: '/swaps', label: 'シフト交代', icon: Repeat },
@@ -66,10 +73,10 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/line-settings', label: 'LINE通知', icon: MessageCircle },
     { path: '/admin-hub', label: '管理ハブ', icon: Shield },
     { path: '/settings', label: '設定', icon: Settings },
-    { path: '/setup-guide', label: '導入手順書', icon: BookOpen },
-    { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
     { path: '/feedback', label: 'フィードバック', icon: MessageSquare },
   ]
+
+  const adminNavItems = [...adminNavCore, ...adminNavMore]
 
   const staffNavItems = [
     { path: '/timecards', label: 'タイムカード', icon: Clock },
@@ -84,6 +91,19 @@ export default function Layout({ children }: LayoutProps) {
 
   const navItems = isAdminRole ? adminNavItems : staffNavItems
   const isActive = (path: string) => location.pathname === path
+
+  const moreActiveAtStart = adminNavMore.some(item => isActive(item.path))
+  const [moreOpen, setMoreOpen] = useState(() => {
+    if (moreActiveAtStart) return true
+    try { return localStorage.getItem('navMoreOpen') === '1' } catch { return false }
+  })
+  const toggleMore = () => {
+    setMoreOpen(prev => {
+      const next = !prev
+      try { localStorage.setItem('navMoreOpen', next ? '1' : '0') } catch {}
+      return next
+    })
+  }
 
   const getStatusInfo = (record: any) => {
     if (!record) return { text: '未出勤', color: 'bg-gray-300' }
@@ -156,7 +176,7 @@ export default function Layout({ children }: LayoutProps) {
         {/* Navigation links */}
         {navItems.length > 0 && (
           <nav className="px-3 py-4 space-y-1 overflow-y-auto shrink-0">
-            {navItems.map(item => {
+            {(isAdminRole ? adminNavCore : navItems).map(item => {
               const Icon = item.icon
               return (
                 <Link
@@ -175,6 +195,38 @@ export default function Layout({ children }: LayoutProps) {
                 </Link>
               )
             })}
+
+            {isAdminRole && (
+              <>
+                <button
+                  onClick={toggleMore}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                >
+                  <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+                  詳細機能
+                  <span className="ml-auto text-xs text-gray-400">{adminNavMore.length}</span>
+                </button>
+                {moreOpen && adminNavMore.map(item => {
+                  const Icon = item.icon
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center gap-3 pl-6 pr-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive(item.path)
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 ${isActive(item.path) ? 'text-blue-600' : 'text-gray-400'}`} />
+                      {item.label}
+                      {isActive(item.path) && <ChevronRight className="w-4 h-4 ml-auto text-blue-600" />}
+                    </Link>
+                  )
+                })}
+              </>
+            )}
           </nav>
         )}
 
