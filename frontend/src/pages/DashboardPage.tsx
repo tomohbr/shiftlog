@@ -96,7 +96,7 @@ export default function DashboardPage() {
       laborApi.getAlerts(year, month).catch(() => null),
       swapsApi.list().catch(() => null),
     ]).then(([c, a, sw]) => {
-      setMonthlyLabor((c?.data as any)?.total || 0)
+      setMonthlyLabor((c?.data as any)?.totalCost || 0)
       setAlertCount(((a?.data as any)?.alerts || []).length)
       setPendingSwaps(((sw?.data as any)?.swaps || []).filter((s: any) => s.status === 'pending').length)
     })

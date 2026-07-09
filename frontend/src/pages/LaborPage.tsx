@@ -11,16 +11,12 @@ type TabKey = 'costs' | 'ratio' | 'alerts'
 interface DailyCost {
   date: string
   labor_cost: number
-  hours: number
-  staff_count: number
 }
 
 interface WeeklySummary {
   week: number
   start_date: string
-  end_date: string
   labor_cost: number
-  hours: number
 }
 
 interface CostsData {
@@ -43,15 +39,17 @@ interface RatioData {
   daily: DailyRatio[]
 }
 
+// バックエンド(labor.ts)の実際のアラート形。dates/week/date/hours は種類により片方のみ
 interface LaborAlert {
-  id: number
   severity: 'warning' | 'error'
-  type: 'consecutive_days' | 'weekly_overtime' | 'monthly_overtime'
+  type: string
+  user_id: number
   user_name: string
-  user_color?: string
   message: string
-  details: string
-  affected_dates: string[]
+  dates?: string[]
+  week?: string
+  date?: string
+  hours?: number
 }
 
 interface AlertsData {
@@ -90,25 +88,39 @@ export default function LaborPage() {
     setLoading(true)
     try {
       if (activeTab === 'costs') {
+        // バックエンドは { totalCost, dailyCosts: Record, weeklyCosts: Record, shiftCount } を返す
         const res = await laborApi.getCosts(year, month)
-        const data = res.data as CostsData
+        const data = res.data as { totalCost?: number; dailyCosts?: Record<string, number>; weeklyCosts?: Record<string, number> }
+        const daily = Object.entries(data.dailyCosts ?? {})
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([date, cost]) => ({ date, labor_cost: cost }))
+        const weekly = Object.entries(data.weeklyCosts ?? {})
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([weekStart, cost], i) => ({ week: i + 1, start_date: weekStart, labor_cost: cost }))
         setCostsData({
-          total_cost: data.total_cost ?? 0,
-          daily: data.daily ?? [],
-          weekly: data.weekly ?? [],
+          total_cost: data.totalCost ?? 0,
+          daily,
+          weekly,
         })
       } else if (activeTab === 'ratio') {
+        // バックエンドは { totalLaborCost, totalSales, ratio, daily: [{date, laborCost, sales, ratio}] } を返す
         const res = await laborApi.getRatio(year, month)
-        const data = res.data as RatioData
+        const data = res.data as { totalLaborCost?: number; totalSales?: number; ratio?: number; daily?: Array<{ date: string; laborCost: number; sales: number; ratio: number }> }
+        const daily = (data.daily ?? []).map(d => ({
+          date: d.date,
+          sales: d.sales ?? 0,
+          labor_cost: d.laborCost ?? 0,
+          ratio: d.ratio ?? 0,
+        }))
         setRatioData({
-          total_sales: data.total_sales ?? 0,
-          total_labor_cost: data.total_labor_cost ?? 0,
-          total_ratio: data.total_ratio ?? 0,
-          daily: data.daily ?? [],
+          total_sales: data.totalSales ?? 0,
+          total_labor_cost: data.totalLaborCost ?? 0,
+          total_ratio: data.ratio ?? 0,
+          daily,
         })
         // Initialize sales inputs from data
         const inputs: Record<string, string> = {}
-        for (const d of data.daily ?? []) {
+        for (const d of daily) {
           inputs[d.date] = d.sales > 0 ? String(d.sales) : ''
         }
         setSalesInputs(inputs)
@@ -138,15 +150,7 @@ export default function LaborPage() {
     try {
       await laborApi.saveSales(date, amount)
       toast.success('売上を保存しました')
-      // Reload ratio data
-      const res = await laborApi.getRatio(year, month)
-      const data = res.data as RatioData
-      setRatioData({
-        total_sales: data.total_sales ?? 0,
-        total_labor_cost: data.total_labor_cost ?? 0,
-        total_ratio: data.total_ratio ?? 0,
-        daily: data.daily ?? [],
-      })
+      await loadData()
     } catch {
       toast.error('売上の保存に失敗しました')
     } finally {
@@ -170,10 +174,14 @@ export default function LaborPage() {
 
   const getAlertTypeLabel = (type: string): string => {
     switch (type) {
-      case 'consecutive_days':
+      case 'consecutive':
         return '連勤'
       case 'weekly_overtime':
         return '週40時間超過'
+      case 'daily_overtime':
+        return '日次8時間超過'
+      case 'agreement36_month':
+        return '36協定超過'
       case 'monthly_overtime':
         return '月間残業'
       default:
@@ -287,20 +295,22 @@ export default function LaborPage() {
 
               {/* Weekly summary cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {costsData.weekly.map(week => (
-                  <div key={week.week} className="card">
-                    <p className="text-xs text-gray-500 mb-1">第{week.week}週</p>
-                    <p className="text-xs text-gray-400 mb-2">
-                      {formatDate(week.start_date)} ~ {formatDate(week.end_date)}
-                    </p>
-                    <p className="text-xl font-bold text-gray-900">
-                      ¥{week.labor_cost.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {week.hours.toFixed(1)}時間
-                    </p>
-                  </div>
-                ))}
+                {costsData.weekly.map(week => {
+                  const end = new Date(week.start_date)
+                  end.setDate(end.getDate() + 6)
+                  const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
+                  return (
+                    <div key={week.start_date} className="card">
+                      <p className="text-xs text-gray-500 mb-1">第{week.week}週</p>
+                      <p className="text-xs text-gray-400 mb-2">
+                        {formatDate(week.start_date)} ~ {formatDate(endStr)}
+                      </p>
+                      <p className="text-xl font-bold text-gray-900">
+                        ¥{week.labor_cost.toLocaleString()}
+                      </p>
+                    </div>
+                  )
+                })}
                 {costsData.weekly.length === 0 && (
                   <p className="text-gray-400 text-sm col-span-full text-center py-4">
                     週別データがありません
@@ -465,9 +475,9 @@ export default function LaborPage() {
 
                   {/* Alert list */}
                   <div className="space-y-3">
-                    {alertsData.alerts.map(alert => (
+                    {alertsData.alerts.map((alert, idx) => (
                       <div
-                        key={alert.id}
+                        key={`${alert.type}-${alert.user_id}-${idx}`}
                         className={`card border-l-4 ${
                           alert.severity === 'error'
                             ? 'border-l-red-500'
@@ -506,23 +516,14 @@ export default function LaborPage() {
                               </span>
                             </div>
                             <div className="flex items-center gap-2 mb-1">
-                              {alert.user_color && (
-                                <div
-                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                                  style={{ backgroundColor: alert.user_color }}
-                                >
-                                  {alert.user_name.charAt(0)}
-                                </div>
-                              )}
                               <span className="text-sm font-semibold text-gray-900">
                                 {alert.user_name}
                               </span>
                             </div>
                             <p className="text-sm text-gray-700 mb-2">{alert.message}</p>
-                            <p className="text-xs text-gray-500 mb-2">{alert.details}</p>
-                            {alert.affected_dates.length > 0 && (
+                            {(alert.dates?.length || alert.date) && (
                               <div className="flex flex-wrap gap-1">
-                                {alert.affected_dates.map(date => (
+                                {(alert.dates ?? (alert.date ? [alert.date] : [])).map(date => (
                                   <span
                                     key={date}
                                     className="inline-block px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600"
