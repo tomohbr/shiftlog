@@ -5,17 +5,19 @@ import toast from 'react-hot-toast'
 
 interface LineSettings {
   channel_access_token: string
-  notify_on_publish: boolean
-  notify_on_change: boolean
-  notify_on_help_request: boolean
+  notify_shift_published: boolean
+  notify_shift_changed: boolean
+  notify_help_request: boolean
+  notify_request_open: boolean
 }
 
 export default function LineSettingsPage() {
   const [settings, setSettings] = useState<LineSettings>({
     channel_access_token: '',
-    notify_on_publish: true,
-    notify_on_change: true,
-    notify_on_help_request: true,
+    notify_shift_published: true,
+    notify_shift_changed: true,
+    notify_help_request: true,
+    notify_request_open: true,
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -30,12 +32,15 @@ export default function LineSettingsPage() {
     setLoading(true)
     try {
       const res = await lineApi.getSettings()
-      if (res.data) {
+      // APIは { settings: {...} | null } を返す。数値(0/1)なのでbooleanに変換
+      const s = res.data?.settings
+      if (s) {
         setSettings({
-          channel_access_token: res.data.channel_access_token || '',
-          notify_on_publish: res.data.notify_on_publish ?? true,
-          notify_on_change: res.data.notify_on_change ?? true,
-          notify_on_help_request: res.data.notify_on_help_request ?? true,
+          channel_access_token: s.channel_access_token || '',
+          notify_shift_published: s.notify_shift_published == null ? true : !!s.notify_shift_published,
+          notify_shift_changed: s.notify_shift_changed == null ? true : !!s.notify_shift_changed,
+          notify_help_request: s.notify_help_request == null ? true : !!s.notify_help_request,
+          notify_request_open: s.notify_request_open == null ? true : !!s.notify_request_open,
         })
       }
     } catch {
@@ -131,66 +136,34 @@ export default function LineSettingsPage() {
       <div className="card p-6">
         <h3 className="text-base font-semibold text-gray-900 mb-4">通知設定</h3>
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-900">シフト公開時に通知</p>
-              <p className="text-xs text-gray-500">管理者がシフトを公開した際にスタッフへ通知します</p>
+          {([
+            ['notify_request_open', 'シフト希望の収集開始時に通知', '希望シフトの受付が始まった際にスタッフへ通知します（対象期間・締切入り）'],
+            ['notify_shift_published', 'シフト公開時に通知', '管理者がシフトを公開した際にスタッフへ通知します'],
+            ['notify_shift_changed', 'シフト変更時に通知', '公開済みシフトが変更された際に該当スタッフへ通知します'],
+            ['notify_help_request', 'ヘルプ募集時に通知', '欠勤連絡が発生した際に全スタッフへ通知します'],
+          ] as const).map(([key, title, desc], i) => (
+            <div key={key}>
+              {i > 0 && <div className="border-t border-gray-100 mb-4" />}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{title}</p>
+                  <p className="text-xs text-gray-500">{desc}</p>
+                </div>
+                <button
+                  onClick={() => toggleSetting(key)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ml-3 ${
+                    settings[key] ? 'bg-green-500' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      settings[key] ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
-            <button
-              onClick={() => toggleSetting('notify_on_publish')}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings.notify_on_publish ? 'bg-green-500' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings.notify_on_publish ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="border-t border-gray-100" />
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-900">シフト変更時に通知</p>
-              <p className="text-xs text-gray-500">公開済みシフトが変更された際に該当スタッフへ通知します</p>
-            </div>
-            <button
-              onClick={() => toggleSetting('notify_on_change')}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings.notify_on_change ? 'bg-green-500' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings.notify_on_change ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="border-t border-gray-100" />
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-900">ヘルプ募集時に通知</p>
-              <p className="text-xs text-gray-500">欠勤連絡が発生した際に全スタッフへ通知します</p>
-            </div>
-            <button
-              onClick={() => toggleSetting('notify_on_help_request')}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings.notify_on_help_request ? 'bg-green-500' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings.notify_on_help_request ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
+          ))}
         </div>
       </div>
 

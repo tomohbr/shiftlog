@@ -212,9 +212,17 @@ function AdminView({
       {/* Collection period controls */}
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg transition-colors shrink-0"
+              title="収集設定（対象期間・締切日）"
+            >
+              <Settings className="w-4 h-4" />
+              収集設定
+            </button>
             <div
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium shrink-0 ${
                 period.status === 'open'
                   ? 'bg-green-100 text-green-700'
                   : 'bg-gray-100 text-gray-500'
@@ -228,35 +236,26 @@ function AdminView({
               {period.status === 'open' ? '収集中' : '締切済み'}
             </div>
             {period.start_date && period.end_date && (
-              <span className="text-sm text-gray-600 font-medium">
+              <span className="text-sm text-gray-600 font-medium shrink-0">
                 対象: {period.start_date.slice(5).replace('-', '/')} 〜 {period.end_date.slice(5).replace('-', '/')}
               </span>
             )}
             {period.deadline && (
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-gray-500 shrink-0">
                 締切: {period.deadline}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-              title="収集設定"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            <button
-              onClick={togglePeriod}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                period.status === 'open'
-                  ? 'bg-red-500 hover:bg-red-600 text-white'
-                  : 'bg-green-500 hover:bg-green-600 text-white'
-              }`}
-            >
-              {period.status === 'open' ? '収集を締め切る' : '収集を開始する'}
-            </button>
-          </div>
+          <button
+            onClick={togglePeriod}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+              period.status === 'open'
+                ? 'bg-red-500 hover:bg-red-600 text-white'
+                : 'bg-green-500 hover:bg-green-600 text-white'
+            }`}
+          >
+            {period.status === 'open' ? '収集を締め切る' : '収集を開始する'}
+          </button>
         </div>
 
         {showSettings && (

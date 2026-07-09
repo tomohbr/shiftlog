@@ -1,9 +1,26 @@
 import { useState, useEffect } from 'react'
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { Shift, User, shiftsApi } from '../api/client'
+import { Shift, User, shiftsApi, shiftRequestsApi } from '../api/client'
 import toast from 'react-hot-toast'
+
+interface DayRequest {
+  availability: 'available' | 'unavailable' | 'preferred'
+  preferred_start: string | null
+  preferred_end: string | null
+}
+
+const REQ_LABEL: Record<string, string> = {
+  available: '出勤可',
+  preferred: '希望',
+  unavailable: '出勤不可',
+}
+const REQ_MARK: Record<string, string> = {
+  available: '○',
+  preferred: '◎',
+  unavailable: '×',
+}
 
 interface ShiftModalProps {
   isOpen: boolean
@@ -28,6 +45,7 @@ export default function ShiftModal({
   const [breakMinutes, setBreakMinutes] = useState(60)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [dayRequests, setDayRequests] = useState<Record<number, DayRequest>>({})
 
   useEffect(() => {
     if (shift) {
@@ -44,6 +62,40 @@ export default function ShiftModal({
       setNotes('')
     }
   }, [shift, users, isOpen])
+
+  // この日に提出されている希望シフトを取得（希望を見ながらシフトを確定できるように）
+  useEffect(() => {
+    if (!isOpen || !date) {
+      setDayRequests({})
+      return
+    }
+    const dateStr = format(date, 'yyyy-MM-dd')
+    shiftRequestsApi
+      .getAll({ year: date.getFullYear(), month: date.getMonth() + 1 })
+      .then(res => {
+        const map: Record<number, DayRequest> = {}
+        for (const r of res.data.requests || []) {
+          if (r.date === dateStr) {
+            map[r.user_id] = {
+              availability: r.availability,
+              preferred_start: r.preferred_start || null,
+              preferred_end: r.preferred_end || null,
+            }
+          }
+        }
+        setDayRequests(map)
+      })
+      .catch(() => setDayRequests({}))
+  }, [isOpen, date])
+
+  const selectedRequest = userId ? dayRequests[parseInt(userId)] : undefined
+  const canApplyPreferredTime = !!(selectedRequest?.preferred_start && selectedRequest?.preferred_end)
+
+  const applyPreferredTime = () => {
+    if (!selectedRequest?.preferred_start || !selectedRequest?.preferred_end) return
+    setStartTime(selectedRequest.preferred_start.slice(0, 5))
+    setEndTime(selectedRequest.preferred_end.slice(0, 5))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -139,11 +191,47 @@ export default function ShiftModal({
               required
             >
               <option value="">選択してください</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
+              {users.map(u => {
+                const req = dayRequests[u.id]
+                const compact = (t: string) => t.slice(0, 5).replace(/:00$/, '')
+                const timeText = req?.preferred_start && req?.preferred_end
+                  ? ` ${compact(req.preferred_start)}-${compact(req.preferred_end)}`
+                  : ''
+                const mark = req ? ` ${REQ_MARK[req.availability]}${REQ_LABEL[req.availability]}${timeText}` : ''
+                return (
+                  <option key={u.id} value={u.id}>{u.name}{mark}</option>
+                )
+              })}
             </select>
           </div>
+
+          {/* Selected staff's request for this day */}
+          {selectedRequest && (
+            <div className={`rounded-lg p-3 flex flex-wrap items-center justify-between gap-2 text-sm ${
+              selectedRequest.availability === 'unavailable'
+                ? 'bg-red-50 text-red-700 border border-red-200'
+                : selectedRequest.availability === 'preferred'
+                  ? 'bg-yellow-50 text-yellow-800 border border-yellow-200'
+                  : 'bg-green-50 text-green-800 border border-green-200'
+            }`}>
+              <span>
+                この日の希望: <b>{REQ_LABEL[selectedRequest.availability]}</b>
+                {selectedRequest.preferred_start && selectedRequest.preferred_end && (
+                  <> {selectedRequest.preferred_start.slice(0, 5)}〜{selectedRequest.preferred_end.slice(0, 5)}</>
+                )}
+              </span>
+              {canApplyPreferredTime && selectedRequest.availability !== 'unavailable' && (
+                <button
+                  type="button"
+                  onClick={applyPreferredTime}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-white border border-current rounded-lg hover:opacity-80"
+                >
+                  <Clock className="w-3 h-3" />
+                  希望時間を反映
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Time */}
           <div className="grid grid-cols-2 gap-3">
@@ -215,12 +303,12 @@ export default function ShiftModal({
                 className="btn-danger flex items-center gap-1"
               >
                 <Trash2 className="w-4 h-4" />
-                削除
+                シフトを削除
               </button>
             )}
             <div className="flex gap-2 ml-auto">
               <button type="button" onClick={onClose} className="btn-secondary">
-                キャンセル
+                閉じる
               </button>
               <button type="submit" disabled={loading} className="btn-primary">
                 {loading ? '保存中...' : shift ? '更新' : '追加'}
