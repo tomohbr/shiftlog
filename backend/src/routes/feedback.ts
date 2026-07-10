@@ -1,8 +1,16 @@
 import { Router, Request, Response } from 'express';
-import db from '../db';
+import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { sendMail } from '../utils/mailer';
 
 const router = Router();
+
+const CATEGORY_LABEL: Record<string, string> = {
+  bug: '不具合報告',
+  feature: '機能要望',
+  question: '質問',
+  other: 'その他',
+};
 
 // POST /api/feedback - フィードバック送信（認証必須だが会社所属は問わない）
 router.post('/', authenticateToken, (req: AuthRequest, res: Response): void => {
@@ -24,9 +32,16 @@ router.post('/', authenticateToken, (req: AuthRequest, res: Response): void => {
   // companyId は req.companyId があれば使うが、authenticateToken だけだと set されないので null でOK
   const companyId = null;
 
-  db.prepare(
+  const result = db.prepare(
     'INSERT INTO feedbacks (user_id, company_id, category, message, email) VALUES (?, ?, ?, ?, ?)'
   ).run(userId, companyId, safeCategory, message.trim(), email || null);
+
+  // 運営者にメール通知（未読のまま埋もれるのを防ぐ）。送信失敗してもフィードバック自体はDBに保存済みなので握りつぶす。
+  const senderName = req.user?.name || '(不明)';
+  const senderEmail = email || req.user?.email || '(未記入)';
+  const subject = `【シフトログ】新しいフィードバック（${CATEGORY_LABEL[safeCategory]}） - ${senderName}様`;
+  const body = `${senderName}様より新しいフィードバックが届きました。\n\n分類: ${CATEGORY_LABEL[safeCategory]}\n連絡先: ${senderEmail}\n\n--- 本文 ---\n${message.trim()}\n---\n\n管理画面で確認・返信: https://shiftlog-production.up.railway.app/feedback-admin\nフィードバックID: ${result.lastInsertRowid}`;
+  sendMail(SUPER_ADMIN_EMAIL, subject, body).catch(() => {});
 
   res.status(201).json({ message: 'フィードバックを送信しました。ありがとうございました。' });
 });
