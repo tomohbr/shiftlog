@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage'
 import LandingPage from './pages/LandingPage'
 import TokushohoPage from './pages/TokushohoPage'
 import DashboardPage from './pages/DashboardPage'
+import OnboardingPage from './pages/OnboardingPage'
 import StaffPage from './pages/StaffPage'
 import ShiftEditPage from './pages/ShiftEditPage'
 import ReportPage from './pages/ReportPage'
@@ -33,7 +34,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
 
 function AppRoutes() {
-  const { user, selectedCompany, loading } = useAuth()
+  const { user, selectedCompany, loading, justRegistered } = useAuth()
   const location = useLocation()
 
   // 法的ページはログイン状態に関係なく表示
@@ -83,6 +84,11 @@ function AppRoutes() {
         </div>
       </Layout>
     )
+  }
+
+  // 登録直後は、サイドバー等のない全画面ウィザードで初期設定を案内する
+  if (isAdminRole && justRegistered) {
+    return <OnboardingPage />
   }
 
   // Admin / Super admin gets full access

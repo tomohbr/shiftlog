@@ -18,6 +18,8 @@ interface AuthContextType {
   pinLogin?: (companyPin: string, userId: number) => Promise<void>
   logout: () => void
   selectCompany: (company: Company) => void
+  justRegistered: boolean
+  clearJustRegistered: () => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -27,6 +29,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [companies, setCompanies] = useState<Company[]>([])
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
+  const [justRegistered, setJustRegistered] = useState(false)
+  const clearJustRegistered = () => setJustRegistered(false)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -85,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSelectedCompany(comps[0])
       localStorage.setItem('selectedCompanyId', comps[0].id.toString())
     }
+    setJustRegistered(true)
   }
 
   const pinLogin = async (companyPin: string, userId: number) => {
@@ -109,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('selectedCompanyId')
+    setJustRegistered(false)
     delete api.defaults.headers.common['Authorization']
     setUser(null)
     setCompanies([])
@@ -121,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, companies, selectedCompany, loading, login, register, pinLogin, logout, selectCompany }}>
+    <AuthContext.Provider value={{ user, companies, selectedCompany, loading, login, register, pinLogin, logout, selectCompany, justRegistered, clearJustRegistered }}>
       {children}
     </AuthContext.Provider>
   )
