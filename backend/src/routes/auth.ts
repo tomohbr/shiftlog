@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { JWT_SECRET, authenticateToken, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { getJSTDate, getJSTTime } from '../utils/jst';
 
 const router = Router();
 
@@ -80,7 +81,7 @@ router.post('/kiosk', (req: Request, res: Response): void => {
   `).all(company.id);
 
   // Get today's time records for this company
-  const today = new Date().toISOString().split('T')[0];
+  const today = getJSTDate();
   const records = db.prepare(`
     SELECT user_id, clock_in, clock_out, break_start, break_end, status
     FROM time_records
@@ -114,8 +115,8 @@ router.post('/kiosk-clock', (req: Request, res: Response): void => {
     return;
   }
 
-  const today = new Date().toISOString().split('T')[0];
-  const now = new Date().toTimeString().slice(0, 5);
+  const today = getJSTDate();
+  const now = getJSTTime();
 
   if (action === 'clock-in') {
     // Check if already clocked in today

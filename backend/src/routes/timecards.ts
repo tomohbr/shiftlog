@@ -1,21 +1,9 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { getJSTDate, getJSTTime } from '../utils/jst';
 
 const router = Router();
-
-// 日本時間ヘルパー（サーバーTZに依存せず常にJSTを返す）
-// 旧実装は toISOString(UTC日付) + toTimeString(サーバーローカル時刻) で、
-// Railway(UTC)上では打刻が9時間ズレ・深夜〜朝は前日扱いになる事故があった
-function jstNow(): Date {
-  return new Date(Date.now() + 9 * 60 * 60 * 1000);
-}
-function getJSTDate(): string {
-  return jstNow().toISOString().split('T')[0];
-}
-function getJSTTime(): string {
-  return jstNow().toISOString().split('T')[1].slice(0, 5);
-}
 
 // 打刻変更履歴の記録（編集/削除の前後スナップショット）
 function snapshotRecord(rec: any): string | null {
