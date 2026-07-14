@@ -80,6 +80,43 @@ function cycleAvailability(current: Availability | undefined): Availability {
   return 'unavailable'
 }
 
+// 時間帯の希望の選択肢（30分刻み）
+// Androidの一部端末でOS標準の時刻ダイアログが画面からはみ出す不具合があるため、
+// <input type="time"> ではなく <select> を使う（selectはどの端末でも確実に画面内に収まる）
+const TIME_OPTIONS: string[] = []
+for (let h = 0; h < 24; h++) {
+  for (const m of [0, 30]) {
+    TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+  }
+}
+
+function TimeSelect({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+}) {
+  // 既存データが30分刻み以外（例: 19:15）でも表示が消えないように選択肢へ含める
+  const options = value && !TIME_OPTIONS.includes(value)
+    ? [...TIME_OPTIONS, value].sort()
+    : TIME_OPTIONS
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className={`border border-gray-200 rounded-lg px-2 py-1 text-sm bg-white ${value ? 'text-gray-900' : 'text-gray-400'}`}
+    >
+      <option value="">{placeholder}</option>
+      {options.map(t => (
+        <option key={t} value={t}>{t}</option>
+      ))}
+    </select>
+  )
+}
+
 // ===================== Admin View =====================
 
 function AdminView({
@@ -779,18 +816,16 @@ function StaffView({
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${av === 'preferred' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
                       {av === 'preferred' ? '希望' : '出勤可'}
                     </span>
-                    <input
-                      type="time"
+                    <TimeSelect
                       value={t.start}
-                      onChange={e => setTime(day.date, 'start', e.target.value)}
-                      className="border border-gray-200 rounded-lg px-2 py-1 text-sm"
+                      onChange={v => setTime(day.date, 'start', v)}
+                      placeholder="開始"
                     />
                     <span className="text-gray-400 text-sm">〜</span>
-                    <input
-                      type="time"
+                    <TimeSelect
                       value={t.end}
-                      onChange={e => setTime(day.date, 'end', e.target.value)}
-                      className="border border-gray-200 rounded-lg px-2 py-1 text-sm"
+                      onChange={v => setTime(day.date, 'end', v)}
+                      placeholder="終了"
                     />
                     {(t.start || t.end) && (
                       <button

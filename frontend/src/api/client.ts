@@ -35,6 +35,7 @@ export interface Company {
   company_pin?: string
   address?: string
   phone?: string
+  staff_home?: string
   my_role?: string
   company_role?: string
   created_at: string

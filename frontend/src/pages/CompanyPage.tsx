@@ -10,7 +10,7 @@ export default function CompanyPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingCompany, setEditingCompany] = useState<Company | null>(null)
-  const [form, setForm] = useState({ name: '', company_pin: '', address: '', phone: '' })
+  const [form, setForm] = useState({ name: '', company_pin: '', address: '', phone: '', staff_home: 'timecards' })
 
   const fetchCompanies = async () => {
     try {
@@ -27,13 +27,13 @@ export default function CompanyPage() {
 
   const openCreate = () => {
     setEditingCompany(null)
-    setForm({ name: '', company_pin: '', address: '', phone: '' })
+    setForm({ name: '', company_pin: '', address: '', phone: '', staff_home: 'timecards' })
     setShowModal(true)
   }
 
   const openEdit = (c: Company) => {
     setEditingCompany(c)
-    setForm({ name: c.name, company_pin: c.company_pin || '', address: c.address || '', phone: c.phone || '' })
+    setForm({ name: c.name, company_pin: c.company_pin || '', address: c.address || '', phone: c.phone || '', staff_home: c.staff_home || 'timecards' })
     setShowModal(true)
   }
 
@@ -184,6 +184,21 @@ export default function CompanyPage() {
                   onChange={e => setForm({ ...form, phone: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">スタッフの最初の画面</label>
+                <select
+                  value={form.staff_home}
+                  onChange={e => setForm({ ...form, staff_home: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="timecards">タイムカード（打刻）</option>
+                  <option value="my-shifts">自分のシフト</option>
+                  <option value="shift-requests">シフト希望提出</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  スタッフがログインした直後に表示される画面です。打刻を別の仕組みで行っている場合は「自分のシフト」がおすすめです。
+                </p>
               </div>
             </div>
             <div className="flex gap-3 mt-6">

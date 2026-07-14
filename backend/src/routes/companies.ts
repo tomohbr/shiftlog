@@ -75,7 +75,7 @@ router.post('/', authenticateToken, requireAdmin, (req: AuthRequest, res: Respon
 // PUT /api/companies/:id
 router.put('/:id', authenticateToken, requireAdmin, (req: AuthRequest, res: Response): void => {
   const companyId = parseInt(req.params.id);
-  const { name, company_pin, address, phone } = req.body;
+  const { name, company_pin, address, phone, staff_home } = req.body;
 
   const access = db.prepare(
     'SELECT * FROM user_companies WHERE user_id = ? AND company_id = ? AND role = ?'
@@ -86,9 +86,13 @@ router.put('/:id', authenticateToken, requireAdmin, (req: AuthRequest, res: Resp
     return;
   }
 
+  // スタッフのTOP画面（リクエストに含まれない場合は現状維持）
+  const validHomes = ['timecards', 'my-shifts', 'shift-requests'];
+  const staffHome = validHomes.includes(staff_home) ? staff_home : null;
+
   db.prepare(
-    'UPDATE companies SET name = ?, company_pin = ?, address = ?, phone = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).run(name, company_pin || null, address || null, phone || null, companyId);
+    "UPDATE companies SET name = ?, company_pin = ?, address = ?, phone = ?, staff_home = COALESCE(?, staff_home, 'timecards'), updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+  ).run(name, company_pin || null, address || null, phone || null, staffHome, companyId);
 
   const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(companyId);
   res.json({ company });

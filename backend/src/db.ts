@@ -340,6 +340,10 @@ try {
   if (!compCols.includes('company_pin')) {
     db.exec("ALTER TABLE companies ADD COLUMN company_pin TEXT");
   }
+  // スタッフのTOP画面設定（timecards | my-shifts | shift-requests）
+  if (!compCols.includes('staff_home')) {
+    db.exec("ALTER TABLE companies ADD COLUMN staff_home TEXT NOT NULL DEFAULT 'timecards'");
+  }
   const ucCols = db.prepare("PRAGMA table_info(user_companies)").all().map((c: any) => c.name);
   if (!ucCols.includes('employment_type')) {
     db.exec("ALTER TABLE user_companies ADD COLUMN employment_type TEXT NOT NULL DEFAULT 'part_time'");

@@ -78,7 +78,9 @@ export default function Layout({ children }: LayoutProps) {
 
   const adminNavItems = [...adminNavCore, ...adminNavMore]
 
-  const staffNavItems = [
+  // 会社設定「スタッフの最初の画面」をナビの先頭に持ってくる
+  const staffHomePath = `/${selectedCompany?.staff_home || 'timecards'}`
+  const staffNavBase = [
     { path: '/timecards', label: 'タイムカード', icon: Clock },
     { path: '/my-shifts', label: '自分のシフト', icon: Calendar },
     { path: '/shift-requests', label: 'シフト希望提出', icon: ClipboardList },
@@ -87,6 +89,10 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/setup-guide', label: '使い方ガイド', icon: BookOpen },
     { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
     { path: '/feedback', label: 'フィードバック', icon: MessageSquare },
+  ]
+  const staffNavItems = [
+    ...staffNavBase.filter(i => i.path === staffHomePath),
+    ...staffNavBase.filter(i => i.path !== staffHomePath),
   ]
 
   const navItems = isAdminRole ? adminNavItems : staffNavItems

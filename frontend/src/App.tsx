@@ -134,10 +134,14 @@ function AppRoutes() {
   }
 
   // Staff gets limited routes
+  // 会社設定「スタッフの最初の画面」に応じてTOPを切り替える（既定はタイムカード）
+  const staffHomePath = ['timecards', 'my-shifts', 'shift-requests'].includes(selectedCompany.staff_home || '')
+    ? `/${selectedCompany.staff_home}`
+    : '/timecards'
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Navigate to="/timecards" replace />} />
+        <Route path="/" element={<Navigate to={staffHomePath} replace />} />
         <Route path="/timecards" element={<TimecardPage />} />
         <Route path="/my-shifts" element={<MyShiftsPage />} />
         <Route path="/shift-requests" element={<ShiftRequestPage />} />
@@ -146,8 +150,8 @@ function AppRoutes() {
         <Route path="/setup-guide" element={<SetupGuidePage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/feedback" element={<FeedbackPage />} />
-        <Route path="/login" element={<Navigate to="/timecards" replace />} />
-        <Route path="*" element={<Navigate to="/timecards" replace />} />
+        <Route path="/login" element={<Navigate to={staffHomePath} replace />} />
+        <Route path="*" element={<Navigate to={staffHomePath} replace />} />
       </Routes>
     </Layout>
   )

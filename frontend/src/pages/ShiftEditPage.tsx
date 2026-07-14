@@ -4,7 +4,7 @@ import { ja } from 'date-fns/locale'
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import MonthNavigator from '../components/MonthNavigator'
 import ShiftModal from '../components/ShiftModal'
-import { shiftsApi, usersApi, Shift, User } from '../api/client'
+import { shiftsApi, usersApi, shiftRequestsApi, Shift, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -21,18 +21,30 @@ export default function ShiftEditPage() {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null)
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table')
   const [filterUserId, setFilterUserId] = useState<number | null>(null)
+  // 希望シフト（提出済みマーク表示用）: `${user_id}-${date}` → 希望内容
+  const [requestMap, setRequestMap] = useState<Record<string, { availability: string; preferred_start?: string | null; preferred_end?: string | null }>>({})
 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth() + 1
-      const [shiftsRes, usersRes] = await Promise.all([
+      const [shiftsRes, usersRes, requestsRes] = await Promise.all([
         shiftsApi.getAll({ year, month }),
         usersApi.getAll(),
+        shiftRequestsApi.getAll({ year, month }).catch(() => null),
       ])
       setShifts(shiftsRes.data.shifts)
       setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
+      const reqMap: Record<string, { availability: string; preferred_start?: string | null; preferred_end?: string | null }> = {}
+      for (const r of requestsRes?.data.requests || []) {
+        reqMap[`${r.user_id}-${r.date}`] = {
+          availability: r.availability,
+          preferred_start: r.preferred_start,
+          preferred_end: r.preferred_end,
+        }
+      }
+      setRequestMap(reqMap)
     } catch {
       toast.error('データの取得に失敗しました')
     } finally {
@@ -113,6 +125,25 @@ export default function ShiftEditPage() {
         </div>
       </div>
 
+      {/* 希望シフトマークの凡例（提出がある月だけ表示） */}
+      {!loading && Object.keys(requestMap).length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+          <span className="font-medium">スタッフの希望（点線枠・タップで確定）:</span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block px-1 rounded border border-dashed border-green-300 bg-green-50 text-green-700 font-bold">○可</span>
+            出勤できる
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block px-1 rounded border border-dashed border-yellow-300 bg-yellow-50 text-yellow-700 font-bold">◎希望</span>
+            入りたい
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="text-red-300 font-bold">×</span>
+            出勤不可
+          </span>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -191,9 +222,34 @@ export default function ShiftEditPage() {
                               <div className="opacity-80">~{shift.end_time.slice(0, 5)}</div>
                             </div>
                           ))}
-                          {cellShifts.length === 0 && (
-                            <span className="text-gray-200 text-xs hover:text-gray-300">+</span>
-                          )}
+                          {cellShifts.length === 0 && (() => {
+                            // 未確定でも希望シフトが提出済みなら目印を出す（タップで確定できる）
+                            const req = requestMap[`${u.id}-${day.date}`]
+                            if (!req) {
+                              return <span className="text-gray-200 text-xs hover:text-gray-300">+</span>
+                            }
+                            const compact = (t?: string | null) => (t || '').slice(0, 5)
+                            const timeText = req.preferred_start && req.preferred_end
+                              ? `${compact(req.preferred_start)}-${compact(req.preferred_end)}`
+                              : ''
+                            if (req.availability === 'unavailable') {
+                              return <span className="text-red-300 text-xs font-bold" title="出勤不可の希望">×</span>
+                            }
+                            const isPreferred = req.availability === 'preferred'
+                            return (
+                              <div
+                                className={`rounded text-[10px] py-0.5 px-0.5 leading-tight border border-dashed ${
+                                  isPreferred
+                                    ? 'bg-yellow-50 border-yellow-300 text-yellow-700'
+                                    : 'bg-green-50 border-green-300 text-green-700'
+                                }`}
+                                title={`希望提出済み: ${isPreferred ? '希望' : '出勤可'}${timeText ? ` ${timeText}` : ''}（タップで確定）`}
+                              >
+                                <div className="font-bold">{isPreferred ? '◎希望' : '○可'}</div>
+                                {timeText && <div className="text-[9px]">{timeText}</div>}
+                              </div>
+                            )
+                          })()}
                         </td>
                       )
                     })}
