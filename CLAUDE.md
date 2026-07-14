@@ -1,7 +1,7 @@
-# ワークシフト（shift-app）
+# シフトログ（shiftlog）
 
 ## プロジェクト概要
-エアシフトの代替となるシフト管理アプリ。
+エアシフトの代替となるシフト管理アプリ（販売用プロダクト）。
 
 ## 技術スタック
 - Frontend: React 18 + TypeScript + Vite
@@ -9,8 +9,10 @@
 - デプロイ: Railway（GitHub push で自動デプロイ）
 
 ## リポジトリ
-- GitHub: `tomohbr/shift-app` (branch: main)
-- 本番URL: https://shift-app-production-61b2.up.railway.app
+- GitHub: `tomohbr/shiftlog` (branch: main)
+- 本番URL: https://shiftlog-production.up.railway.app（Railwayプロジェクト: shiftlog）
+
+※ `shift-app-production-61b2.up.railway.app` は自社用の別インスタンス。販売用の作業では触らないこと。
 
 ## ディレクトリ構成
 ```
