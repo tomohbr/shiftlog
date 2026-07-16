@@ -48,7 +48,7 @@ function buildMessage(noticeType: string, companyName: string, daysLeft: number)
 
 export async function runTrialNotifications(): Promise<void> {
   if (!isMailConfigured()) {
-    console.log('[trial-notify] SMTP not configured — skipping (set SMTP_USER / SMTP_PASS to enable)');
+    console.log('[trial-notify] mail not configured — skipping (set BREVO_API_KEY, or SMTP_USER / SMTP_PASS for local dev)');
     return;
   }
 

@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
-import db from '../db';
+import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { authenticateToken, requireSuperAdmin, AuthRequest } from '../middleware/auth';
+import { sendMailWithResult } from '../utils/mailer';
+import { runTrialNotifications } from '../utils/trial-notify';
 
 const router = Router();
 
@@ -123,6 +125,30 @@ router.patch('/users/:id/active', (req: AuthRequest, res: Response): void => {
   db.prepare('UPDATE users SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(is_active ? 1 : 0, id);
   res.json({ ok: true });
+});
+
+// POST /api/admin/test-mail - メール送信経路の実測確認（super_admin宛に固定送信、Message-Idを返す）
+router.post('/test-mail', async (_req: AuthRequest, res: Response): Promise<void> => {
+  const now = new Date().toISOString();
+  const result = await sendMailWithResult(
+    SUPER_ADMIN_EMAIL,
+    `【シフトログ】メール送信テスト ${now}`,
+    `これはメール送信経路の動作確認メールです。\n\n送信時刻(UTC): ${now}\n環境: ${process.env.RAILWAY_ENVIRONMENT_NAME || 'local'}\n\nこのメールが届いていれば、本番のメール送信は正常です。`
+  );
+  res.status(result.ok ? 200 : 502).json(result);
+});
+
+// POST /api/admin/run-trial-notify - トライアル通知スケジューラの手動実行（送信済み記録により冪等）
+router.post('/run-trial-notify', async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    await runTrialNotifications();
+    const notices = db.prepare(
+      'SELECT company_id, notice_type, sent_at FROM trial_notices ORDER BY sent_at DESC LIMIT 20'
+    ).all();
+    res.json({ ok: true, recent_notices: notices });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
 });
 
 export default router;
