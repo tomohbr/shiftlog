@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy, Crown, Share2, QrCode } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy, Crown, Share2, QrCode, Printer } from 'lucide-react'
 import { usersApi, billingApi, BillingPlan, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import BulkImportModal from '../components/BulkImportModal'
 import StaffLoginQR, { staffLoginUrl } from '../components/StaffLoginQR'
+import LineShareButton from '../components/LineShareButton'
 import toast from 'react-hot-toast'
 
 const COLORS = [
@@ -339,6 +340,14 @@ export default function StaffPage() {
             <div className="flex justify-center">
               <StaffLoginQR companyPin={companyPin} size={200} />
             </div>
+            <button
+              onClick={() => window.open('/qr-poster', '_blank')}
+              className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+            >
+              <Printer className="w-4 h-4" />
+              印刷用ポスターを開く（A4）
+            </button>
+            <p className="text-xs text-gray-400 mt-2">店名・QR・使い方3ステップ入りのポスターを印刷できます</p>
           </div>
         </div>
       )}
@@ -538,6 +547,7 @@ export default function StaffPage() {
                   {generateInviteMessage(inviteUser, selectedCompany?.name || '', companyPin, isPro)}
                 </pre>
                 <div className="absolute top-2 right-2 flex gap-1.5">
+                  <LineShareButton text={generateInviteMessage(inviteUser, selectedCompany?.name || '', companyPin, isPro)} />
                   {typeof navigator !== 'undefined' && !!(navigator as any).share && (
                     <button
                       onClick={() => {
@@ -548,7 +558,7 @@ export default function StaffPage() {
                       }}
                       className="px-3 py-1.5 text-xs bg-white border border-green-300 rounded hover:bg-green-50 flex items-center gap-1 font-semibold"
                     >
-                      <Share2 className="w-3 h-3" /> LINEで送る
+                      <Share2 className="w-3 h-3" /> 送る
                     </button>
                   )}
                   <button

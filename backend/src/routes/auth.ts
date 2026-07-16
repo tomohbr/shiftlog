@@ -5,6 +5,7 @@ import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { JWT_SECRET, authenticateToken, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { getJSTDate, getJSTTime } from '../utils/jst';
+import { sendMail } from '../utils/mailer';
 
 const router = Router();
 
@@ -276,6 +277,14 @@ router.post('/register', (req: Request, res: Response): void => {
   ).run(companyId, 'free', 1);
 
   logAudit({ userId: userId, companyId, action: 'create', entity: 'company', entityId: companyId, summary: `会社「${companyName}」を新規作成` });
+
+  // 運営者へ新規登録の即時通知（送信失敗しても登録処理は成功させる。feedback.tsと同方式）
+  try {
+    const registeredAt = `${getJSTDate()} ${getJSTTime()}`;
+    const subject = `【シフトログ】新規登録: ${companyName}`;
+    const body = `新しい会社が登録されました。\n\n会社名: ${companyName}\n管理者名: ${name}\nメール: ${email}\n登録時刻: ${registeredAt} (JST)\ncompany_id: ${companyId}\n\n登録当日が唯一のフォロー窓です。ウェルカムメールを検討してください。\n利用状況: https://shiftlog-production.up.railway.app/admin`;
+    sendMail(SUPER_ADMIN_EMAIL, subject, body).catch(() => {});
+  } catch {}
 
   const token = jwt.sign(
     { id: userId, email, role: assignedRole, name },

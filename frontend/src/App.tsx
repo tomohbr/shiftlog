@@ -29,6 +29,7 @@ import AutoSchedulePage from './pages/AutoSchedulePage'
 import AdminHubPage from './pages/AdminHubPage'
 import SetupGuidePage from './pages/SetupGuidePage'
 import OrganizationPage from './pages/OrganizationPage'
+import QrPosterPage from './pages/QrPosterPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -84,6 +85,11 @@ function AppRoutes() {
         </div>
       </Layout>
     )
+  }
+
+  // 印刷用QRポスターはレイアウト（サイドバー等）なしの独立ページとして表示する
+  if (isAdminRole && location.pathname === '/qr-poster') {
+    return <QrPosterPage />
   }
 
   // 登録直後は、サイドバー等のない全画面ウィザードで初期設定を案内する

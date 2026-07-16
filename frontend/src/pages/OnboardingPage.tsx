@@ -4,6 +4,7 @@ import { Store, Users, Calendar, Send, Check, ArrowRight, Plus, X, Copy, Share2,
 import { storesApi, usersApi, shiftsApi, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import StaffLoginQR, { simpleInviteMessage } from '../components/StaffLoginQR'
+import LineShareButton from '../components/LineShareButton'
 import toast from 'react-hot-toast'
 
 type Step = 1 | 2 | 3 | 4
@@ -382,6 +383,7 @@ function InviteStep({ companyPin, companyName, onFinish }: { companyPin: string;
           <p className="text-xs text-gray-600 mb-2">案内文の例（{staffList[0].name}さん宛）</p>
           <pre className="text-xs text-gray-800 whitespace-pre-wrap font-sans pr-20">{message}</pre>
           <div className="absolute top-2 right-2 flex gap-1.5">
+            <LineShareButton text={message} className="px-2.5 py-1.5 text-xs bg-[#06C755] text-white rounded hover:opacity-90 flex items-center gap-1 font-semibold" />
             {typeof navigator !== 'undefined' && !!(navigator as any).share && (
               <button
                 type="button"

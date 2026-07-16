@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Check, X as XIcon, Clock, Send, Settings } from 'lucide-react'
-import { shiftRequestsApi } from '../api/client'
+import { Calendar, Check, X as XIcon, Clock, Send, Settings, Megaphone, Copy, Printer, Share2, AlertCircle } from 'lucide-react'
+import { shiftRequestsApi, usersApi, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
+import { staffLoginUrl } from '../components/StaffLoginQR'
+import LineShareButton from '../components/LineShareButton'
 import toast from 'react-hot-toast'
 
 type Availability = 'available' | 'unavailable' | 'preferred'
@@ -117,6 +119,55 @@ function TimeSelect({
   )
 }
 
+// ===================== 提出依頼文・催促文（スタッフ周知の摩擦削減） =====================
+
+function fmtMD(d: string): string {
+  return `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`
+}
+
+function buildRequestMessage(
+  companyName: string,
+  companyPin: string,
+  year: number,
+  month: number,
+  start?: string | null,
+  end?: string | null,
+  deadline?: string | null
+): string {
+  const lines = [
+    `【${companyName}】${month}月の希望シフト提出のお願い`,
+    `${year}年${month}月分の希望シフトの受付を開始しました。`,
+  ]
+  if (start && end) lines.push(`対象期間: ${fmtMD(start)} 〜 ${fmtMD(end)}`)
+  if (deadline) lines.push(`締切: ${fmtMD(deadline)}`)
+  lines.push(
+    '',
+    '下のURLを開いて自分の名前をタップ → メニューの「希望シフト」から提出できます。',
+    staffLoginUrl(companyPin)
+  )
+  return lines.join('\n')
+}
+
+function buildReminderMessage(
+  companyName: string,
+  companyPin: string,
+  month: number,
+  names: string[],
+  deadline?: string | null
+): string {
+  const lines = [
+    `【${companyName}】${month}月の希望シフト提出のお願い（リマインド）`,
+    `まだ提出が確認できていない方: ${names.map(n => `${n}さん`).join('、')}`,
+  ]
+  if (deadline) lines.push(`締切: ${fmtMD(deadline)}`)
+  lines.push(
+    '',
+    '下のURLを開いて自分の名前をタップ → メニューの「希望シフト」から提出をお願いします。',
+    staffLoginUrl(companyPin)
+  )
+  return lines.join('\n')
+}
+
 // ===================== Admin View =====================
 
 function AdminView({
@@ -128,6 +179,7 @@ function AdminView({
   month: number
   days: DayEntry[]
 }) {
+  const { selectedCompany } = useAuth()
   const [staffSummary, setStaffSummary] = useState<StaffSummaryRow[]>([])
   const [period, setPeriod] = useState<CollectionPeriod>({ status: 'closed', deadline: null, start_date: null, end_date: null })
   const [loading, setLoading] = useState(true)
@@ -135,6 +187,14 @@ function AdminView({
   const [deadlineInput, setDeadlineInput] = useState('')
   const [startInput, setStartInput] = useState('')
   const [endInput, setEndInput] = useState('')
+  // スタッフ周知（収集開始直後のモーダル/バナー）と未提出者の可視化。
+  // どちらも既存の収集開始処理・提出状況テーブルには手を入れず、表示を足すだけ。
+  const [allStaff, setAllStaff] = useState<User[]>([])
+  const [hasPeriod, setHasPeriod] = useState(false)
+  const [notifyView, setNotifyView] = useState<'none' | 'modal' | 'banner'>('none')
+
+  const companyName = selectedCompany?.name || ''
+  const companyPin = (selectedCompany as any)?.company_pin || ''
 
   const monthFirst = formatDate(year, month, 1)
   const monthLast = formatDate(year, month, getDaysInMonth(year, month))
@@ -146,9 +206,11 @@ function AdminView({
   const loadData = async () => {
     setLoading(true)
     try {
-      const [summaryRes, periodRes] = await Promise.all([
+      const [summaryRes, periodRes, usersRes] = await Promise.all([
         shiftRequestsApi.getAll({ year, month }),
         shiftRequestsApi.getPeriod(year, month),
+        // スタッフ一覧は未提出者の可視化用。失敗しても既存表示は変えない
+        usersApi.getAll().catch(() => null),
       ])
 
       const requests = summaryRes.data.requests || []
@@ -182,6 +244,8 @@ function AdminView({
       setDeadlineInput(pData?.deadline || '')
       setStartInput(pData?.start_date || '')
       setEndInput(pData?.end_date || '')
+      setHasPeriod(!!pData)
+      setAllStaff(usersRes?.data?.users || [])
     } catch {
       toast.error('データの取得に失敗しました')
     } finally {
@@ -209,6 +273,23 @@ function AdminView({
       toast.success(
         newStatus === 'open' ? '希望シフト収集を開始しました' : '希望シフト収集を締め切りました'
       )
+      // 収集開始が成功した後に、フロント側で「スタッフに知らせる」案内を重ねる。
+      // 初回はモーダル、2回目以降は小さいバナー（localStorageで判定）。
+      // バックエンドの収集開始処理には一切手を入れていない。
+      if (newStatus === 'open') {
+        setHasPeriod(true)
+        let seen = false
+        try {
+          const key = `shiftlog_collect_notify_seen_${selectedCompany?.id ?? 'c'}`
+          seen = !!localStorage.getItem(key)
+          if (!seen) localStorage.setItem(key, '1')
+        } catch {
+          // localStorageが使えない環境ではモーダル扱いにする
+        }
+        setNotifyView(seen ? 'banner' : 'modal')
+      } else {
+        setNotifyView('none')
+      }
     } catch (e: any) {
       toast.error(e.response?.data?.error || '操作に失敗しました')
     }
@@ -235,6 +316,34 @@ function AdminView({
   }
 
   const todayStr = new Date().toISOString().slice(0, 10)
+
+  // 提出依頼文（収集開始直後の周知用）。開始直後は入力値が最新なので入力値を優先する
+  const requestMessage = buildRequestMessage(
+    companyName,
+    companyPin,
+    year,
+    month,
+    startInput || period.start_date,
+    endInput || period.end_date,
+    deadlineInput || period.deadline
+  )
+
+  // 未提出スタッフの可視化（表示の追加のみ。既存の提出セル・確定操作は不変）
+  const staffOnly = allStaff.filter(u => u.role === 'staff' || u.company_role === 'staff')
+  const submittedIds = new Set(staffSummary.map(s => s.user_id))
+  const unsubmitted = staffOnly.filter(u => !submittedIds.has(u.id))
+  const reminderMessage = buildReminderMessage(
+    companyName,
+    companyPin,
+    month,
+    unsubmitted.map(u => u.name),
+    period.deadline
+  )
+
+  const copyText = (text: string, doneMsg: string) => {
+    navigator.clipboard.writeText(text)
+    toast.success(doneMsg)
+  }
 
   if (loading) {
     return (
@@ -343,6 +452,56 @@ function AdminView({
         )}
       </div>
 
+      {/* 収集開始後の周知バナー（2回目以降のリマインド。閉じるだけで消える） */}
+      {notifyView === 'banner' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex flex-wrap items-center gap-3">
+          <Megaphone className="w-5 h-5 text-blue-600 shrink-0" />
+          <p className="text-sm text-blue-900 font-medium flex-1 min-w-[200px]">
+            収集を開始しました。スタッフへの案内は送りましたか？
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => copyText(requestMessage, '提出依頼文をコピーしました')}
+              className="px-3 py-1.5 text-xs bg-white border border-blue-300 rounded hover:bg-blue-100 flex items-center gap-1 font-semibold text-blue-800"
+            >
+              <Copy className="w-3 h-3" /> 依頼文をコピー
+            </button>
+            <LineShareButton text={requestMessage} />
+            <button
+              onClick={() => setNotifyView('none')}
+              className="p-1.5 text-blue-400 hover:text-blue-600 rounded"
+              title="閉じる"
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 未提出スタッフへの催促（収集中で未提出者がいる時だけ表示） */}
+      {hasPeriod && period.status === 'open' && unsubmitted.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-wrap items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-sm font-semibold text-amber-900">
+              未提出のスタッフが{unsubmitted.length}名います
+            </p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              {unsubmitted.map(u => u.name).join('、')}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => copyText(reminderMessage, '催促文をコピーしました')}
+              className="px-3 py-1.5 text-xs bg-white border border-amber-300 rounded hover:bg-amber-100 flex items-center gap-1 font-semibold text-amber-800"
+            >
+              <Copy className="w-3 h-3" /> 催促文をコピー
+            </button>
+            <LineShareButton text={reminderMessage} />
+          </div>
+        </div>
+      )}
+
       {/* Legend */}
       <div className="flex items-center gap-4 text-xs text-gray-500">
         <span className="font-medium">凡例:</span>
@@ -399,7 +558,7 @@ function AdminView({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {staffSummary.length === 0 && (
+              {staffSummary.length === 0 && (!hasPeriod || unsubmitted.length === 0) && (
                 <tr>
                   <td colSpan={days.length + 2} className="text-center py-12 text-gray-400">
                     まだ希望シフトの提出はありません
@@ -474,10 +633,104 @@ function AdminView({
                   </tr>
                 )
               })}
+              {/* 未提出スタッフの行（収集期間がある月だけ。既存の提出済み行の下に追加表示するのみ） */}
+              {hasPeriod && unsubmitted.map(u => (
+                <tr key={`unsubmitted-${u.id}`} className="hover:bg-gray-50/50">
+                  <td className="sticky left-0 z-10 bg-white px-4 py-2 border-r border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 opacity-50"
+                        style={{ backgroundColor: u.color || '#9CA3AF' }}
+                      >
+                        {u.name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-sm font-medium text-gray-500 truncate max-w-[90px]">
+                          {u.name}
+                        </span>
+                        <span className="inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">
+                          未提出
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                  {days.map(day => (
+                    <td key={day.date} className="text-center py-1 px-0.5 border-r border-gray-100">
+                      <span className="text-gray-200 text-xs">-</span>
+                    </td>
+                  ))}
+                  <td className="text-center px-3 py-2">
+                    <span className="text-xs font-semibold text-red-500">0%</span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* 収集開始直後の「スタッフに知らせる」モーダル（初回のみ。閉じると既存画面にそのまま戻る） */}
+      {notifyView === 'modal' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setNotifyView('none')} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Megaphone className="w-5 h-5 text-blue-600" />
+                スタッフに提出開始を知らせましょう
+              </h3>
+              <button onClick={() => setNotifyView('none')}>
+                <XIcon className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto space-y-3">
+              <p className="text-sm text-gray-700">
+                収集を開始しただけでは、<b className="text-gray-900">スタッフには通知されません</b>。
+                下の案内文をLINEやグループチャットで送るか、印刷用QRポスターを店舗に貼ってください。
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <pre className="text-xs text-gray-800 whitespace-pre-wrap font-sans">{requestMessage}</pre>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => copyText(requestMessage, '提出依頼文をコピーしました')}
+                  className="px-3 py-2 text-xs bg-white border border-blue-300 rounded-lg hover:bg-blue-50 flex items-center gap-1.5 font-semibold text-blue-800"
+                >
+                  <Copy className="w-3.5 h-3.5" /> 依頼文をコピー
+                </button>
+                <LineShareButton
+                  text={requestMessage}
+                  className="px-3 py-2 text-xs bg-[#06C755] text-white rounded-lg hover:opacity-90 flex items-center gap-1.5 font-semibold"
+                />
+                {typeof navigator !== 'undefined' && !!(navigator as any).share && (
+                  <button
+                    onClick={() => {
+                      (navigator as any).share({ title: '希望シフト提出のお願い', text: requestMessage }).catch(() => {})
+                    }}
+                    className="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 font-semibold text-gray-700"
+                  >
+                    <Share2 className="w-3.5 h-3.5" /> 送る
+                  </button>
+                )}
+                <button
+                  onClick={() => window.open('/qr-poster', '_blank')}
+                  className="px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 font-semibold text-gray-700"
+                >
+                  <Printer className="w-3.5 h-3.5" /> 印刷用QRポスターを開く
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end px-5 py-3 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setNotifyView('none')}
+                className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                閉じる（あとで送る）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
