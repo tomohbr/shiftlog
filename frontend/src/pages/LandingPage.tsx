@@ -181,6 +181,22 @@ const PRO_ITEMS = ['Freeの全機能', '過去月の集計・履歴', '勤怠・
 
 const FAQS = [
   {
+    q: 'Airシフトのデータはそのまま移せますか？',
+    a: 'スタッフ情報・店舗設定はこちらで無料で移行代行します。過去の打刻履歴の移行は内容によりますので、メール（shibahara.724@gmail.com）でご相談ください。',
+  },
+  {
+    q: 'なぜこんなに安いのですか？',
+    a: '個人開発で、広告費も営業部隊もかけていないためです。作者自身が飲食店の現場で毎日使うために作ったツールを、そのまま提供しています。',
+  },
+  {
+    q: '個人開発で、急にサービスが終わったりしませんか？',
+    a: '作者自身の店舗運営に必須のツールとして毎日稼働しています。万一の際もCSVで全データをお手元に出力できます（Pro機能）。',
+  },
+  {
+    q: 'スタッフへの説明が面倒なのですが。',
+    a: 'スタッフはアプリのインストール不要で、スマホでURLを開いてPINコードを入力するだけです。導入時にそのまま使える「スタッフ向け案内文」もお渡しします。',
+  },
+  {
     q: '無料期間が終わるとデータは消えますか？',
     a: '消えません。トライアル終了後は自動的にFreeプランに切り替わり、登録したスタッフ・シフト・打刻データはすべてそのまま使えます。',
   },
@@ -190,7 +206,7 @@ const FAQS = [
   },
   {
     q: 'スタッフ側の設定は大変ですか？',
-    a: 'スタッフはアプリのインストール不要。店長から共有されるPINコードを入力するだけで、自分のスマホから打刻とシフト確認ができます。',
+    a: 'スタッフはアプリのインストール不要。マネージャーから共有されるPINコードを入力するだけで、自分のスマホから打刻とシフト確認ができます。',
   },
   {
     q: '解約はすぐできますか？',
@@ -198,7 +214,7 @@ const FAQS = [
   },
 ]
 
-function CTAButton({ large = false }: { large?: boolean }) {
+function CTAButton({ large = false, label = '無料で乗り換える' }: { large?: boolean; label?: string }) {
   return (
     <Link
       to="/login?mode=register"
@@ -206,7 +222,7 @@ function CTAButton({ large = false }: { large?: boolean }) {
         large ? 'px-9 py-4 text-base' : 'px-6 py-3 text-sm'
       }`}
     >
-      無料で店舗を作成する
+      {label}
       <ArrowRight className="w-4 h-4" />
     </Link>
   )
@@ -240,23 +256,23 @@ export default function LandingPage() {
         <div className="relative max-w-6xl mx-auto px-5 pt-28 pb-16 sm:pt-36 sm:pb-24 grid lg:grid-cols-2 gap-12 items-center">
           <div className="text-center lg:text-left">
             <p className="inline-block px-3 py-1 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-200 text-xs font-medium mb-6">
-              現役の飲食店店長が、自分の店のために作りました
+              現役の飲食店マネージャーが、自分の店のために作りました
             </p>
             <h1 className="text-4xl sm:text-5xl font-bold text-white leading-[1.25] mb-6">
-              打刻とシフトを、
+              Airシフトが有料になって、
               <br />
-              毎日<span className="text-blue-400">見える</span>状態に。
+              困っていませんか？
             </h1>
             <p className="text-base sm:text-lg text-slate-300 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0">
-              紙のシフト表とLINEのやり取りを、これひとつに。
-              出退勤の打刻から月末の給与集計まで、店長の「見えない・わからない・終わらない」をなくします。
+              シフトログなら<span className="text-blue-400 font-bold">10分</span>で乗り換えできます。
+              1店舗・スタッフ30名までずっと無料。全機能使っても月980円（税込）です。
             </p>
             <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
               <CTAButton large />
               <div className="text-sm text-slate-400 leading-snug text-center sm:text-left">
-                30日間Proの全機能を無料でお試し
+                クレカ登録不要・30日間全機能お試し
                 <br />
-                クレジットカード不要
+                勝手に課金されることはありません
               </div>
             </div>
           </div>
@@ -266,11 +282,96 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* 課題共感: 料金構造のちがい */}
+      <section className="py-16 sm:py-20">
+        <div className="max-w-4xl mx-auto px-5">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center leading-snug mb-3">
+            シフト管理に、
+            <br className="sm:hidden" />
+            スタッフの人数分の料金はいりません。
+          </h2>
+          <p className="text-center text-gray-500 leading-relaxed mb-10 max-w-2xl mx-auto">
+            Airシフトは2026年4月に有料化され、スタッフ1人あたり月330円（最低990円/月）がかかるようになりました。
+            人数が増えるほど月額も増えていく仕組みです。シフトログは、何人使っても定額です。
+          </p>
+          <div className="rounded-2xl border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
+                  <th className="text-left font-medium px-4 sm:px-6 py-3.5">お店の規模</th>
+                  <th className="text-right font-medium px-3 sm:px-6 py-3.5">人数課金の場合<span className="hidden sm:inline">（Airシフト）</span></th>
+                  <th className="text-right font-medium px-4 sm:px-6 py-3.5 text-blue-600">シフトログ</th>
+                </tr>
+              </thead>
+              <tbody className="text-gray-700">
+                {[
+                  { staff: 'スタッフ5名', air: '月1,650円', log: '¥0（Freeプラン）' },
+                  { staff: 'スタッフ10名', air: '月3,300円', log: '¥0（Freeプラン）' },
+                  { staff: 'スタッフ30名', air: '月9,900円', log: '¥0（Freeプラン）' },
+                  { staff: 'スタッフ31名以上', air: '人数分の月額', log: '月980円（Pro・無制限）' },
+                ].map(r => (
+                  <tr key={r.staff} className="border-b border-gray-100 last:border-0">
+                    <td className="px-4 sm:px-6 py-3.5 font-medium">{r.staff}</td>
+                    <td className="px-3 sm:px-6 py-3.5 text-right text-gray-500">{r.air}</td>
+                    <td className="px-4 sm:px-6 py-3.5 text-right font-bold text-blue-600">{r.log}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-400 mt-4 leading-relaxed">
+            ※2026年4月の有料化時点のAirシフト公表料金（スタッフ1人あたり月330円・最低990円/月）に基づく試算です。最新の料金は各公式サイトをご確認ください。
+          </p>
+        </div>
+      </section>
+
+      {/* Migration steps */}
+      <section className="bg-gray-50 py-16 sm:py-20">
+        <div className="max-w-6xl mx-auto px-5">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-3">
+            Airシフトからの乗り換えは、10分で終わります。
+          </h2>
+          <p className="text-center text-gray-500 mb-12">面倒な移行作業は、こちらで代行します。</p>
+          <div className="grid sm:grid-cols-3 gap-6">
+            {[
+              {
+                step: '1',
+                title: 'スタッフの名前一覧を送る',
+                desc: 'LINE・メール・写真でOK。手元のシフト表の写真をそのまま送っていただいても大丈夫です。',
+              },
+              {
+                step: '2',
+                title: 'こちらで店舗とスタッフを登録',
+                desc: '店舗設定・スタッフ登録はこちらで代行します。ここまでで約10分です。',
+              },
+              {
+                step: '3',
+                title: 'スタッフはスマホでそのまま打刻',
+                desc: 'スタッフはアプリのインストール不要。スマホでQRを読んで打刻を始められます。紙の移行マニュアルも要りません。',
+              },
+            ].map(s => (
+              <div key={s.step} className="rounded-2xl bg-white border border-gray-200 p-7">
+                <div className="w-11 h-11 bg-blue-600 rounded-xl flex items-center justify-center mb-5 text-white font-bold text-lg">
+                  {s.step}
+                </div>
+                <h3 className="font-bold text-gray-900 mb-2.5 leading-snug">{s.title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-sm text-gray-500 mt-8">
+            移行作業はすべて無料。Zoomで画面を見ながら一緒に設定することもできます（15分）。
+            <br />
+            移行のご相談: <a href="mailto:shibahara.724@gmail.com" className="text-blue-600 font-medium hover:underline">shibahara.724@gmail.com</a>
+          </p>
+        </div>
+      </section>
+
       {/* Pains */}
       <section className="py-16 sm:py-20">
         <div className="max-w-6xl mx-auto px-5">
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-3">こんな毎日、続けますか</h2>
-          <p className="text-center text-gray-500 mb-12">小さな店のシフト管理は、店長の善意と残業でできている。</p>
+          <p className="text-center text-gray-500 mb-12">小さな店のシフト管理は、マネージャーの善意と残業でできている。</p>
           <div className="grid sm:grid-cols-3 gap-6">
             {PAINS.map(p => {
               const Icon = p.icon
@@ -408,7 +509,7 @@ export default function LandingPage() {
           <div className="rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-8 sm:p-12 text-center">
             <p className="text-sm font-bold text-blue-400 mb-5">作った人について</p>
             <p className="text-white text-lg sm:text-xl font-bold leading-relaxed mb-5">
-              シフトログは、現役の飲食店店長が
+              シフトログは、現役の飲食店マネージャーが
               <br className="hidden sm:block" />
               自分の店のために作ったアプリです。
             </p>
@@ -424,9 +525,11 @@ export default function LandingPage() {
       {/* Pricing */}
       <section className="bg-gray-50 py-16 sm:py-20">
         <div className="max-w-4xl mx-auto px-5">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-3">料金プラン</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-3">
+            人数で課金しません。何人使っても、この料金です。
+          </h2>
           <p className="text-center text-gray-500 mb-12">
-            新規登録から30日間は、Proの全機能を無料でお試しいただけます
+            登録した日から30日間、Proの全機能が無料。クレジットカードの登録は一切不要なので、勝手に課金されることはありません。
           </p>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="rounded-2xl bg-white border border-gray-200 p-8">
@@ -463,7 +566,10 @@ export default function LandingPage() {
               </ul>
             </div>
           </div>
-          <p className="text-center text-sm text-gray-400 mt-8">
+          <p className="text-center text-sm text-gray-600 mt-8">
+            Airシフトのスタッフ3人分の料金（¥330/人 × 3人 = ¥990/月）より安く、シフトログのProは何人使っても月¥980です。
+          </p>
+          <p className="text-center text-sm text-gray-400 mt-2">
             トライアル終了後は自動でFreeプランに。<span className="font-medium text-gray-500">データは消えず、請求も発生しません。</span>
           </p>
         </div>
@@ -490,9 +596,9 @@ export default function LandingPage() {
       {/* Bottom CTA */}
       <section className="bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 py-16 sm:py-20 text-center px-5">
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
-          今日のシフトから、見える状態に。
+          乗り換えに、覚悟はいりません。
         </h2>
-        <p className="text-slate-400 mb-8">登録は3分。スタッフへの案内はあとからで大丈夫です。</p>
+        <p className="text-slate-400 mb-8">登録は3分、移行は10分。合わなくても、Freeのまま使い続けられます。</p>
         <CTAButton large />
         <p className="text-sm text-slate-500 mt-4">30日間Proを無料でお試し・クレジットカード不要</p>
       </section>
