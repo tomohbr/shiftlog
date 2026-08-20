@@ -258,7 +258,7 @@ export default function LandingPage() {
             <p className="inline-block px-3 py-1 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-200 text-xs font-medium mb-6">
               現役の飲食店マネージャーが、自分の店のために作りました
             </p>
-            <h1 className="text-4xl sm:text-5xl font-bold text-white leading-[1.25] mb-6">
+            <h1 className="text-[clamp(1.4rem,6.5vw,3rem)] sm:text-5xl font-bold text-white leading-[1.3] sm:leading-[1.25] mb-6">
               Airシフトが有料になって、
               <br />
               困っていませんか？
@@ -286,9 +286,9 @@ export default function LandingPage() {
       <section className="py-16 sm:py-20">
         <div className="max-w-4xl mx-auto px-5">
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center leading-snug mb-3">
-            シフト管理に、
+            シフト管理に、スタッフの
             <br className="sm:hidden" />
-            スタッフの人数分の料金はいりません。
+            人数分の料金はいりません。
           </h2>
           <p className="text-center text-gray-500 leading-relaxed mb-10 max-w-2xl mx-auto">
             Airシフトは2026年4月に有料化され、スタッフ1人あたり月330円（最低990円/月）がかかるようになりました。
@@ -298,22 +298,22 @@ export default function LandingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
-                  <th className="text-left font-medium px-4 sm:px-6 py-3.5">お店の規模</th>
-                  <th className="text-right font-medium px-3 sm:px-6 py-3.5">人数課金の場合<span className="hidden sm:inline">（Airシフト）</span></th>
-                  <th className="text-right font-medium px-4 sm:px-6 py-3.5 text-blue-600">シフトログ</th>
+                  <th className="text-left font-medium px-2.5 sm:px-6 py-3.5 whitespace-nowrap">スタッフ数</th>
+                  <th className="text-right font-medium px-2 sm:px-6 py-3.5 whitespace-nowrap">人数課金の場合<span className="hidden sm:inline">（Airシフト）</span></th>
+                  <th className="text-right font-medium px-2.5 sm:px-6 py-3.5 text-blue-600 whitespace-nowrap">シフトログ</th>
                 </tr>
               </thead>
               <tbody className="text-gray-700">
                 {[
-                  { staff: 'スタッフ5名', air: '月1,650円', log: '¥0（Freeプラン）' },
-                  { staff: 'スタッフ10名', air: '月3,300円', log: '¥0（Freeプラン）' },
-                  { staff: 'スタッフ30名', air: '月9,900円', log: '¥0（Freeプラン）' },
-                  { staff: 'スタッフ31名以上', air: '人数分の月額', log: '月980円（Pro・無制限）' },
+                  { staff: '5名', air: '月1,650円', log: '¥0（Freeプラン）' },
+                  { staff: '10名', air: '月3,300円', log: '¥0（Freeプラン）' },
+                  { staff: '30名', air: '月9,900円', log: '¥0（Freeプラン）' },
+                  { staff: '31名以上', air: '人数分の月額', log: '月980円（定額）' },
                 ].map(r => (
                   <tr key={r.staff} className="border-b border-gray-100 last:border-0">
-                    <td className="px-4 sm:px-6 py-3.5 font-medium">{r.staff}</td>
-                    <td className="px-3 sm:px-6 py-3.5 text-right text-gray-500">{r.air}</td>
-                    <td className="px-4 sm:px-6 py-3.5 text-right font-bold text-blue-600">{r.log}</td>
+                    <td className="px-2.5 sm:px-6 py-3.5 font-medium whitespace-nowrap">{r.staff}</td>
+                    <td className="px-2 sm:px-6 py-3.5 text-right text-gray-500 whitespace-nowrap">{r.air}</td>
+                    <td className="px-2.5 sm:px-6 py-3.5 text-right font-bold text-blue-600 whitespace-nowrap">{r.log}</td>
                   </tr>
                 ))}
               </tbody>
@@ -329,7 +329,9 @@ export default function LandingPage() {
       <section className="bg-gray-50 py-16 sm:py-20">
         <div className="max-w-6xl mx-auto px-5">
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-3">
-            Airシフトからの乗り換えは、10分で終わります。
+            Airシフトからの乗り換えは、
+            <br className="sm:hidden" />
+            10分で終わります。
           </h2>
           <p className="text-center text-gray-500 mb-12">面倒な移行作業は、こちらで代行します。</p>
           <div className="grid sm:grid-cols-3 gap-6">
@@ -526,7 +528,9 @@ export default function LandingPage() {
       <section className="bg-gray-50 py-16 sm:py-20">
         <div className="max-w-4xl mx-auto px-5">
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-3">
-            人数で課金しません。何人使っても、この料金です。
+            人数で課金しません。
+            <br className="sm:hidden" />
+            何人使っても、この料金です。
           </h2>
           <p className="text-center text-gray-500 mb-12">
             登録した日から30日間、Proの全機能が無料。クレジットカードの登録は一切不要なので、勝手に課金されることはありません。
@@ -596,7 +600,9 @@ export default function LandingPage() {
       {/* Bottom CTA */}
       <section className="bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 py-16 sm:py-20 text-center px-5">
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
-          乗り換えに、覚悟はいりません。
+          乗り換えに、
+          <br className="sm:hidden" />
+          覚悟はいりません。
         </h2>
         <p className="text-slate-400 mb-8">登録は3分、移行は10分。合わなくても、Freeのまま使い続けられます。</p>
         <CTAButton large />
