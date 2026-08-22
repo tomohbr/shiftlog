@@ -11,38 +11,42 @@
 | Node.js | ✅ **v24.19.0 LTS 導入済み**（2026-08-22、`~/.local` に展開・sudo不要） |
 | Homebrew | ❌ 未インストール |
 | CocoaPods | ❌ 未インストール |
-| Apple Developer Program | ❌ 未加入 |
+| Apple Developer Program | ❌ 未加入（**個人で登録する**と決定） |
 
 新Mac移行直後のため、ビルドに必要なものが揃っていない。以下を上から順に進める。
 
 ---
 
-## 1. Apple Developer Program に加入する（最優先・時間がかかる）
+## 1. Apple Developer Program に加入する（最優先・クリティカルパス）
 
-**費用**: 年額 11,800円前後（$99）
-**所要**: 個人なら即日〜2日、法人は数週間かかることがある
+**2026-08-22 決定: 個人（Individual）で登録する。**
 
-### 個人 or 法人の判断
+**費用**: 年額 12,980円（税込・日本価格。$99相当）
+**所要**: 最短即日、通常1〜2日
 
-| | 個人（Individual） | 法人（Organization） |
-|---|---|---|
-| App Store 上の販売者名 | **本人の氏名が表示される** | 法人名が表示される |
-| 必要なもの | Apple Account + 支払い手段 | **D-U-N-S 番号**、登記情報、法人の電話番号 |
-| 審査期間 | 即日〜2日 | 数日〜数週間 |
+### 準備するもの
 
-シフトログは店舗向けに販売する商用プロダクトなので、**法人名で出したいなら法人登録**を選ぶ。個人名が表示されて問題ないなら個人登録の方が圧倒的に早い。
-
-> 法人を選ぶ場合、D-U-N-S 番号の取得だけで1〜2週間かかることがある。先に https://developer.apple.com/enroll/duns-lookup/ で取得済みか確認する。
+- Apple Account（**2ファクタ認証の有効化が必須**）
+- クレジットカード
+- **写真付きの公的身分証明書** — 運転免許証、マイナンバーカード、パスポートのいずれか
 
 ### 手順
 
 1. https://developer.apple.com/programs/enroll/ にアクセス
-2. Apple Account でサインイン（2ファクタ認証が必須）
-3. Individual / Organization を選択
-4. 情報を入力して支払い
-5. 承認メールを待つ
+2. Apple Account でサインイン
+3. **Individual / Sole Proprietor** を選択
+4. 氏名・住所などを入力（**身分証明書の記載と完全に一致させる**。ズレると差し戻される）
+5. 身分証明書の写真をアップロード（[Identity verification](https://developer.apple.com/help/account/membership/identity-verification/)）
+6. 年会費を支払う
+7. 承認メールを待つ → App Store Connect にログインできるようになる
 
-**注意**: 加入が完了するまで App Store Connect でアプリレコードを作成できない。ここが全体のクリティカルパスなので、他の作業と並行して真っ先に着手する。
+### 個人登録で認識しておくこと
+
+- **App Store の販売者名として本人の氏名が公開される。** 屋号やサービス名ではなく「芝原 朋弥」が表示される。これが困る場合は法人登録が必要（D-U-N-S 番号の取得で1〜2週間かかる）
+- 後から個人→法人へ移行する場合、**アプリを新しいアカウントへ移管する手続きが必要**になる。将来法人化する予定があるなら、この時点で法人登録を選んでおく方が手間が少ない
+- 特定商取引法の表記は既に `TokushohoPage.tsx` があり、運営責任者「芝原 朋弥」・住所と電話番号は請求開示方式で運用している。個人登録と整合している
+
+**注意**: 加入が完了するまで App Store Connect でアプリレコードを作成できず、証明書もプロビジョニングプロファイルも作れない。Xcode のインストールと並行して、真っ先に着手する。
 
 ---
 
@@ -177,7 +181,7 @@ npm -v
 pod --version
 ```
 
-- [ ] Apple Developer Program に加入済み（App Store Connect にログインできる）
+- [ ] Apple Developer Program に加入済み（個人 / App Store Connect にログインできる）
 - [ ] Xcode 26 以降がインストール済み
 - [ ] `xcode-select -p` が `/Applications/Xcode.app/...` を指している
 - [x] Node.js LTS が入っている（v24.19.0）
