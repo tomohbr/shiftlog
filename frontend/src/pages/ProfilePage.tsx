@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { authApi, usersApi, icalApi, billingApi, BillingPlan } from '../api/client'
-import { User, Mail, Lock, Save, Calendar, Copy, Trash2, Sun, Moon, Crown, CreditCard, Sparkles } from 'lucide-react'
+import { authApi, usersApi, icalApi, billingApi, BillingPlan, AccountDeletionInfo } from '../api/client'
+import { User, Mail, Lock, Save, Calendar, Copy, Trash2, Sun, Moon, Crown, CreditCard, Sparkles, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function ProfilePage() {
-  const { user, selectedCompany } = useAuth()
+  const { user, selectedCompany, logout } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [plan, setPlan] = useState<BillingPlan | null>(null)
   const [billingLoading, setBillingLoading] = useState(false)
@@ -93,6 +93,48 @@ export default function ProfilePage() {
       toast.error(e.response?.data?.error || '失敗しました')
     }
   }
+  // アカウント削除
+  const [deleteInfo, setDeleteInfo] = useState<AccountDeletionInfo | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
+  const openDeleteModal = async () => {
+    try {
+      const res = await authApi.getAccountDeletionInfo()
+      setDeleteInfo(res.data)
+      setDeletePassword('')
+      setDeleteConfirm('')
+      setShowDeleteModal(true)
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '削除内容の取得に失敗しました')
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!deleteInfo) return
+    if (deleteInfo.requires_password && !deletePassword) {
+      toast.error('パスワードを入力してください')
+      return
+    }
+    if (!deleteInfo.requires_password && deleteConfirm !== '削除') {
+      toast.error('確認のため「削除」と入力してください')
+      return
+    }
+    setDeleting(true)
+    try {
+      await authApi.deleteAccount(
+        deleteInfo.requires_password ? { password: deletePassword } : { confirm: deleteConfirm }
+      )
+      toast.success('アカウントを削除しました')
+      logout()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'アカウント削除に失敗しました')
+      setDeleting(false)
+    }
+  }
+
   const toggleTheme = () => {
     const next = theme === 'light' ? 'dark' : 'light'
     setTheme(next)
@@ -369,6 +411,101 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      {/* アカウント削除 */}
+      <div className="bg-white rounded-xl border border-red-200 p-6 space-y-3">
+        <h3 className="text-lg font-semibold flex items-center gap-2 text-red-700">
+          <AlertTriangle className="w-5 h-5" /> アカウントの削除
+        </h3>
+        <p className="text-sm text-gray-500">
+          アカウントと、あなたが唯一の管理者である会社のデータをすべて削除します。この操作は取り消せません。
+        </p>
+        <button
+          onClick={openDeleteModal}
+          className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 text-sm font-medium"
+        >
+          <Trash2 className="w-4 h-4" /> アカウントを削除
+        </button>
+      </div>
+
+      {/* アカウント削除の確認 */}
+      {showDeleteModal && deleteInfo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold flex items-center gap-2 text-red-700">
+              <AlertTriangle className="w-5 h-5" /> 本当に削除しますか？
+            </h3>
+
+            {deleteInfo.deleting_companies.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-red-800 mb-1">
+                  以下の会社は、すべてのデータごと削除されます
+                </p>
+                <ul className="text-sm text-red-700 list-disc list-inside">
+                  {deleteInfo.deleting_companies.map(c => <li key={c.id}>{c.name}</li>)}
+                </ul>
+                <p className="text-xs text-red-600 mt-2">
+                  シフト・打刻・スタッフ・集計データがすべて消えます。有料プランは解約されます。
+                </p>
+              </div>
+            )}
+
+            {deleteInfo.leaving_companies.length > 0 && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-gray-700 mb-1">
+                  以下の会社からは、あなたのみが退出します（会社は残ります）
+                </p>
+                <ul className="text-sm text-gray-600 list-disc list-inside">
+                  {deleteInfo.leaving_companies.map(c => <li key={c.id}>{c.name}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {deleteInfo.requires_password ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  確認のためパスワードを入力
+                </label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={e => setDeletePassword(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  確認のため「削除」と入力
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirm}
+                  onChange={e => setDeleteConfirm(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50"
+              >
+                {deleting ? '削除中...' : '完全に削除する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

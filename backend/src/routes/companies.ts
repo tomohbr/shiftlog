@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
+import { deleteCompanyData, cancelCompanySubscription } from '../utils/account-deletion';
 
 const router = Router();
 
@@ -99,7 +100,7 @@ router.put('/:id', authenticateToken, requireAdmin, (req: AuthRequest, res: Resp
 });
 
 // DELETE /api/companies/:id
-router.delete('/:id', authenticateToken, requireAdmin, (req: AuthRequest, res: Response): void => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   const companyId = parseInt(req.params.id);
 
   const access = db.prepare(
@@ -111,13 +112,16 @@ router.delete('/:id', authenticateToken, requireAdmin, (req: AuthRequest, res: R
     return;
   }
 
-  // Delete all related data
-  db.prepare('DELETE FROM time_records WHERE company_id = ?').run(companyId);
-  db.prepare('DELETE FROM shifts WHERE company_id = ?').run(companyId);
-  db.prepare('DELETE FROM shift_publications WHERE company_id = ?').run(companyId);
-  db.prepare('DELETE FROM stores WHERE company_id = ?').run(companyId);
-  db.prepare('DELETE FROM user_companies WHERE company_id = ?').run(companyId);
-  db.prepare('DELETE FROM companies WHERE id = ?').run(companyId);
+  // 有料契約が残っていれば先に解約する
+  await cancelCompanySubscription(companyId);
+
+  try {
+    db.transaction(() => deleteCompanyData(companyId))();
+  } catch (e) {
+    console.error(`[companies] 会社削除に失敗 (company_id=${companyId}):`, e);
+    res.status(500).json({ error: '会社の削除に失敗しました' });
+    return;
+  }
 
   res.json({ message: '会社を削除しました' });
 });

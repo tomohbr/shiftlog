@@ -164,9 +164,22 @@ export const timecardsApi = {
     api.get('/timecards/summary', { params: { year, month } }),
 }
 
+export interface AccountDeletionInfo {
+  email?: string
+  name: string
+  requires_password: boolean
+  // 会社ごと全データが消える
+  deleting_companies: { id: number; name: string }[]
+  // 自分だけ抜ける（会社は残る）
+  leaving_companies: { id: number; name: string; role: string }[]
+}
+
 export const authApi = {
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', { currentPassword, newPassword }),
+  getAccountDeletionInfo: () => api.get<AccountDeletionInfo>('/auth/account'),
+  deleteAccount: (payload: { password?: string; confirm?: string }) =>
+    api.delete('/auth/account', { data: payload }),
 }
 
 export interface PlanInfo {

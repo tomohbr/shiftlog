@@ -6,6 +6,7 @@ import { JWT_SECRET, authenticateToken, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { getJSTDate, getJSTTime } from '../utils/jst';
 import { sendMail } from '../utils/mailer';
+import { findSoleAdminCompanies, cancelCompanySubscription, deleteAccount } from '../utils/account-deletion';
 
 const router = Router();
 
@@ -346,6 +347,97 @@ router.post('/change-password', authenticateToken, (req: AuthRequest, res: Respo
     .run(newHash, req.user!.id);
 
   res.json({ message: 'パスワードを変更しました' });
+});
+
+// GET /api/auth/account - 退会時に何が消えるかの事前確認
+router.get('/account', authenticateToken, (req: AuthRequest, res: Response): void => {
+  const user = db.prepare('SELECT id, email, name, password FROM users WHERE id = ?').get(req.user!.id) as any;
+  if (!user) {
+    res.status(404).json({ error: 'ユーザーが見つかりません' });
+    return;
+  }
+
+  const soleAdminCompanies = findSoleAdminCompanies(user.id);
+
+  // 自分が抜けても管理者が残る会社（＝会社は消えず、自分だけ抜ける）
+  const soleAdminIds = new Set(soleAdminCompanies.map(c => c.id));
+  const allCompanies = db.prepare(`
+    SELECT c.id, c.name, uc.role
+    FROM user_companies uc
+    JOIN companies c ON c.id = uc.company_id
+    WHERE uc.user_id = ?
+    ORDER BY c.name ASC
+  `).all(user.id) as { id: number; name: string; role: string }[];
+  const leavingCompanies = allCompanies.filter(c => !soleAdminIds.has(c.id));
+
+  res.json({
+    email: user.email,
+    name: user.name,
+    requires_password: !!user.password,
+    // この会社は会社ごと全データが消える
+    deleting_companies: soleAdminCompanies,
+    // この会社からは自分だけ抜ける（会社は残る）
+    leaving_companies: leavingCompanies,
+  });
+});
+
+// DELETE /api/auth/account - アカウント削除（App Store ガイドライン 5.1.1(v) 必須要件）
+router.delete('/account', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { password, confirm } = req.body || {};
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.id) as any;
+  if (!user) {
+    res.status(404).json({ error: 'ユーザーが見つかりません' });
+    return;
+  }
+
+  if (user.email === SUPER_ADMIN_EMAIL) {
+    res.status(403).json({ error: '運営アカウントは削除できません' });
+    return;
+  }
+
+  // パスワードを持つアカウントはパスワード確認、PINのみのスタッフは文字入力で確認
+  if (user.password) {
+    if (!password) {
+      res.status(400).json({ error: 'パスワードを入力してください' });
+      return;
+    }
+    if (!bcrypt.compareSync(password, user.password)) {
+      res.status(401).json({ error: 'パスワードが正しくありません' });
+      return;
+    }
+  } else if (confirm !== '削除') {
+    res.status(400).json({ error: '確認のため「削除」と入力してください' });
+    return;
+  }
+
+  const soleAdminCompanies = findSoleAdminCompanies(user.id);
+
+  // DB を消す前に有料契約を解約する（消した後だと stripe_subscription_id が引けない）
+  for (const company of soleAdminCompanies) {
+    await cancelCompanySubscription(company.id);
+  }
+
+  // 監査ログは会社ごと消えるため、削除前に記録を残す
+  logAudit({
+    userId: user.id,
+    companyId: null,
+    action: 'delete',
+    entity: 'account',
+    entityId: user.id,
+    summary: `アカウント削除: ${user.email || user.name}`,
+    detail: { deleted_companies: soleAdminCompanies.map(c => c.name) },
+  });
+
+  try {
+    deleteAccount(user.id, soleAdminCompanies.map(c => c.id));
+  } catch (e) {
+    console.error('[auth] アカウント削除に失敗:', e);
+    res.status(500).json({ error: 'アカウント削除に失敗しました。時間をおいて再度お試しください。' });
+    return;
+  }
+
+  res.json({ message: 'アカウントを削除しました' });
 });
 
 export default router;
