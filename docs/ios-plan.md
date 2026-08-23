@@ -36,10 +36,13 @@ WebView が読むのは**バンドルしたローカルアセット**にする�
 | # | ガイドライン | 内容 | 状態 |
 |---|---|---|---|
 | 1 | **5.1.1(v)** | アカウント作成できるアプリは、アプリ内から削除もできること | ✅ **実装済み**（2026-08-22） |
-| 2 | **4.2** | 最低限の機能。Webサイトのラッパーは却下 | ⬜ 未着手（本計画の主作業） |
-| 3 | **3.1.1** | アプリ内で使うデジタルコンテンツは IAP 必須 | ⬜ 未着手 |
-| 4 | **5.1.1** | プライバシーポリシーの掲示 | △ LPに記載あり、公開URLの確定が必要 |
-| 5 | **2.1** | 審査用のデモアカウント提供 | ⬜ 未着手 |
+| 2 | **4.2** | 最低限の機能。Webサイトのラッパーは却下 | ✅ **実装済み**（2026-08-23）オフライン打刻・APNs・Face ID |
+| 3 | **3.1.1** | アプリ内で使うデジタルコンテンツは IAP 必須 | ✅ **実装済み**（2026-08-23）StoreKit 2 + サーバー検証 |
+| 4 | **5.1.1** | プライバシーポリシーの掲示 | ✅ `/legal/privacy` を単独URLで公開 |
+| 5 | **2.1** | 審査用のデモアカウント提供 | ✅ 生成スクリプトを用意（`create-review-account.js`） |
+
+**残っているのは Apple 側の手続きだけ**（Developer Program 加入・Xcode 導入・App Store Connect の設定）。
+手順は `ios-release.md` にまとめてある。
 
 ### 1-1. アカウント削除（実装済み）
 
@@ -170,38 +173,77 @@ LP（`shiftlog-lp/index.html`）内に記載があるが、**単独の公開URL�
 
 ## 5. 作業フェーズと目安
 
-| フェーズ | 作業 | 目安 | 前提 |
-|---|---|---|---|
-| **P0** | Apple Developer Program 加入 | 即日〜数週間 | — |
-| **P0** | 環境構築（Xcode 26 / Node / CocoaPods） | 半日 | — |
-| **P1** | Capacitor 導入、iOS プロジェクト生成、実機起動 | 1日 | P0 |
-| **P1** | ローカルアセット配信への切り替え、API接続先の設定 | 1日 | P1 |
-| **P2** | オフライン打刻（API変更含む） | 3〜5日 | P1 |
-| **P2** | APNs プッシュ通知 | 2〜3日 | P1 |
-| **P2** | Face ID / Touch ID | 1日 | P1 |
-| **P3** | IAP（StoreKit 2 + サーバー検証 + 通知受信） | 5〜8日 | P0 |
-| **P3** | ウィジェット | 2〜3日 | P1 |
-| **P3** | QRスキャン | 1日 | P1 |
-| **P4** | アイコン・スクリーンショット・掲載情報 | 1日 | — |
-| **P4** | TestFlight で内部テスト | 2日 | P1〜P3 |
-| **P4** | 審査提出・リジェクト対応 | 1〜3週間 | すべて |
+| フェーズ | 作業 | 状態 |
+|---|---|---|
+| **P0** | Apple Developer Program 加入 | ⬜ **未着手（クリティカルパス）** |
+| **P0** | Xcode 26 のインストール | ⬜ **未着手（約15GB）** |
+| **P0** | Node.js | ✅ 済（v24.19.0） |
+| **P0** | CocoaPods | — **不要になった**（Capacitor 8 は Swift Package Manager） |
+| **P1** | Capacitor 導入、iOS プロジェクト生成 | ✅ 済（`frontend/ios`） |
+| **P1** | ローカルアセット配信、API接続先の絶対URL化、CORS | ✅ 済 |
+| **P2** | オフライン打刻（API変更・冪等化・改ざん対策込み） | ✅ 済（検証スクリプト33項目パス） |
+| **P2** | APNs プッシュ通知（送信基盤＋5種類のイベント） | ✅ 済（要 環境変数） |
+| **P2** | Face ID / Touch ID（アプリロック＋かんたんログイン） | ✅ 済 |
+| **P3** | IAP（StoreKit 2 + App Store Server API 検証 + ASSN V2） | ✅ 済（要 環境変数・商品登録） |
+| **P3** | ウィジェット | ⬜ 見送り（Xcode でのターゲット追加が必要。v1.1 以降） |
+| **P3** | QRスキャン | ⬜ 見送り（キオスク打刻の導線は既にある。v1.1 以降） |
+| **P4** | アイコン（1024・アルファなし） | ✅ 済 |
+| **P4** | スクリーンショット（1320×2868） | ✅ 済（`store-assets/screenshots-ios/`） |
+| **P4** | プライバシーポリシー / 利用規約の単独URL | ✅ 済 |
+| **P4** | 審査用デモアカウント | ✅ 生成スクリプトあり |
+| **P4** | TestFlight で内部テスト | ⬜ Xcode 待ち |
+| **P4** | 審査提出・リジェクト対応 | ⬜ 1〜3週間見込み |
 
-**最短でも1.5〜2ヶ月**、IAP とネイティブ機能をきちんと作るなら2〜3ヶ月を見ておく。初回審査で 4.2 が返ってくる前提で、反論用に「ネイティブ機能の説明とスクリーンショット」を審査メモに書く準備をしておく。
+**残作業は Apple 側の手続きが中心**。Developer Program が承認され Xcode が入れば、
+ビルド → TestFlight → 提出まで最短で数日。初回審査で 4.2 が返ってくる前提で、
+反論用のメモは `store-assets/app-store-listing.md` に用意してある。
+
+### v1.0 で見送った判断
+
+- **iPad 対応を外した**（`TARGETED_DEVICE_FAMILY = 1`）。iPad を含めると 13インチ用スクリーンショットと
+  iPad レイアウトの確認が追加で必要になる。iPhone専用でも iPad 上では互換モードで動くため、
+  店舗タブレットでのキオスク運用は従来どおり Web で行える。v1.1 で対応を検討する。
+- **ウィジェットと QRスキャン**は 4.2 の反証としては十分すぎる材料が揃ったため、初回提出から外した。
 
 ---
 
-## 6. 最初の一歩（環境が整い次第）
+## 6. 実装した構成（2026-08-23 時点）
 
-```bash
-cd ~/カンパニー/shiftlog/frontend
+```
+frontend/
+  capacitor.config.ts          appId=com.shiftlog.app / webDir=dist
+  .npmrc                       legacy-peer-deps（StoreKitプラグインのpeer競合回避）
+  ios/App/                     Xcode プロジェクト（SPM。Podfile は無い）
+    App/Info.plist             NSFaceIDUsageDescription / ITSAppUsesNonExemptEncryption 等
+    App/App.entitlements       aps-environment
+    App/AppDelegate.swift      APNs のデバイストークン受け渡し
+  src/native/
+    platform.ts                ネイティブ判定・APIの絶対URL
+    offlinePunch.ts            オフライン打刻キュー（Preferences + Network + App）
+    push.ts                    APNs 登録・通知タップの遷移
+    biometric.ts               Face ID（アプリロック / かんたんログイン）
+    iap.ts                     StoreKit 2 の購入・復元・管理
+    bootstrap.ts               起動時の初期化
+    NativeShell.tsx            アプリロック画面・通知許可の事前説明・同期通知
 
-npm install @capacitor/core @capacitor/cli
-npx cap init "シフトログ" com.shiftlog.app --web-dir=dist
-
-npm install @capacitor/ios
-npm run build
-npx cap add ios
-npx cap open ios     # Xcode が開く
+backend/
+  certs/                       Apple ルート証明書（JWS 検証用）
+  src/utils/punch.ts           recorded_at の検証・冪等化・オフライン印
+  src/utils/apns.ts            APNs 送信（HTTP/2 + ES256 JWT。外部ライブラリなし）
+  src/utils/apple-iap.ts       App Store Server API での取引検証
+  src/routes/push.ts           デバイストークンの登録・解除・テスト送信
+  src/routes/billing.ts        /apple/verify と /apple/notifications を追加
+  scripts/verify-offline-punch.js    オフライン打刻の回帰テスト
+  scripts/create-review-account.js   審査用デモアカウントの生成
 ```
 
 `com.shiftlog.app` は Google Play（TWA）で使っている Package ID と揃えてある（`store-assets/twa-manifest.json`）。
+
+### DB の追加分（既存DBには起動時に自動マイグレーション）
+
+- `punch_receipts` — オフライン打刻の受領記録。`client_uuid` が主キーで再送を冪等化する
+- `device_tokens` — APNs のデバイストークン
+- `time_records.has_offline_punch` — オフライン由来の打刻が含まれる日の印
+- `subscriptions.platform` / `apple_original_transaction_id` / `apple_transaction_id` / `apple_product_id` / `apple_environment`
+
+いずれもアカウント削除処理（`utils/account-deletion.ts`）に組み込み済み。

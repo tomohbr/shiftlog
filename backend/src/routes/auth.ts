@@ -370,6 +370,15 @@ router.get('/account', authenticateToken, (req: AuthRequest, res: Response): voi
   `).all(user.id) as { id: number; name: string; role: string }[];
   const leavingCompanies = allCompanies.filter(c => !soleAdminIds.has(c.id));
 
+  // Apple の App内課金は、こちらのサーバーからは解約できない（App Store の設定からのみ）。
+  // 退会画面で「解約は別途必要」と明示しないと Guideline 5.1.1(v) の運用要件を満たさない。
+  const appleSubCompanies = soleAdminCompanies.filter(c => {
+    const sub = db.prepare(
+      "SELECT platform, plan, status FROM subscriptions WHERE company_id = ?"
+    ).get(c.id) as any;
+    return sub?.platform === 'apple' && sub?.plan === 'pro' && sub?.status !== 'canceled';
+  });
+
   res.json({
     email: user.email,
     name: user.name,
@@ -378,6 +387,8 @@ router.get('/account', authenticateToken, (req: AuthRequest, res: Response): voi
     deleting_companies: soleAdminCompanies,
     // この会社からは自分だけ抜ける（会社は残る）
     leaving_companies: leavingCompanies,
+    // Apple 課金が残っている場合、App Store 側で別途解約が必要
+    has_apple_subscription: appleSubCompanies.length > 0,
   });
 });
 

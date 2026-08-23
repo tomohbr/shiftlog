@@ -23,13 +23,30 @@ import icalRoutes from './routes/ical';
 import autoScheduleRoutes from './routes/auto-schedule';
 import payrollRoutes from './routes/payroll';
 import seedRoutes from './routes/seed';
+import pushRoutes from './routes/push';
 import { startTrialNotifier } from './utils/trial-notify';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// iOS ネイティブアプリ（Capacitor）の WebView は capacitor://localhost をオリジンとして送ってくる。
+// ALLOWED_ORIGIN を本番URLに固定していると弾かれてアプリが一切通信できなくなるため、
+// ネイティブシェルのオリジンは常に許可する。
+const NATIVE_ORIGINS = ['capacitor://localhost', 'ionic://localhost', 'http://localhost'];
+const configuredOrigins = process.env.ALLOWED_ORIGIN
+  ? process.env.ALLOWED_ORIGIN.split(',').map(o => o.trim()).filter(Boolean)
+  : ['http://localhost:5173', 'http://localhost:3000'];
+const allowedOrigins = [...new Set([...configuredOrigins, ...NATIVE_ORIGINS])];
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || ['http://localhost:5173', 'http://localhost:3000'],
+  origin: (origin, callback) => {
+    // origin なし = 同一オリジン、curl、ネイティブの一部リクエスト
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    // 許可しないオリジンでも例外は投げない。投げると Express のエラーハンドラに落ちて
+    // 静的ファイルの配信まで 500 になる（＝サイトが真っ白になる）。
+    // CORS ヘッダを付けないだけにして、ブラウザ側に判断させる。
+    callback(null, false);
+  },
   credentials: true,
 }));
 
@@ -60,6 +77,7 @@ app.use('/api/ical', icalRoutes);
 app.use('/api/auto-schedule', autoScheduleRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/seed', seedRoutes);
+app.use('/api/push', pushRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Calendar, Eye, EyeOff, Clock, Coffee, LogOut, ArrowLeft, UserPlus } from 'lucide-react'
+import { Calendar, Eye, EyeOff, Clock, Coffee, LogOut, ArrowLeft, UserPlus, Fingerprint } from 'lucide-react'
 import { api } from '../api/client'
 import toast from 'react-hot-toast'
+import { isNative } from '../native/platform'
+import { getBiometricInfo, getQuickLoginEmail, loadQuickLogin, saveQuickLogin } from '../native/biometric'
 
 interface StaffMember {
   id: number
@@ -68,13 +70,50 @@ export default function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Face ID / Touch ID でのかんたんログイン（iOSアプリのみ）
+  const [quickLoginEmail, setQuickLoginEmail] = useState<string | null>(null)
+  const [biometryLabel, setBiometryLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isNative) return
+    void (async () => {
+      const info = await getBiometricInfo()
+      if (!info.available) return
+      setBiometryLabel(info.label)
+      setQuickLoginEmail(await getQuickLoginEmail())
+    })()
+  }, [])
+
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
       await login(email, password)
+      // ログインできたら、次回から生体認証で入れるよう端末の Keychain に保存する
+      if (isNative && biometryLabel && quickLoginEmail !== email) {
+        try {
+          await saveQuickLogin(email, password)
+          setQuickLoginEmail(email)
+        } catch { /* Keychain に保存できなくてもログイン自体は成功している */ }
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'ログインに失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBiometricLogin = async () => {
+    setLoading(true)
+    try {
+      const creds = await loadQuickLogin()
+      if (!creds) {
+        setLoading(false)
+        return
+      }
+      await login(creds.email, creds.password)
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'ログインに失敗しました。パスワードを入力してください。')
     } finally {
       setLoading(false)
     }
@@ -497,6 +536,27 @@ export default function LoginPage() {
                 {loading ? 'ログイン中...' : 'ログイン'}
               </button>
             </form>
+
+            {isNative && biometryLabel && quickLoginEmail && (
+              <>
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-white px-3 text-xs text-gray-400">または</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleBiometricLogin()}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg font-semibold disabled:opacity-50"
+                >
+                  <Fingerprint className="w-5 h-5" />
+                  {biometryLabel}でログイン
+                </button>
+                <p className="text-xs text-gray-400 text-center mt-2">{quickLoginEmail}</p>
+              </>
+            )}
 
             <button
               onClick={() => setMode('select')}

@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { notifyCompanyStaff } from './line';
+import { pushToCompanyAsync } from '../utils/apns';
 
 const router = Router();
 
@@ -130,6 +131,13 @@ router.post('/period', authenticateToken, requireCompany, (req: AuthRequest, res
   const nowOpen = (status || 'open') === 'open';
   const wasOpen = prev?.status === 'open';
   if (nowOpen && !wasOpen) {
+    const deadlinePush = deadline ? `締切は ${deadline} です。` : '';
+    pushToCompanyAsync(companyId, {
+      title: 'シフト希望の受付が始まりました',
+      body: `${year}年${month}月分の希望を提出してください。${deadlinePush}`,
+      path: '/shift-requests',
+    }, req.user!.id);
+
     const lineSettings = db.prepare('SELECT notify_request_open FROM line_settings WHERE company_id = ?').get(companyId) as any;
     if (lineSettings?.notify_request_open) {
       const rangeText = start_date && end_date

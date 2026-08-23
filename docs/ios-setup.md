@@ -9,8 +9,8 @@
 | macOS | Darwin 25.5.0（macOS 26 系）→ Xcode 26 に対応 ✅ |
 | Xcode | ❌ 未インストール（Command Line Tools のみ） |
 | Node.js | ✅ **v24.19.0 LTS 導入済み**（2026-08-22、`~/.local` に展開・sudo不要） |
-| Homebrew | ❌ 未インストール |
-| CocoaPods | ❌ 未インストール |
+| Homebrew | ❌ 未インストール（**不要**） |
+| CocoaPods | ❌ 未インストール（**不要**。Capacitor 8 は Swift Package Manager を使う） |
 | Apple Developer Program | ❌ 未加入（**個人で登録する**と決定） |
 
 新Mac移行直後のため、ビルドに必要なものが揃っていない。以下を上から順に進める。
@@ -126,23 +126,15 @@ npm -v
 
 ---
 
-## 4. CocoaPods をインストールする
+## 4. CocoaPods は不要
 
-Capacitor の iOS プロジェクトが依存関係の管理に使う。
+**2026-08-23 追記: この節の作業は不要になった。**
 
-```bash
-# Homebrew を入れた場合（推奨・sudo 不要）
-brew install cocoapods
+Capacitor 8 の iOS プロジェクトは **Swift Package Manager** で依存を解決する
+（`frontend/ios/App/CapApp-SPM/Package.swift`）。`Podfile` は生成されず、
+`pod install` も走らない。Homebrew も CocoaPods も入れる必要はない。
 
-# Homebrew を使わない場合
-sudo gem install cocoapods
-```
-
-確認:
-
-```bash
-pod --version
-```
+Xcode がプロジェクトを開いたときに、Swift Package の解決が自動で行われる（初回のみ数分かかる）。
 
 ---
 
@@ -185,7 +177,17 @@ pod --version
 - [ ] Xcode 26 以降がインストール済み
 - [ ] `xcode-select -p` が `/Applications/Xcode.app/...` を指している
 - [x] Node.js LTS が入っている（v24.19.0）
-- [ ] CocoaPods が入っている
-- [ ] `shiftlog` の backend / frontend が `npm run build` で通る
+- [x] ~~CocoaPods~~ → 不要（Swift Package Manager）
+- [x] `shiftlog` の backend / frontend が `npm run build` で通る（2026-08-23 確認）
 
-ここまで終わったら `ios-plan.md` に進む。
+確認用（`pod --version` は不要）:
+
+```bash
+xcodebuild -version
+xcrun --sdk iphoneos --show-sdk-version
+node -v
+npm -v
+```
+
+ここまで終わったら **`ios-release.md`** に進む。実装はすべて完了しているので、
+`ios-plan.md` は設計の記録として読めばよい。

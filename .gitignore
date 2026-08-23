@@ -4,3 +4,13 @@ data/
 *.db
 .env
 .DS_Store
+
+# Xcode / Capacitor iOS
+frontend/ios/App/build/
+frontend/ios/App/App/public/
+frontend/ios/App/DerivedData/
+frontend/ios/capacitor-cordova-ios-plugins/
+frontend/ios/App/App/capacitor.config.json
+frontend/ios/App/App/config.xml
+**/xcuserdata/
+*.xcuserstate

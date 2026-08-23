@@ -1,6 +1,8 @@
 import axios from 'axios'
+import { apiBaseUrl, apiOrigin, isNative } from '../native/platform'
 
-const API_BASE = '/api'
+// Web は同一オリジンの /api、iOS アプリはバンドル済みアセットから本番サーバーへ絶対URLで叩く
+const API_BASE = apiBaseUrl
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -22,7 +24,14 @@ api.interceptors.response.use(
   error => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      // ネイティブは capacitor://localhost/login というURLが存在しないので、
+      // ハッシュ無しのフルリロードではなく履歴APIで /login に戻す
+      if (isNative) {
+        window.history.replaceState(null, '', '/login')
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      } else {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
@@ -168,6 +177,8 @@ export interface AccountDeletionInfo {
   email?: string
   name: string
   requires_password: boolean
+  /** Apple の App内課金が残っている場合、App Store 側で別途解約が必要 */
+  has_apple_subscription?: boolean
   // 会社ごと全データが消える
   deleting_companies: { id: number; name: string }[]
   // 自分だけ抜ける（会社は残る）
@@ -196,6 +207,10 @@ export interface BillingPlan {
   max_free_staff: number
   current_staff: number
   stripe_configured: boolean
+  /** 'stripe' | 'apple' — どちらの決済で契約しているか */
+  platform: 'stripe' | 'apple'
+  apple_configured: boolean
+  apple_product_id: string
   trial_days_total: number
   in_trial: boolean
   trial_ends_at: string | null
@@ -204,6 +219,10 @@ export interface BillingPlan {
 
 export const billingApi = {
   getPlan: () => api.get<BillingPlan>('/billing/plan'),
+  verifyApple: (transaction_id: string) =>
+    api.post<{ plan: string; status: string; platform: string; expires_at: string | null }>(
+      '/billing/apple/verify', { transaction_id }
+    ),
   createCheckout: (additional_stores: number = 0) =>
     api.post<{ url: string }>('/billing/checkout', { additional_stores }),
   createPortal: () => api.post<{ url: string }>('/billing/portal'),
@@ -406,7 +425,7 @@ export const payrollApi = {
   exportUrl: (year: number, month: number, format: PayrollFormat) => {
     const token = localStorage.getItem('token') || ''
     const companyId = localStorage.getItem('selectedCompanyId') || ''
-    return `/api/payroll/export?year=${year}&month=${month}&format=${format}&access_token=${encodeURIComponent(token)}&company_id=${companyId}`
+    return `${apiOrigin}/api/payroll/export?year=${year}&month=${month}&format=${format}&access_token=${encodeURIComponent(token)}&company_id=${companyId}`
   },
 }
 
@@ -545,4 +564,12 @@ export const lineApi = {
   saveSettings: (data: any) => api.post('/line/settings', data),
   register: (line_user_id: string) => api.post('/line/register', { line_user_id }),
   testNotify: () => api.post('/line/test'),
+}
+
+// プッシュ通知（iOSアプリ）
+export const pushApi = {
+  registerDevice: (payload: { token: string; platform?: string; environment?: string; app_version?: string }) =>
+    api.post<{ ok: boolean; configured: boolean }>('/push/device', payload),
+  unregisterDevice: (token: string) => api.delete('/push/device', { data: { token } }),
+  test: () => api.post<{ ok: boolean; sent: number }>('/push/test'),
 }

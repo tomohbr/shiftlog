@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { pushToCompanyAsync, pushToUsersAsync } from '../utils/apns';
 
 const router = Router();
 
@@ -60,6 +61,15 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   ).run(companyId, userId, shift_id, target_user_id || null, reason || null);
 
   logAudit({ userId, companyId, action: 'create', entity: 'shift_swap', entityId: Number(result.lastInsertRowid), summary: `シフト #${shift_id} の交代を依頼` });
+
+  // 名指しなら本人だけ、全員宛なら会社の全スタッフに通知する
+  const swapBody = `${shift.date} ${shift.start_time}〜${shift.end_time} の交代依頼が届きました`;
+  if (target_user_id) {
+    pushToUsersAsync([Number(target_user_id)], { title: '交代の依頼が届きました', body: swapBody, path: '/swaps' });
+  } else {
+    pushToCompanyAsync(companyId, { title: '交代できる人を探しています', body: swapBody, path: '/swaps' }, userId);
+  }
+
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
@@ -93,6 +103,13 @@ router.post('/:id/accept', authenticateToken, requireCompany, (req: AuthRequest,
   });
   txn();
   logAudit({ userId, companyId, action: 'accept', entity: 'shift_swap', entityId: Number(req.params.id), summary: `シフト交代を承諾 (shift #${swap.shift_id})` });
+
+  pushToUsersAsync([swap.requester_id], {
+    title: '交代が成立しました',
+    body: `${req.user!.name}さんが交代を引き受けました`,
+    path: '/swaps',
+  });
+
   res.json({ message: '承諾しました' });
 });
 
@@ -112,6 +129,13 @@ router.post('/:id/reject', authenticateToken, requireCompany, (req: AuthRequest,
   db.prepare('UPDATE shift_swaps SET status = ?, responder_id = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run('rejected', userId, swap.id);
   logAudit({ userId, companyId, action: 'reject', entity: 'shift_swap', entityId: Number(req.params.id) });
+
+  pushToUsersAsync([swap.requester_id], {
+    title: '交代を断られました',
+    body: `${req.user!.name}さんが交代を辞退しました。別の人に依頼してください。`,
+    path: '/swaps',
+  });
+
   res.json({ message: '拒否しました' });
 });
 

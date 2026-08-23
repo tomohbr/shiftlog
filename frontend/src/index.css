@@ -34,6 +34,24 @@
     .app-main { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
     .app-sidebar { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
   }
+  /* iOS ネイティブアプリ（Capacitor）はステータスバーの下から描画が始まるので、
+     上端にもセーフエリアぶんの余白を入れる */
+  @supports (padding: max(0px)) {
+    .is-native .app-main { padding-top: max(env(safe-area-inset-top), 0px); }
+    .is-native .app-sidebar { padding-top: max(env(safe-area-inset-top), 0px); }
+    .is-native .native-safe-top { padding-top: max(env(safe-area-inset-top), 0px); }
+  }
+  /* ネイティブでは長押しの選択メニューとゴムバンドを抑えて、アプリらしい手触りにする */
+  .is-native body {
+    -webkit-user-select: none;
+    user-select: none;
+    overscroll-behavior: none;
+  }
+  .is-native input,
+  .is-native textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
   .dark .bg-white { @apply bg-gray-900; }
   .dark .bg-gray-50 { @apply bg-gray-950; }
   .dark .bg-gray-100 { @apply bg-gray-800; }

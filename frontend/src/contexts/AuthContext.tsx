@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { api, Company } from '../api/client'
+import { unregisterPush } from '../native/push'
+import { clearQuickLogin } from '../native/biometric'
 
 interface User {
   id: number
@@ -112,6 +114,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
+    // この端末宛の通知を止め、生体認証のかんたんログインも消す。
+    // 共有端末で前のスタッフに通知が飛び続けるのを防ぐため。
+    void unregisterPush()
+    void clearQuickLogin()
     localStorage.removeItem('token')
     localStorage.removeItem('selectedCompanyId')
     setJustRegistered(false)

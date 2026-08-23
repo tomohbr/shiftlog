@@ -2,6 +2,8 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import LandingPage from './pages/LandingPage'
 import TokushohoPage from './pages/TokushohoPage'
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
+import TermsPage from './pages/TermsPage'
 import DashboardPage from './pages/DashboardPage'
 import OnboardingPage from './pages/OnboardingPage'
 import StaffPage from './pages/StaffPage'
@@ -33,14 +35,23 @@ import QrPosterPage from './pages/QrPosterPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
+import NativeShell from './native/NativeShell'
 
 function AppRoutes() {
   const { user, selectedCompany, loading, justRegistered } = useAuth()
   const location = useLocation()
 
-  // 法的ページはログイン状態に関係なく表示
+  // 法的ページはログイン状態に関係なく表示。
+  // プライバシーポリシーは App Store Connect に提出する単独URLでもあるため、
+  // 未ログインでもそのまま開けなければならない。
   if (location.pathname === '/legal/tokusho') {
     return <TokushohoPage />
+  }
+  if (location.pathname === '/legal/privacy') {
+    return <PrivacyPolicyPage />
+  }
+  if (location.pathname === '/legal/terms') {
+    return <TermsPage />
   }
 
   if (loading) {
@@ -167,7 +178,10 @@ function App() {
   return (
     <AuthProvider>
       <KioskProvider>
-        <AppRoutes />
+        {/* iOSアプリのアプリロック・プッシュ通知・オフライン同期の通知。Webでは何もしない */}
+        <NativeShell>
+          <AppRoutes />
+        </NativeShell>
       </KioskProvider>
     </AuthProvider>
   )

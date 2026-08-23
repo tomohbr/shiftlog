@@ -330,6 +330,40 @@ db.exec(`
   );
 `);
 
+// ---- iOS アプリ（App Store 版）用テーブル ----
+db.exec(`
+  -- オフライン打刻の受領記録。
+  -- 圏外で打った打刻は端末のキューに溜まり、復帰後にまとめて送られてくる。
+  -- 再送で二重打刻にならないよう client_uuid を主キーにして冪等にする。
+  CREATE TABLE IF NOT EXISTS punch_receipts (
+    client_uuid TEXT PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    time_record_id INTEGER,
+    recorded_date TEXT,
+    recorded_time TEXT,
+    device_recorded_at TEXT,
+    source TEXT NOT NULL DEFAULT 'app',
+    received_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_punch_receipts_user ON punch_receipts(user_id, received_at DESC);
+
+  -- APNs のデバイストークン（iOS ネイティブアプリのプッシュ通知用）
+  CREATE TABLE IF NOT EXISTS device_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    platform TEXT NOT NULL DEFAULT 'ios',
+    environment TEXT NOT NULL DEFAULT 'production',
+    app_version TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
+`);
+
 // ---- Migrations for existing DBs ----
 try {
   const userCols = db.prepare("PRAGMA table_info(users)").all().map((c: any) => c.name);
@@ -351,6 +385,29 @@ try {
   const subCols = db.prepare("PRAGMA table_info(subscriptions)").all().map((c: any) => c.name);
   if (!subCols.includes('trial_ends_at')) {
     db.exec("ALTER TABLE subscriptions ADD COLUMN trial_ends_at TEXT");
+  }
+  // Apple の App内課金（StoreKit 2）。Web は Stripe、iOS アプリは Apple の二系統になる。
+  if (!subCols.includes('platform')) {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN platform TEXT NOT NULL DEFAULT 'stripe'");
+  }
+  if (!subCols.includes('apple_original_transaction_id')) {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN apple_original_transaction_id TEXT");
+  }
+  if (!subCols.includes('apple_transaction_id')) {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN apple_transaction_id TEXT");
+  }
+  if (!subCols.includes('apple_product_id')) {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN apple_product_id TEXT");
+  }
+  if (!subCols.includes('apple_environment')) {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN apple_environment TEXT");
+  }
+  // 同じ Apple サブスクリプションが複数会社に紐づくのを防ぐ
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_apple_orig ON subscriptions(apple_original_transaction_id) WHERE apple_original_transaction_id IS NOT NULL");
+  // オフライン打刻が含まれる日を管理者が見分けられるようにする
+  const trCols = db.prepare("PRAGMA table_info(time_records)").all().map((c: any) => c.name);
+  if (!trCols.includes('has_offline_punch')) {
+    db.exec("ALTER TABLE time_records ADD COLUMN has_offline_punch INTEGER NOT NULL DEFAULT 0");
   }
   // 希望シフト収集の任意期間指定（null = 従来どおり月全体）
   const periodCols = db.prepare("PRAGMA table_info(shift_request_periods)").all().map((c: any) => c.name);

@@ -2,11 +2,21 @@ import { useState, useEffect, useCallback } from 'react'
 import { billingApi, timecardsApi, usersApi, TimeRecord, TimeRecordEdit, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { useKiosk } from '../contexts/KioskContext'
-import { Clock, Play, Square, Coffee, Edit2, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { Clock, Play, Square, Coffee, Edit2, ChevronLeft, ChevronRight, Download, CloudOff, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { isNative } from '../native/platform'
+import {
+  ACTION_LABELS,
+  PunchAction,
+  QueuedPunch,
+  flushQueue,
+  isOnline as checkOnline,
+  punch,
+  subscribePending,
+} from '../native/offlinePunch'
 
 export default function TimecardPage() {
-  const { user } = useAuth()
+  const { user, selectedCompany } = useAuth()
   const { selectedStaff, refreshStaffStatus } = useKiosk()
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
@@ -22,8 +32,42 @@ export default function TimecardPage() {
   const [editHistory, setEditHistory] = useState<TimeRecordEdit[]>([])
   const [currentTime, setCurrentTime] = useState(new Date())
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  // オフライン打刻（iOSアプリのみ）
+  const [pending, setPending] = useState<QueuedPunch[]>([])
+  const [online, setOnline] = useState(true)
+  const [syncing, setSyncing] = useState(false)
 
   const now = new Date()
+
+  // 未同期の打刻件数を監視する
+  useEffect(() => {
+    if (!isNative) return
+    const unsubscribe = subscribePending(setPending)
+    const tick = () => { void checkOnline().then(setOnline) }
+    tick()
+    const timer = setInterval(tick, 10_000)
+    return () => { unsubscribe(); clearInterval(timer) }
+  }, [])
+
+  const syncNow = async () => {
+    setSyncing(true)
+    try {
+      const result = await flushQueue()
+      if (result.synced > 0) {
+        toast.success(`${result.synced}件の打刻を同期しました`)
+        fetchToday()
+        fetchRecords()
+      }
+      result.rejected.forEach(r => {
+        toast.error(`${r.entry.user_name}さんの${ACTION_LABELS[r.entry.action]}（${r.entry.recorded_at.replace('T', ' ')}）: ${r.reason}`, { duration: 8000 })
+      })
+      if (result.synced === 0 && result.rejected.length === 0 && result.remaining > 0) {
+        toast.error('まだ通信できません。電波の届く場所でもう一度お試しください。')
+      }
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   // Update clock every second
   useEffect(() => {
@@ -70,51 +114,64 @@ export default function TimecardPage() {
     fetchRecords()
   }, [fetchToday, fetchRecords])
 
-  const handleClockIn = async () => {
+  // 打刻対象。管理者は自分、キオスクでは左で選択中のスタッフ。
+  const punchTarget = isAdmin
+    ? (user ? { userId: user.id, userName: user.name } : null)
+    : (selectedStaff ? { userId: selectedStaff.id, userName: selectedStaff.name } : null)
+
+  // 圏外でキューに積まれたぶんを画面に反映する（サーバーの応答を待たずに状態を進める）
+  const applyOptimistic = (action: PunchAction, time: string) => {
+    setTodayRecord(prev => {
+      const hhmm = time.slice(11, 16)
+      if (action === 'clock_in') {
+        return {
+          id: -Date.now(), company_id: selectedCompany?.id ?? 0,
+          user_id: punchTarget?.userId ?? 0, date: time.slice(0, 10),
+          clock_in: hhmm, break_minutes: 0, status: 'open',
+        } as TimeRecord
+      }
+      if (!prev) return prev
+      if (action === 'clock_out') return { ...prev, clock_out: hhmm, status: 'closed' }
+      if (action === 'break_start') return { ...prev, break_start: hhmm }
+      return { ...prev, break_end: hhmm }
+    })
+  }
+
+  const doPunch = async (action: PunchAction, successMessage: string) => {
+    if (!punchTarget || !selectedCompany) {
+      toast.error('打刻するスタッフを選んでください')
+      return
+    }
     try {
-      await timecardsApi.clockIn(activeUserId)
-      toast.success(`${selectedStaff?.name || ''}出勤しました`)
-      fetchToday()
-      fetchRecords()
-      if (activeUserId) refreshStaffStatus(activeUserId)
+      const result = await punch(action, {
+        userId: punchTarget.userId,
+        userName: punchTarget.userName,
+        companyId: selectedCompany.id,
+      })
+
+      if (result.synced) {
+        toast.success(successMessage)
+        fetchToday()
+        fetchRecords()
+        refreshStaffStatus(punchTarget.userId)
+        return
+      }
+
+      // 圏外。端末に保存し、通信が戻り次第まとめて送る。
+      applyOptimistic(action, result.queued!.recorded_at)
+      toast.success(
+        `${ACTION_LABELS[action]}を端末に記録しました（${result.queued!.recorded_at.slice(11)}）。通信が戻ると自動で同期されます。`,
+        { icon: '📴', duration: 5000 }
+      )
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'エラー')
     }
   }
 
-  const handleClockOut = async () => {
-    try {
-      await timecardsApi.clockOut(activeUserId)
-      toast.success(`${selectedStaff?.name || ''}退勤しました`)
-      fetchToday()
-      fetchRecords()
-      if (activeUserId) refreshStaffStatus(activeUserId)
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || 'エラー')
-    }
-  }
-
-  const handleBreakStart = async () => {
-    try {
-      await timecardsApi.breakStart(activeUserId)
-      toast.success('休憩開始')
-      fetchToday()
-      if (activeUserId) refreshStaffStatus(activeUserId)
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || 'エラー')
-    }
-  }
-
-  const handleBreakEnd = async () => {
-    try {
-      await timecardsApi.breakEnd(activeUserId)
-      toast.success('休憩終了')
-      fetchToday()
-      if (activeUserId) refreshStaffStatus(activeUserId)
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || 'エラー')
-    }
-  }
+  const handleClockIn = () => doPunch('clock_in', `${selectedStaff?.name || ''}出勤しました`)
+  const handleClockOut = () => doPunch('clock_out', `${selectedStaff?.name || ''}退勤しました`)
+  const handleBreakStart = () => doPunch('break_start', '休憩開始')
+  const handleBreakEnd = () => doPunch('break_end', '休憩終了')
 
   const openEdit = (rec: TimeRecord) => {
     setEditingRecord(rec)
@@ -238,9 +295,50 @@ export default function TimecardPage() {
     )
   }
 
+  const offlineBanner = (pending.length > 0 || !online) && isNative ? (
+    <div className={`rounded-xl border p-4 ${pending.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
+      <div className="flex items-start gap-3">
+        <CloudOff className={`w-5 h-5 mt-0.5 shrink-0 ${pending.length > 0 ? 'text-amber-600' : 'text-gray-400'}`} />
+        <div className="flex-1 min-w-0">
+          {pending.length > 0 ? (
+            <>
+              <p className="text-sm font-semibold text-amber-900">未同期の打刻が{pending.length}件あります</p>
+              <ul className="mt-1 text-xs text-amber-800 space-y-0.5">
+                {pending.slice(0, 3).map(p => (
+                  <li key={p.client_uuid}>
+                    {p.user_name} — {ACTION_LABELS[p.action]} {p.recorded_at.replace('T', ' ')}
+                  </li>
+                ))}
+                {pending.length > 3 && <li>ほか{pending.length - 3}件</li>}
+              </ul>
+              <p className="mt-1.5 text-xs text-amber-700">
+                打刻は端末に保存されています。通信が戻ると自動で送信されます。
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-gray-600">
+              オフラインです。このまま打刻でき、通信が戻ったときに自動で同期されます。
+            </p>
+          )}
+        </div>
+        {pending.length > 0 && (
+          <button
+            onClick={syncNow}
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 shrink-0"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? '同期中' : '今すぐ同期'}
+          </button>
+        )}
+      </div>
+    </div>
+  ) : null
+
   // 打刻画面
   return (
     <div className="space-y-6">
+      {offlineBanner}
       {/* Punch card */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center gap-3 mb-4">

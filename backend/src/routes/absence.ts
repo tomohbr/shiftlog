@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { pushToCompanyAsync, pushToUsersAsync } from '../utils/apns';
 
 const router = Router();
 
@@ -42,6 +43,13 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
     'INSERT INTO absence_reports (company_id, user_id, shift_id, date, reason) VALUES (?, ?, ?, ?, ?)'
   ).run(companyId, userId, shift_id || null, date, reason || null);
 
+  // 欠勤が出たら、代わりに入れる人を探すため会社全員に通知する（本人は除く）
+  pushToCompanyAsync(companyId, {
+    title: 'ヘルプ募集',
+    body: `${req.user!.name}さんが ${date} を欠勤。入れる方を探しています。`,
+    path: '/absence',
+  }, userId);
+
   res.status(201).json({ report: db.prepare('SELECT * FROM absence_reports WHERE id = ?').get(result.lastInsertRowid) });
 });
 
@@ -56,6 +64,12 @@ router.post('/:id/cover', authenticateToken, requireCompany, (req: AuthRequest, 
   db.prepare(
     'UPDATE absence_reports SET cover_user_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
   ).run(req.user!.id, 'covered', req.params.id);
+
+  pushToUsersAsync([report.user_id], {
+    title: 'ヘルプが見つかりました',
+    body: `${req.user!.name}さんが ${report.date} の代わりに入ってくれます`,
+    path: '/absence',
+  });
 
   // If there's a linked shift, create a new shift for cover user
   if (report.shift_id) {

@@ -36,6 +36,7 @@ export function deleteCompanyData(companyId: number): void {
   db.prepare('DELETE FROM shift_swaps WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM absence_reports WHERE company_id = ?').run(companyId);
 
+  db.prepare('DELETE FROM punch_receipts WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM time_records WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shifts WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_publications WHERE company_id = ?').run(companyId);
@@ -69,6 +70,7 @@ function deleteUserPersonalData(userId: number): void {
   db.prepare('UPDATE absence_reports SET cover_user_id = NULL WHERE cover_user_id = ?').run(userId);
   db.prepare('UPDATE absence_reports SET shift_id = NULL WHERE shift_id IN (SELECT id FROM shifts WHERE user_id = ?)').run(userId);
 
+  db.prepare('DELETE FROM punch_receipts WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM time_records WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shifts WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shift_requests WHERE user_id = ?').run(userId);
@@ -76,6 +78,7 @@ function deleteUserPersonalData(userId: number): void {
   db.prepare('DELETE FROM user_skills WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM ical_tokens WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM device_tokens WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM user_line_ids WHERE user_id = ?').run(userId);
 
   // 監査ログ・フィードバックは記録として残すが、個人との紐付けは外す

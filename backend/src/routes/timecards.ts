@@ -1,7 +1,14 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
-import { getJSTDate, getJSTTime } from '../utils/jst';
+import { getJSTDate } from '../utils/jst';
+import {
+  ResolvedPunchTime,
+  findProcessedPunch,
+  markOfflinePunch,
+  recordPunchReceipt,
+  resolvePunchTime,
+} from '../utils/punch';
 
 const router = Router();
 
@@ -51,6 +58,28 @@ function logTimeRecordEdit(opts: {
   }
 }
 
+// 打刻リクエストの共通前処理。
+// 1) 同じ client_uuid が処理済みなら、そのときの結果をそのまま返す（オフラインキューの再送対策）
+// 2) recorded_at があれば端末が打った時刻を採用する（オフライン打刻）
+// 返り値が null のときは、すでにレスポンスを返しているので呼び出し側は即 return する。
+function preparePunch(
+  req: AuthRequest,
+  res: Response,
+  userId: number
+): ResolvedPunchTime | null {
+  const already = findProcessedPunch(req.body?.client_uuid, userId);
+  if (already) {
+    res.json({ record: already, duplicate: true });
+    return null;
+  }
+  try {
+    return resolvePunchTime(req.body);
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+    return null;
+  }
+}
+
 // GET /api/timecards - 月別タイムカード一覧
 router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
@@ -92,13 +121,14 @@ router.post('/clock-in', authenticateToken, requireCompany, (req: AuthRequest, r
   const companyId = req.companyId!;
   // user_idが指定されていればそのユーザーの打刻（キオスクモード）
   const userId = req.body.user_id || req.user!.id;
-  const date = getJSTDate();
-  const time = getJSTTime();
 
-  // Check if already clocked in today
+  const resolved = preparePunch(req, res, userId);
+  if (!resolved) return;
+
+  // Check if already clocked in that day
   const existing = db.prepare(
     'SELECT id FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-  ).get(companyId, userId, date, 'open');
+  ).get(companyId, userId, resolved.date, 'open');
 
   if (existing) {
     res.status(409).json({ error: '既に出勤打刻済みです' });
@@ -106,8 +136,14 @@ router.post('/clock-in', authenticateToken, requireCompany, (req: AuthRequest, r
   }
 
   const result = db.prepare(
-    'INSERT INTO time_records (company_id, user_id, date, clock_in, status) VALUES (?, ?, ?, ?, ?)'
-  ).run(companyId, userId, date, time, 'open');
+    'INSERT INTO time_records (company_id, user_id, date, clock_in, status, has_offline_punch) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(companyId, userId, resolved.date, resolved.time, 'open', resolved.source === 'offline' ? 1 : 0);
+
+  recordPunchReceipt({
+    clientUuid: req.body?.client_uuid,
+    companyId, userId, action: 'clock_in',
+    timeRecordId: result.lastInsertRowid, resolved,
+  });
 
   const record = db.prepare('SELECT * FROM time_records WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json({ record });
@@ -117,12 +153,13 @@ router.post('/clock-in', authenticateToken, requireCompany, (req: AuthRequest, r
 router.post('/clock-out', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const userId = req.body.user_id || req.user!.id;
-  const date = getJSTDate();
-  const time = getJSTTime();
+
+  const resolved = preparePunch(req, res, userId);
+  if (!resolved) return;
 
   const existing = db.prepare(
     'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-  ).get(companyId, userId, date, 'open') as any;
+  ).get(companyId, userId, resolved.date, 'open') as any;
 
   if (!existing) {
     res.status(404).json({ error: '出勤打刻がありません' });
@@ -139,7 +176,14 @@ router.post('/clock-out', authenticateToken, requireCompany, (req: AuthRequest, 
 
   db.prepare(
     'UPDATE time_records SET clock_out = ?, break_minutes = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).run(time, breakMins, 'closed', existing.id);
+  ).run(resolved.time, breakMins, 'closed', existing.id);
+
+  markOfflinePunch(existing.id, resolved);
+  recordPunchReceipt({
+    clientUuid: req.body?.client_uuid,
+    companyId, userId, action: 'clock_out',
+    timeRecordId: existing.id, resolved,
+  });
 
   const record = db.prepare('SELECT * FROM time_records WHERE id = ?').get(existing.id);
   res.json({ record });
@@ -149,12 +193,13 @@ router.post('/clock-out', authenticateToken, requireCompany, (req: AuthRequest, 
 router.post('/break-start', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const userId = req.body.user_id || req.user!.id;
-  const date = getJSTDate();
-  const time = getJSTTime();
+
+  const resolved = preparePunch(req, res, userId);
+  if (!resolved) return;
 
   const existing = db.prepare(
     'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-  ).get(companyId, userId, date, 'open') as any;
+  ).get(companyId, userId, resolved.date, 'open') as any;
 
   if (!existing) {
     res.status(404).json({ error: '出勤打刻がありません' });
@@ -163,7 +208,14 @@ router.post('/break-start', authenticateToken, requireCompany, (req: AuthRequest
 
   db.prepare(
     'UPDATE time_records SET break_start = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).run(time, existing.id);
+  ).run(resolved.time, existing.id);
+
+  markOfflinePunch(existing.id, resolved);
+  recordPunchReceipt({
+    clientUuid: req.body?.client_uuid,
+    companyId, userId, action: 'break_start',
+    timeRecordId: existing.id, resolved,
+  });
 
   const record = db.prepare('SELECT * FROM time_records WHERE id = ?').get(existing.id);
   res.json({ record });
@@ -173,12 +225,13 @@ router.post('/break-start', authenticateToken, requireCompany, (req: AuthRequest
 router.post('/break-end', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const userId = req.body.user_id || req.user!.id;
-  const date = getJSTDate();
-  const time = getJSTTime();
+
+  const resolved = preparePunch(req, res, userId);
+  if (!resolved) return;
 
   const existing = db.prepare(
     'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-  ).get(companyId, userId, date, 'open') as any;
+  ).get(companyId, userId, resolved.date, 'open') as any;
 
   if (!existing) {
     res.status(404).json({ error: '出勤打刻がありません' });
@@ -188,13 +241,20 @@ router.post('/break-end', authenticateToken, requireCompany, (req: AuthRequest, 
   let breakMins = 0;
   if (existing.break_start) {
     const bs = existing.break_start.split(':').map(Number);
-    const be = time.split(':').map(Number);
+    const be = resolved.time.split(':').map(Number);
     breakMins = (be[0] * 60 + be[1]) - (bs[0] * 60 + bs[1]);
   }
 
   db.prepare(
     'UPDATE time_records SET break_end = ?, break_minutes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).run(time, breakMins, existing.id);
+  ).run(resolved.time, breakMins, existing.id);
+
+  markOfflinePunch(existing.id, resolved);
+  recordPunchReceipt({
+    clientUuid: req.body?.client_uuid,
+    companyId, userId, action: 'break_end',
+    timeRecordId: existing.id, resolved,
+  });
 
   const record = db.prepare('SELECT * FROM time_records WHERE id = ?').get(existing.id);
   res.json({ record });

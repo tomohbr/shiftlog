@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { pushToCompanyAsync } from '../utils/apns';
 import { requireProForPastMonths } from '../utils/billing';
 
 const router = Router();
@@ -316,6 +317,15 @@ router.post('/publication', authenticateToken, requireCompany, (req: AuthRequest
   }
 
   logAudit({ userId: req.user!.id, companyId, action: is_published ? 'publish' : 'cancel', entity: 'shift_publication', summary: `${year}年${month}月のシフトを${is_published ? '公開' : '非公開化'}` });
+
+  // シフトが確定・公開されたらスタッフ全員にプッシュ通知（公開を取り消したときは送らない）
+  if (is_published) {
+    pushToCompanyAsync(companyId, {
+      title: 'シフトが公開されました',
+      body: `${year}年${month}月のシフトが確定しました。自分の勤務を確認してください。`,
+      path: '/my-shifts',
+    }, req.user!.id);
+  }
 
   const publication = db.prepare(
     'SELECT * FROM shift_publications WHERE company_id = ? AND year = ? AND month = ?'

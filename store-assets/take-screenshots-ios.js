@@ -50,7 +50,8 @@ async function main() {
     const buttons = await page.$$('button');
     for (const btn of buttons) {
       const text = await page.evaluate(el => el.textContent, btn);
-      if (text && text.includes('管理者ログイン')) {
+      // ログイン画面の文言に合わせる（「オーナー・店長ログイン」）
+      if (text && (text.includes('オーナー・店長ログイン') || text.includes('管理者ログイン'))) {
         await btn.click();
         break;
       }

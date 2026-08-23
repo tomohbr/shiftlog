@@ -16,9 +16,29 @@
 
 ## ディレクトリ構成
 ```
-frontend/   - React フロントエンド
-backend/    - Express バックエンド
+frontend/          - React フロントエンド
+  src/native/      - iOS アプリ専用の層（Webでは no-op）
+  ios/             - Capacitor が生成した Xcode プロジェクト（SPM。CocoaPods は使わない）
+backend/           - Express バックエンド
+  certs/           - Apple ルート証明書（App内課金の JWS 検証用）
+docs/              - iOS 化の設計・環境構築・提出手順
+store-assets/      - ストア掲載情報・スクリーンショット・アイコン生成
 ```
+
+## iOS アプリ（App Store 版）
+Capacitor 8 で既存の React アプリをネイティブシェルに載せている。ネイティブ固有の実装:
+
+- **オフライン打刻** — 圏外でも打刻でき、復帰後に「打った時刻」のまま同期（`src/native/offlinePunch.ts` / `backend/src/utils/punch.ts`）
+- **APNs プッシュ通知** — シフト公開・交代依頼・ヘルプ募集・希望収集開始（`backend/src/utils/apns.ts`）
+- **Face ID / Touch ID** — アプリロックとかんたんログイン
+- **App内課金（StoreKit 2）** — iOS では Stripe の導線を出さない（Guideline 3.1.1）
+
+```bash
+# Web を変更したら iOS に反映する（毎回必要）
+cd frontend && npm run build && npx cap sync ios && npx cap open ios
+```
+
+提出までの手順は `docs/ios-release.md`。実装状況は `docs/ios-plan.md`。
 
 ## 認証フロー
 - 管理者ログイン: メールアドレス + パスワード（必須）
@@ -35,3 +55,5 @@ Railway が自動でビルド・デプロイする。
 ## 注意事項
 - 日本語で会話すること
 - 作業完了後はTelegramで通知すること
+- `frontend/.npmrc` の `legacy-peer-deps=true` は消さないこと（StoreKitプラグインの peer 競合でRailwayのビルドが落ちる）
+- CORS の設定で許可外オリジンに例外を投げないこと（静的ファイルの配信まで500になる）

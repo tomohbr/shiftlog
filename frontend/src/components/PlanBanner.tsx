@@ -3,6 +3,8 @@ import { billingApi, BillingPlan } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { Sparkles, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { isNative } from '../native/platform'
+import { IapError, purchasePro } from '../native/iap'
 
 // 課金タイミング設計:
 // - トライアル残り7日以下: 黄色バナーで残日数と「Proを続ける」を常時表示
@@ -27,6 +29,24 @@ export default function PlanBanner() {
 
   const handleUpgrade = async () => {
     setCheckoutLoading(true)
+
+    // iOS アプリ内から Stripe へ誘導することはできない（Guideline 3.1.1）。
+    // App内課金で購入し、サーバー側で検証する。
+    if (isNative) {
+      try {
+        const result = await purchasePro()
+        toast.success('Proプランが有効になりました')
+        setPlan(prev => (prev ? { ...prev, plan: result.plan, platform: 'apple' } : prev))
+      } catch (e: any) {
+        if (!(e instanceof IapError && e.message === 'CANCELLED')) {
+          toast.error(e?.message || '購入を完了できませんでした')
+        }
+      } finally {
+        setCheckoutLoading(false)
+      }
+      return
+    }
+
     try {
       const res = await billingApi.createCheckout()
       window.location.href = res.data.url
