@@ -236,7 +236,11 @@ router.post('/pin-login', (req: Request, res: Response): void => {
 
 // POST /api/auth/register - 新規登録（管理者アカウント + 会社作成）
 router.post('/register', (req: Request, res: Response): void => {
-  const { email, password, name, companyName } = req.body;
+  const { email, password, name, companyName, attribution } = req.body;
+  // 任意の流入データは文字列だけを最大200文字で保存する。
+  const acquisition = ['source', 'medium', 'campaign', 'content', 'landing_path', 'referrer'].map(key =>
+    attribution && typeof attribution[key] === 'string' ? attribution[key].slice(0, 200) : null
+  );
 
   if (!email || !password || !name || !companyName) {
     res.status(400).json({ error: 'すべての項目を入力してください' });
@@ -264,8 +268,8 @@ router.post('/register', (req: Request, res: Response): void => {
 
   const companyPin = String(Math.floor(100000 + Math.random() * 900000));
   const companyResult = db.prepare(
-    'INSERT INTO companies (name, company_pin) VALUES (?, ?)'
-  ).run(companyName, companyPin);
+    'INSERT INTO companies (name, company_pin, acq_source, acq_medium, acq_campaign, acq_content, acq_landing_path, acq_referrer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(companyName, companyPin, ...acquisition);
   const companyId = companyResult.lastInsertRowid as number;
 
   db.prepare(
@@ -283,7 +287,7 @@ router.post('/register', (req: Request, res: Response): void => {
   try {
     const registeredAt = `${getJSTDate()} ${getJSTTime()}`;
     const subject = `【シフトログ】新規登録: ${companyName}`;
-    const body = `新しい会社が登録されました。\n\n会社名: ${companyName}\n管理者名: ${name}\nメール: ${email}\n登録時刻: ${registeredAt} (JST)\ncompany_id: ${companyId}\n\n登録当日が唯一のフォロー窓です。ウェルカムメールを検討してください。\n利用状況: https://shiftlog-production.up.railway.app/admin`;
+    const body = `新しい会社が登録されました。\n\n会社名: ${companyName}\n管理者名: ${name}\nメール: ${email}\n登録時刻: ${registeredAt} (JST)\n流入元: ${acquisition.slice(0, 3).map(value => value ?? 'unknown').join('/')}\ncompany_id: ${companyId}\n\n登録当日が唯一のフォロー窓です。ウェルカムメールを検討してください。\n利用状況: https://shiftlog-production.up.railway.app/admin`;
     sendMail(SUPER_ADMIN_EMAIL, subject, body).catch(() => {});
   } catch {}
 

@@ -541,7 +541,8 @@ export interface AdminUser {
   recently_active: boolean
   in_use: boolean
   company_count: number
-  companies: { id: number; name: string; role: string }[]
+  // 管理画面で登録時の流入元を併記する。
+  companies: { id: number; name: string; role: string; acq_source: string | null }[]
 }
 
 export interface AdminStats {

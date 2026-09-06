@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { authenticateToken, requireSuperAdmin, AuthRequest } from '../middleware/auth';
 import { sendMailWithResult } from '../utils/mailer';
+import { trackingLinks } from '../data/tracking-links';
 import { runTrialNotifications } from '../utils/trial-notify';
 
 const router = Router();
@@ -27,7 +28,8 @@ router.get('/users', (_req: AuthRequest, res: Response): void => {
   `).all() as any[];
 
   const companyStmt = db.prepare(`
-    SELECT c.id, c.name, uc.role
+    -- 登録時の流入元を会社ごとに返す。
+    SELECT c.id, c.name, c.acq_source, uc.role
     FROM user_companies uc
     JOIN companies c ON uc.company_id = c.id
     WHERE uc.user_id = ?
@@ -74,7 +76,7 @@ router.get('/stats', (_req: AuthRequest, res: Response): void => {
 router.get('/companies', (_req: AuthRequest, res: Response): void => {
   const rows = db.prepare(`
     SELECT
-      c.id, c.name, c.company_pin, c.created_at,
+      c.id, c.name, c.acq_source, c.company_pin, c.created_at,
       (SELECT COUNT(*) FROM user_companies uc WHERE uc.company_id = c.id) AS user_count,
       (SELECT COUNT(*) FROM stores s WHERE s.company_id = c.id) AS store_count,
       (SELECT COUNT(*) FROM shifts sh WHERE sh.company_id = c.id) AS shift_count,
@@ -98,7 +100,15 @@ router.get('/activation-funnel', (_req: AuthRequest, res: Response): void => {
   const withShift = (db.prepare('SELECT COUNT(DISTINCT company_id) AS c FROM shifts').get() as any).c;
   const withTimecard = (db.prepare('SELECT COUNT(DISTINCT company_id) AS c FROM time_records').get() as any).c;
   const activeLast7d = (db.prepare("SELECT COUNT(DISTINCT company_id) AS c FROM time_records WHERE created_at >= datetime('now','-7 days')").get() as any).c;
+  // 旧会社の未記録値はunknownとして集計し、打刻件数による重複を避ける。
+  const sourceRows = db.prepare(`
+    SELECT COALESCE(NULLIF(acq_source, ''), 'unknown') AS source, COUNT(*) AS total,
+      SUM(EXISTS(SELECT 1 FROM time_records tr WHERE tr.company_id = companies.id)) AS withTimecard
+    FROM companies GROUP BY COALESCE(NULLIF(acq_source, ''), 'unknown')
+  `).all() as { source: string; total: number; withTimecard: number }[];
+  const bySource = Object.fromEntries(sourceRows.map(({ source, total, withTimecard }) => [source, { total, withTimecard }]));
   res.json({
+    bySource,
     total,
     withStore,
     withStaff,
@@ -149,6 +159,20 @@ router.post('/run-trial-notify', async (_req: AuthRequest, res: Response): Promi
   } catch (err: any) {
     res.status(500).json({ ok: false, error: String(err?.message || err) });
   }
+});
+
+// 配布コードごとの累計と直近7日。未クリックのコードも0件で返す。
+router.get('/tracking-clicks', (_req: AuthRequest, res: Response): void => {
+  const rows = db.prepare(`
+    SELECT code, COUNT(*) AS total,
+      SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS last7d
+    FROM tracking_clicks GROUP BY code
+  `).all() as { code: string; total: number; last7d: number }[];
+  const counts = new Map(rows.map(row => [row.code, row]));
+  for (const { code } of trackingLinks) {
+    if (!counts.has(code)) counts.set(code, { code, total: 0, last7d: 0 });
+  }
+  res.json({ clicks: [...counts.values()] });
 });
 
 export default router;

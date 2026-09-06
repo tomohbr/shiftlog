@@ -1,3 +1,5 @@
+import { getAttribution } from '../lib/attribution'
+import { track } from '../lib/analytics'
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { api, Company } from '../api/client'
 import { unregisterPush } from '../native/push'
@@ -81,7 +83,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const register = async (email: string, password: string, name: string, companyName: string) => {
-    const res = await api.post('/auth/register', { email, password, name, companyName })
+    const res = await api.post('/auth/register', { email, password, name, companyName, attribution: getAttribution() })
+    // 登録がサーバーで完了した時点で計測する。
+    track('register_complete')
     const { token, user: u, companies: comps } = res.data
     localStorage.setItem('token', token)
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`

@@ -1,3 +1,4 @@
+import { track } from '../lib/analytics'
 import { Link } from 'react-router-dom'
 import {
   Calendar,
@@ -214,10 +215,12 @@ const FAQS = [
   },
 ]
 
-function CTAButton({ large = false, label = '無料で乗り換える' }: { large?: boolean; label?: string }) {
+// CTAの表示位置を付けてクリックを計測する。
+function CTAButton({ large = false, label = '無料で乗り換える', location }: { large?: boolean; label?: string; location: string }) {
   return (
     <Link
       to="/login?mode=register"
+      onClick={() => track('cta_click', { label, location })}
       className={`inline-flex items-center justify-center gap-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition-colors shadow-lg shadow-blue-600/30 ${
         large ? 'px-9 py-4 text-base' : 'px-6 py-3 text-sm'
       }`}
@@ -242,6 +245,7 @@ export default function LandingPage() {
           </div>
           <Link
             to="/login"
+            onClick={() => track('cta_click', { label: 'ログイン', location: 'header' })}
             className="px-4 py-2 text-sm font-medium text-white/90 hover:text-white border border-white/25 rounded-lg hover:bg-white/10 transition-colors"
           >
             ログイン
@@ -268,7 +272,7 @@ export default function LandingPage() {
               1店舗・スタッフ30名までずっと無料。全機能使っても月980円（税込）です。
             </p>
             <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
-              <CTAButton large />
+              <CTAButton large location="hero" />
               <div className="text-sm text-slate-400 leading-snug text-center sm:text-left">
                 クレカ登録不要・30日間全機能お試し
                 <br />
@@ -605,7 +609,7 @@ export default function LandingPage() {
           覚悟はいりません。
         </h2>
         <p className="text-slate-400 mb-8">登録は3分、移行は10分。合わなくても、Freeのまま使い続けられます。</p>
-        <CTAButton large />
+        <CTAButton large location="bottom" />
         <p className="text-sm text-slate-500 mt-4">30日間Proを無料でお試し・クレジットカード不要</p>
       </section>
 
@@ -620,7 +624,7 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link to="/legal/tokusho" className="hover:text-slate-300 transition-colors">特定商取引法に基づく表記</Link>
-            <Link to="/login" className="hover:text-slate-300 transition-colors">ログイン</Link>
+            <Link to="/login" onClick={() => track('cta_click', { label: 'ログイン', location: 'footer' })} className="hover:text-slate-300 transition-colors">ログイン</Link>
           </div>
         </div>
       </footer>

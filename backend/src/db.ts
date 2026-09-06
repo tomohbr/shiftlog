@@ -14,7 +14,17 @@ const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+// 流入クリックはアカウントと独立した履歴として保持する。
 db.exec(`
+  CREATE TABLE IF NOT EXISTS tracking_clicks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL,
+    ua TEXT,
+    ip_hash TEXT,
+    referrer TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_tracking_clicks_code_created_at ON tracking_clicks(code, created_at);
   CREATE TABLE IF NOT EXISTS companies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -371,6 +381,11 @@ try {
     db.exec("ALTER TABLE users ADD COLUMN pin TEXT");
   }
   const compCols = db.prepare("PRAGMA table_info(companies)").all().map((c: any) => c.name);
+  // 初回登録の流入元を既存DBにも追加する。
+  for (const column of ['acq_source', 'acq_medium', 'acq_campaign', 'acq_content', 'acq_landing_path', 'acq_referrer']) {
+    if (!compCols.includes(column)) db.exec(`ALTER TABLE companies ADD COLUMN ${column} TEXT`);
+  }
+
   if (!compCols.includes('company_pin')) {
     db.exec("ALTER TABLE companies ADD COLUMN company_pin TEXT");
   }

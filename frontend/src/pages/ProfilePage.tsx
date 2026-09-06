@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { track } from '../lib/analytics'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { authApi, usersApi, icalApi, billingApi, BillingPlan, AccountDeletionInfo } from '../api/client'
@@ -16,11 +17,18 @@ export default function ProfilePage() {
   const [billingLoading, setBillingLoading] = useState(false)
   const isAdminRole = user?.role === 'admin' || user?.role === 'super_admin'
 
+  const checkoutTracked = useRef(false)
+
   // 決済からの戻り: success=お礼+プラン再取得(Webhook反映に数秒かかるためリトライ)
   useEffect(() => {
     const checkout = searchParams.get('checkout')
     if (!checkout) return
     if (checkout === 'success') {
+      // 同じ戻り画面のEffect再実行による重複を防ぐ。
+      if (!checkoutTracked.current) {
+        checkoutTracked.current = true
+        track('pro_upgrade_success', { platform: 'stripe' })
+      }
       toast.success('お支払いありがとうございます！Proプランが有効になりました', { duration: 6000 })
       let attempts = 0
       const poll = setInterval(async () => {
@@ -84,7 +92,10 @@ export default function ProfilePage() {
     // iOS アプリ内では Stripe の決済ページを開けない（Guideline 3.1.1）
     if (isNative) {
       try {
+        // 購入開始とサーバー検証成功を区別して計測する。
+        track('checkout_click', { platform: 'apple' })
         const result = await purchasePro()
+        if (result.plan === 'pro') track('pro_upgrade_success', { platform: 'apple' })
         toast.success('Proプランが有効になりました')
         setPlan(prev => (prev ? { ...prev, plan: result.plan, platform: 'apple' } : prev))
       } catch (e: any) {
@@ -98,6 +109,8 @@ export default function ProfilePage() {
     }
 
     try {
+      // Stripe決済の開始を計測する。
+      track('checkout_click', { platform: 'stripe' })
       const res = await billingApi.createCheckout()
       window.location.href = res.data.url
     } catch (e: any) {
@@ -111,6 +124,8 @@ export default function ProfilePage() {
     setBillingLoading(true)
     try {
       const result = await restorePro()
+      // 購入後の検証失敗を復元で回復した場合も記録する。
+      if (result.plan === 'pro') track('pro_upgrade_success', { platform: 'apple', restored: true })
       setPlan(prev => (prev ? { ...prev, plan: result.plan, platform: 'apple' } : prev))
       toast.success(result.plan === 'pro' ? '購入を復元しました' : '有効な購入は見つかりませんでした')
     } catch (e: any) {

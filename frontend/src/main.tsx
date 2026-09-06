@@ -6,6 +6,14 @@ import './index.css'
 import { Toaster } from 'react-hot-toast'
 import { bootstrapNative } from './native/bootstrap'
 
+import { captureAttribution } from './lib/attribution'
+import { initializeAnalytics, trackCampaignLanding } from './lib/analytics'
+
+// 描画前に初回流入を保存し、GA4の準備後に着地を計測する。
+captureAttribution()
+initializeAnalytics()
+trackCampaignLanding()
+
 // ダークモード初期化（FOUCを避けるため最初に実行）
 try {
   const t = localStorage.getItem('theme')

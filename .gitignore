@@ -1,6 +1,10 @@
 node_modules/
 dist/
 data/
+# 流入リンクのコード表だけはソースとして管理する。
+!backend/src/data/
+backend/src/data/*
+!backend/src/data/tracking-links.ts
 *.db
 .env
 .DS_Store

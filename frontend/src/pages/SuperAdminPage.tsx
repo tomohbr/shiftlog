@@ -137,7 +137,12 @@ export default function SuperAdminPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">
-                      {u.companies.length === 0 ? '—' : u.companies.map(c => c.name).join(', ')}
+                      {/* 会社名の横に保存済みの流入元を表示する。 */}
+                      {u.companies.length === 0 ? '—' : u.companies.map((c, index) => (
+                        <span key={c.id}>{index > 0 && ', '}{c.name}
+                          {c.acq_source && <span className="ml-1 text-xs text-gray-400">{c.acq_source}</span>}
+                        </span>
+                      ))}
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">
                       {fmt(u.last_activity)}

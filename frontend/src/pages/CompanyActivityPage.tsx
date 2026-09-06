@@ -5,6 +5,8 @@ import { api } from '../api/client'
 interface CompanyUsage {
   id: number
   name: string
+  // AdminHubの会社一覧に流入元を併記する。
+  acq_source: string | null
   company_pin: string
   created_at: string
   user_count: number
@@ -140,7 +142,7 @@ export default function CompanyActivityPage() {
                 return (
                   <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-3 py-2">
-                      <p className="font-semibold text-gray-900">{c.name}</p>
+                      <p className="font-semibold text-gray-900">{c.name}{c.acq_source && <span className="ml-1 text-xs font-normal text-gray-400">{c.acq_source}</span>}</p>
                       <p className="text-[10px] text-gray-400">PIN: {c.company_pin}</p>
                     </td>
                     <td className="px-2 py-2 text-center">

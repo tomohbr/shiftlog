@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { track } from '../lib/analytics'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Calendar, Eye, EyeOff, Clock, Coffee, LogOut, ArrowLeft, UserPlus, Fingerprint } from 'lucide-react'
@@ -28,6 +29,12 @@ export default function LoginPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'select'
   const [mode, setMode] = useState<'select' | 'admin' | 'kiosk' | 'pin-login' | 'register'>(initialMode)
+  const previousMode = useRef<string | null>(null)
+  // 登録画面への切り替えを計測し、StrictModeでの重複を防ぐ。
+  useEffect(() => {
+    if (mode === 'register' && previousMode.current !== mode) track('register_start')
+    previousMode.current = mode
+  }, [mode])
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)

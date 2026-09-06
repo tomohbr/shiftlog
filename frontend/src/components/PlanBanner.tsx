@@ -1,3 +1,4 @@
+import { track } from '../lib/analytics'
 import { useEffect, useState } from 'react'
 import { billingApi, BillingPlan } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
@@ -34,7 +35,10 @@ export default function PlanBanner() {
     // App内課金で購入し、サーバー側で検証する。
     if (isNative) {
       try {
+        // 購入開始とサーバー検証成功を区別して計測する。
+        track('checkout_click', { platform: 'apple' })
         const result = await purchasePro()
+        if (result.plan === 'pro') track('pro_upgrade_success', { platform: 'apple' })
         toast.success('Proプランが有効になりました')
         setPlan(prev => (prev ? { ...prev, plan: result.plan, platform: 'apple' } : prev))
       } catch (e: any) {
@@ -48,6 +52,8 @@ export default function PlanBanner() {
     }
 
     try {
+      // Stripe決済の開始を計測する。
+      track('checkout_click', { platform: 'stripe' })
       const res = await billingApi.createCheckout()
       window.location.href = res.data.url
     } catch (e: any) {

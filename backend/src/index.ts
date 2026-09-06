@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import authRoutes from './routes/auth';
+import redirectRoutes from './routes/redirect';
 import userRoutes from './routes/users';
 import shiftRoutes from './routes/shifts';
 import storeRoutes from './routes/stores';
@@ -53,6 +54,9 @@ app.use(cors({
 // Stripe webhook needs raw body for signature verification
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
+
+// 短縮URLはSPAのフォールバックより先に処理する。
+app.use('/r', redirectRoutes);
 
 // API Routes
 app.use('/api/auth', authRoutes);
