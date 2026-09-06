@@ -418,8 +418,8 @@ export default function TimecardPage() {
 
       {/* Monthly records */}
       <div className="bg-white rounded-xl border border-gray-200">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-200">
+          <div className="flex items-center gap-3 w-full sm:w-auto whitespace-nowrap">
             <button onClick={prevMonth} className="p-1.5 hover:bg-gray-100 rounded-lg">
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -428,12 +428,12 @@ export default function TimecardPage() {
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
             {isAdmin && (
               <select
                 value={selectedUserId || ''}
                 onChange={e => setSelectedUserId(e.target.value ? parseInt(e.target.value) : undefined)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                className="min-w-0 flex-1 sm:flex-none min-h-[44px] sm:min-h-0 px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
               >
                 <option value="">全スタッフ</option>
                 {adminStaff.map(s => (
@@ -444,7 +444,7 @@ export default function TimecardPage() {
             <button
               onClick={exportCSV}
               disabled={checkoutLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+              className="flex items-center whitespace-nowrap shrink-0 min-h-[44px] sm:min-h-0 gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
             >
               <Download className="w-4 h-4" />
               {checkoutLoading ? 'Proへ移動中...' : 'CSV'}
@@ -453,7 +453,29 @@ export default function TimecardPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <div className="md:hidden divide-y divide-gray-100">
+            {records.map(rec => {
+              const date = new Date(`${rec.date}T00:00:00`)
+              const dayOfWeek = date.getDay()
+              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+              return (
+                <article key={rec.id} className={`p-4 space-y-2 ${isWeekend ? 'bg-red-50/30' : ''}`}>
+                  <div className="flex items-center justify-between gap-2 text-sm whitespace-nowrap">
+                    <span className={isWeekend ? 'text-red-600' : 'text-gray-900'}>{date.getMonth() + 1}/{date.getDate()}（{'日月火水木金土'[dayOfWeek]}）</span>
+                    <span className="font-mono text-gray-900">{rec.clock_in || '-'} → {rec.clock_out || '-'}</span>
+                  </div>
+                  {isAdmin && <div className="flex items-center gap-2 text-sm text-gray-900"><span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: rec.user_color || '#4A90E2' }} /><span className="break-words min-w-0">{rec.user_name}</span></div>}
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-gray-600">休憩{rec.break_minutes || 0}分 ・ 実労働{calcHours(rec)}</p>
+                    {isAdmin && <button onClick={() => openEdit(rec)} aria-label={`${rec.date} ${rec.user_name || ''}のタイムカードを編集`} className="min-w-[44px] min-h-[44px] shrink-0 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>}
+                  </div>
+                  {rec.notes && <p className="text-xs text-gray-500 break-words">{rec.notes}</p>}
+                </article>
+              )
+            })}
+            {records.length === 0 && <p className="px-4 py-8 text-center text-sm text-gray-500">この月のタイムカードデータはありません</p>}
+          </div>
+          <table className="hidden md:table w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-600">
                 <th className="text-left px-4 py-3 font-medium">日付</th>

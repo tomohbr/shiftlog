@@ -9,7 +9,7 @@ import { IapError, purchasePro } from '../native/iap'
 // 課金タイミング設計:
 // - トライアル残り7日以下: 黄色バナーで残日数と「Proを続ける」を常時表示
 // - トライアル終了後(Free): その日1回だけ閉じられる案内バナー（データは消えない旨を明言して不安による解約・放置を防ぐ）
-// - Pro/トライアル中(8日以上): 何も出さない（利用の邪魔をしない）
+// - トライアル中(8日以上): 控えめな状態表示。Proは表示しない
 export default function PlanBanner() {
   const { user, selectedCompany } = useAuth()
   const [plan, setPlan] = useState<BillingPlan | null>(null)
@@ -81,7 +81,8 @@ export default function PlanBanner() {
     return (
       <div className="bg-gray-50 border-b border-gray-200 px-4 py-1.5">
         <p className="text-xs text-gray-500">
-          Proトライアル中（残り{plan.trial_days_left}日）— 全機能を無料でお試しいただけます。終了後は自動でFreeプランになり、データはそのまま残ります。
+          <span className="md:hidden whitespace-nowrap">Proトライアル中・残り{plan.trial_days_left}日</span>
+          <span className="hidden md:inline">Proトライアル中（残り{plan.trial_days_left}日）— 全機能を無料でお試しいただけます。終了後は自動でFreeプランになり、データはそのまま残ります。</span>
         </p>
       </div>
     )

@@ -288,27 +288,27 @@ export default function StaffPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full sm:w-auto">
           <h2 className="text-lg font-semibold text-gray-900">スタッフ一覧</h2>
           <p className="text-sm text-gray-500 mt-0.5">{users.length}名登録中</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {companyPin && (
             <button
               onClick={() => setQrOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+              className="flex items-center justify-center whitespace-nowrap min-h-[44px] sm:min-h-0 gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
             >
               <QrCode className="w-4 h-4" />
-              店舗共通QRを表示
+              <span className="sm:hidden">QR</span><span className="hidden sm:inline">店舗共通QRを表示</span>
             </button>
           )}
           <button
             onClick={() => freeStaffLimitReached ? startProCheckout() : setBulkOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+            className="flex items-center justify-center whitespace-nowrap min-h-[44px] sm:min-h-0 gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
           >
             <Upload className="w-4 h-4" />
-            CSV一括登録
+            <span className="sm:hidden">一括登録</span><span className="hidden sm:inline">CSV一括登録</span>
           </button>
           <button
             onClick={() => {
@@ -319,7 +319,7 @@ export default function StaffPage() {
                 setModalOpen(true)
               }
             }}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-2 whitespace-nowrap text-sm sm:text-base px-3 sm:px-4 min-h-[44px] sm:min-h-0"
           >
             <Plus className="w-4 h-4" />
             スタッフ追加
@@ -393,7 +393,33 @@ export default function StaffPage() {
         </div>
       ) : (
         <div className="card p-0 overflow-hidden">
-          <table className="w-full">
+          <div className="md:hidden divide-y divide-gray-100">
+            {users.map(u => (
+              <article key={u.id} className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: u.color }} />
+                  <p className="min-w-0 flex-1 text-sm font-medium text-gray-900 break-words">{u.name}</p>
+                  <span className={`shrink-0 whitespace-nowrap text-xs px-2 py-0.5 rounded-full ${(u as any).employment_type === 'full_time' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                    {(u as any).employment_type === 'full_time' ? '社員' : 'パート'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`whitespace-nowrap ${u.role === 'admin' ? 'badge-confirmed' : 'badge-approved'}`}>{u.role === 'admin' ? '管理者' : 'スタッフ'}</span>
+                  {isNeverLoggedIn(u) && <span className="text-xs text-amber-700 bg-amber-100 rounded px-2 py-0.5">未ログイン</span>}
+                  {u.phone && <span className="text-xs text-gray-400">{u.phone}</span>}
+                </div>
+                <div className="flex items-center gap-1">
+                  {u.role === 'staff' && (
+                    <button onClick={() => setInviteUser(u)} className="min-h-[44px] px-2 text-xs whitespace-nowrap text-green-700 border border-green-200 rounded-lg hover:bg-green-50">ログイン案内</button>
+                  )}
+                  <button onClick={() => setResetPasswordUser(u)} className="min-h-[44px] px-2 text-xs whitespace-nowrap text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100">PW変更</button>
+                  <button onClick={() => { setEditingUser(u); setModalOpen(true) }} className="min-h-[44px] px-2 text-xs whitespace-nowrap text-gray-500 border border-gray-200 rounded-lg hover:bg-blue-50">編集</button>
+                  <button onClick={() => handleDelete(u)} aria-label={`${u.name}を削除`} className="min-h-[44px] min-w-[44px] ml-auto flex items-center justify-center text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <table className="hidden md:table w-full">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">スタッフ</th>

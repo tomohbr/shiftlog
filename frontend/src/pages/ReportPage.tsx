@@ -111,14 +111,14 @@ export default function ReportPage() {
           onNext={() => setCurrentDate(d => addMonths(d, 1))}
           onToday={() => setCurrentDate(new Date())}
         />
-        <div className="flex gap-2">
-          <button onClick={() => handleExportCSV('summary')} className="btn-secondary flex items-center gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <button onClick={() => handleExportCSV('summary')} className="btn-secondary flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap text-xs sm:text-base px-2 sm:px-4 min-h-[44px] sm:min-h-0">
             <Download className="w-4 h-4" />勤務集計
           </button>
-          <button onClick={() => handleExportCSV('shifts')} className="btn-secondary flex items-center gap-2">
+          <button onClick={() => handleExportCSV('shifts')} className="btn-secondary flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap text-xs sm:text-base px-2 sm:px-4 min-h-[44px] sm:min-h-0">
             <Download className="w-4 h-4" />シフト
           </button>
-          <button onClick={() => handleExportCSV('timecards')} className="btn-secondary flex items-center gap-2">
+          <button onClick={() => handleExportCSV('timecards')} className="btn-secondary flex items-center justify-center gap-1 sm:gap-2 whitespace-nowrap text-xs sm:text-base px-2 sm:px-4 min-h-[44px] sm:min-h-0">
             <Download className="w-4 h-4" />タイムカード
           </button>
         </div>
@@ -142,32 +142,32 @@ export default function ReportPage() {
       )}
 
       {/* Summary stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-            <TrendingUp className="w-6 h-6 text-blue-600" />
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+        <div className="card p-3 md:p-6 flex items-center gap-2 md:gap-4">
+          <div className="w-8 h-8 md:w-12 md:h-12 shrink-0 bg-blue-100 rounded-xl flex items-center justify-center">
+            <TrendingUp className="w-4 h-4 md:w-6 md:h-6 text-blue-600" />
           </div>
           <div>
             <p className="text-sm text-gray-500">総シフト数</p>
-            <p className="text-2xl font-bold text-gray-900">{totalShifts}件</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900">{totalShifts}件</p>
           </div>
         </div>
-        <div className="card flex items-center gap-4">
-          <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-            <Clock className="w-6 h-6 text-green-600" />
+        <div className="card p-3 md:p-6 flex items-center gap-2 md:gap-4">
+          <div className="w-8 h-8 md:w-12 md:h-12 shrink-0 bg-green-100 rounded-xl flex items-center justify-center">
+            <Clock className="w-4 h-4 md:w-6 md:h-6 text-green-600" />
           </div>
           <div>
             <p className="text-sm text-gray-500">総勤務時間</p>
-            <p className="text-2xl font-bold text-gray-900">{totalHours.toFixed(1)}h</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900">{totalHours.toFixed(1)}h</p>
           </div>
         </div>
-        <div className="card flex items-center gap-4">
-          <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
-            <DollarSign className="w-6 h-6 text-yellow-600" />
+        <div className="card col-span-2 md:col-span-1 p-3 md:p-6 flex items-center gap-2 md:gap-4">
+          <div className="w-8 h-8 md:w-12 md:h-12 shrink-0 bg-yellow-100 rounded-xl flex items-center justify-center">
+            <DollarSign className="w-4 h-4 md:w-6 md:h-6 text-yellow-600" />
           </div>
           <div>
             <p className="text-sm text-gray-500">総人件費</p>
-            <p className="text-2xl font-bold text-gray-900">¥{totalWage.toLocaleString()}</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900">¥{totalWage.toLocaleString()}</p>
           </div>
         </div>
       </div>
@@ -184,7 +184,25 @@ export default function ReportPage() {
               <h3 className="text-base font-semibold text-gray-900">スタッフ別集計</h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <div className="md:hidden divide-y divide-gray-100">
+                {summary.map(row => (
+                  <article key={row.user_id} className="p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: row.user_color }} />
+                        <span className="text-sm font-medium text-gray-900 break-words">{row.user_name}</span>
+                      </div>
+                      <span className="text-base font-bold text-gray-900 whitespace-nowrap">¥{row.total_wage.toLocaleString()}</span>
+                    </div>
+                    <p className="text-xs text-gray-600">{row.shift_count}日 / {row.total_hours}時間{row.total_minutes_remainder > 0 ? `${row.total_minutes_remainder}分` : ''} / 時給 ¥{row.hourly_wage.toLocaleString()}</p>
+                  </article>
+                ))}
+                <div className="p-4 bg-gray-50 space-y-2">
+                  <div className="flex justify-between gap-3 text-sm font-bold text-gray-900"><span>合計</span><span>¥{totalWage.toLocaleString()}</span></div>
+                  <p className="text-xs text-gray-600">{summary.reduce((s, r) => s + r.shift_count, 0)}日 / {Math.floor(totalHours)}時間{Math.round((totalHours % 1) * 60) > 0 ? `${Math.round((totalHours % 1) * 60)}分` : ''}</p>
+                </div>
+              </div>
+              <table className="hidden md:table w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
                     <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">スタッフ</th>

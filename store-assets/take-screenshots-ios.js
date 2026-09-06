@@ -16,7 +16,7 @@ const path = require('path');
 const BASE_URL = process.env.SHIFTLOG_URL || 'https://shiftlog-production.up.railway.app';
 const EMAIL = process.env.SHIFTLOG_EMAIL || 'admin@example.com';
 const PASSWORD = process.env.SHIFTLOG_PASSWORD || 'admin123';
-const OUT = path.join(__dirname, 'screenshots-ios');
+const OUT = process.env.OUT_DIR || path.join(__dirname, 'screenshots-ios');
 
 // iPhone 6.9インチ: 440 x 956 論理ピクセル × 3 = 1320 x 2868
 const VIEWPORT = { width: 440, height: 956, deviceScaleFactor: 3 };
