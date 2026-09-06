@@ -36,6 +36,7 @@ import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
 import NativeShell from './native/NativeShell'
+import { isNative } from './native/platform'
 
 function AppRoutes() {
   const { user, selectedCompany, loading, justRegistered } = useAuth()
@@ -65,7 +66,8 @@ function AppRoutes() {
   if (!user) {
     return (
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        {/* ネイティブアプリでは営業用のLPを出さず、ログイン画面から始める（Appらしさ・4.2対策） */}
+        <Route path="/" element={isNative ? <Navigate to="/login" replace /> : <LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
