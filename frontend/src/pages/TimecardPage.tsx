@@ -11,8 +11,8 @@ import {
   PunchAction,
   QueuedPunch,
   flushQueue,
-  isOnline as checkOnline,
   punch,
+  subscribeOnline,
   subscribePending,
 } from '../native/offlinePunch'
 
@@ -40,14 +40,12 @@ export default function TimecardPage() {
 
   const now = new Date()
 
-  // 未同期の打刻件数を監視する
+  // 未同期の打刻件数とオンライン状態を監視する（ポーリングせずイベントで受ける）
   useEffect(() => {
     if (!isNative) return
-    const unsubscribe = subscribePending(setPending)
-    const tick = () => { void checkOnline().then(setOnline) }
-    tick()
-    const timer = setInterval(tick, 10_000)
-    return () => { unsubscribe(); clearInterval(timer) }
+    const unsubscribePending = subscribePending(setPending)
+    const unsubscribeOnline = subscribeOnline(setOnline)
+    return () => { unsubscribePending(); unsubscribeOnline() }
   }, [])
 
   const syncNow = async () => {

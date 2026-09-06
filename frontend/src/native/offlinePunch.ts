@@ -313,7 +313,12 @@ export async function initOfflinePunch(): Promise<void> {
 
   await refreshPending()
 
+  try {
+    setOnlineState((await Network.getStatus()).connected)
+  } catch { /* 取得できなければオンライン扱いのまま */ }
+
   Network.addListener('networkStatusChange', status => {
+    setOnlineState(status.connected)
     if (status.connected) void tryFlush()
   })
 
@@ -321,10 +326,33 @@ export async function initOfflinePunch(): Promise<void> {
     if (state.isActive) void tryFlush()
   })
 
-  // 通信状態のイベントを取りこぼしても最終的に送られるようにする保険
-  setInterval(() => { void tryFlush() }, 60_000)
+  // 通信状態のイベントを取りこぼしても最終的に送られるようにする保険。
+  // キューが空のときはストレージを読みに行かない（キオスク端末は一日中この画面を開いている）
+  setInterval(() => { if (lastKnown.length > 0) void tryFlush() }, 60_000)
 
   void tryFlush()
+}
+
+// ---------------------------------------------------------------------------
+// オンライン状態（画面のバナー用）。ポーリングせず Network のイベントで更新する
+// ---------------------------------------------------------------------------
+
+let onlineState = true
+const onlineListeners = new Set<(online: boolean) => void>()
+
+function setOnlineState(online: boolean) {
+  if (onlineState === online) return
+  onlineState = online
+  onlineListeners.forEach(l => {
+    try { l(online) } catch { /* リスナー側の例外は無視 */ }
+  })
+}
+
+/** オンライン/オフラインの変化を購読する。呼んだ直後に現在値を1回渡す。 */
+export function subscribeOnline(listener: (online: boolean) => void): () => void {
+  onlineListeners.add(listener)
+  listener(isNative ? onlineState : navigator.onLine)
+  return () => { onlineListeners.delete(listener) }
 }
 
 /** 現在オンラインかどうか（打刻ボタンの表示に使う） */
