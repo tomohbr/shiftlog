@@ -80,64 +80,75 @@ interface ApnsResult {
   reason?: string;
 }
 
-function postToApns(config: ApnsConfig, deviceToken: string, body: string): Promise<ApnsResult> {
-  return new Promise(resolve => {
-    let settled = false;
-    const done = (r: ApnsResult) => {
-      if (settled) return;
-      settled = true;
-      resolve(r);
-    };
-
-    let client: http2.ClientHttp2Session;
-    try {
-      client = http2.connect(config.host);
-    } catch (e) {
-      done({ status: 0, reason: (e as Error).message });
-      return;
-    }
-
-    client.on('error', e => {
-      done({ status: 0, reason: (e as Error).message });
-      try { client.close(); } catch { /* noop */ }
-    });
-
-    const req = client.request({
-      ':method': 'POST',
-      ':path': `/3/device/${deviceToken}`,
-      'authorization': `bearer ${getAuthToken(config)}`,
-      'apns-topic': config.bundleId,
-      'apns-push-type': 'alert',
-      'apns-priority': '10',
-      'apns-expiration': String(Math.floor(Date.now() / 1000) + 60 * 60 * 6),
-      'content-type': 'application/json',
-      'content-length': Buffer.byteLength(body),
-    });
-
-    let status = 0;
-    let responseBody = '';
-    req.setEncoding('utf8');
-    req.on('response', headers => { status = Number(headers[':status']) || 0; });
-    req.on('data', chunk => { responseBody += chunk; });
-    req.on('error', e => {
-      done({ status: 0, reason: (e as Error).message });
-      try { client.close(); } catch { /* noop */ }
-    });
-    req.on('end', () => {
-      let reason: string | undefined;
-      try { reason = responseBody ? JSON.parse(responseBody).reason : undefined; } catch { /* noop */ }
-      done({ status, reason });
-      client.close();
-    });
-
-    req.setTimeout(10_000, () => {
-      req.close();
-      done({ status: 0, reason: 'timeout' });
-      try { client.close(); } catch { /* noop */ }
-    });
-
-    req.end(body);
+// 署名を接続前に済ませ、1回の送信でセッションを共有する。
+async function postToApns(config: ApnsConfig, tokens: string[], body: string): Promise<ApnsResult[]> {
+  let authToken: string;
+  let client: http2.ClientHttp2Session;
+  try {
+    authToken = getAuthToken(config);
+    client = http2.connect(config.host);
+  } catch (e) {
+    return tokens.map(() => ({ status: 0, reason: (e as Error).message }));
+  }
+  const pending = new Set<(result: ApnsResult) => void>();
+  client.on('error', e => {
+    for (const done of pending) done({ status: 0, reason: e.message });
   });
+  client.on('close', () => {
+    for (const done of pending) done({ status: 0, reason: '接続が閉じられました' });
+  });
+  try {
+    const results = await Promise.allSettled(tokens.map(deviceToken => new Promise<ApnsResult>(resolve => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        done({ status: 0, reason: 'timeout' });
+        req?.close();
+      }, 10_000);
+      const done = (result: ApnsResult) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        pending.delete(done);
+        resolve(result);
+      };
+      pending.add(done);
+      let req: http2.ClientHttp2Stream | undefined;
+      try {
+        req = client.request({
+          ':method': 'POST',
+          ':path': `/3/device/${deviceToken}`,
+          authorization: `bearer ${authToken}`,
+          'apns-topic': config.bundleId,
+          'apns-push-type': 'alert',
+          'apns-priority': '10',
+          'apns-expiration': String(Math.floor(Date.now() / 1000) + 60 * 60 * 6),
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
+        });
+        let status = 0;
+        let responseBody = '';
+        req.setEncoding('utf8');
+        req.on('response', headers => { status = Number(headers[':status']) || 0; });
+        req.on('data', chunk => { responseBody += chunk; });
+        req.on('error', e => done({ status: 0, reason: e.message }));
+        req.on('end', () => {
+          let reason: string | undefined;
+          try { reason = responseBody ? JSON.parse(responseBody).reason : undefined; } catch { /* 本文なしでも結果を返す */ }
+          done({ status, reason });
+        });
+        req.on('close', () => done({ status: 0, reason: 'ストリームが閉じられました' }));
+        req.end(body);
+      } catch (e) {
+        done({ status: 0, reason: (e as Error).message });
+      }
+    })));
+    return results.map(result => result.status === 'fulfilled'
+      ? result.value : { status: 0, reason: String(result.reason) });
+  } finally {
+    client.close();
+    // 応答しない接続も残さず破棄する。
+    client.destroy();
+  }
 }
 
 /** 指定ユーザーの全 iOS 端末にプッシュ通知を送る。失敗しても呼び出し元の処理は止めない。 */
@@ -165,8 +176,9 @@ export async function sendPushToUsers(userIds: number[], payload: PushPayload): 
   });
 
   let sent = 0;
-  for (const { token } of tokens) {
-    const result = await postToApns(config, token, body);
+  const results = await postToApns(config, tokens.map(item => item.token), body);
+  for (const [index, { token }] of tokens.entries()) {
+    const result = results[index];
     if (result.status === 200) {
       sent++;
       db.prepare("UPDATE device_tokens SET last_seen_at = CURRENT_TIMESTAMP WHERE token = ?").run(token);

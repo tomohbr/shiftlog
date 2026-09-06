@@ -1,6 +1,7 @@
+import { startProUpgrade } from '../lib/proUpgrade'
 import { useEffect, useState } from 'react'
 import { Crown, Download, FileSpreadsheet, RefreshCw } from 'lucide-react'
-import { payrollApi, api, billingApi, PayrollSummary, PayrollFormat } from '../api/client'
+import { payrollApi, api, PayrollSummary, PayrollFormat } from '../api/client'
 import toast from 'react-hot-toast'
 
 const FORMATS: { id: PayrollFormat; label: string; desc: string }[] = [
@@ -19,16 +20,8 @@ export default function PayrollPage() {
   const [upgradeRequired, setUpgradeRequired] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
 
-  const startProCheckout = async () => {
-    setCheckoutLoading(true)
-    try {
-      const res = await billingApi.createCheckout()
-      window.location.href = res.data.url
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '決済ページの作成に失敗しました')
-      setCheckoutLoading(false)
-    }
-  }
+  // 共通の購入処理で端末に合った決済を開始する。
+  const startProCheckout = () => startProUpgrade({ setLoading: setCheckoutLoading })
 
   const load = async () => {
     setLoading(true)

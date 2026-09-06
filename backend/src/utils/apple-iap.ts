@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import {
-  APIException,
   AppStoreServerAPIClient,
   Environment,
   JWSTransactionDecodedPayload,
@@ -33,9 +32,6 @@ import db from '../db';
 export const APPLE_BUNDLE_ID = process.env.APPLE_BUNDLE_ID || 'com.shiftlog.app';
 export const APPLE_PRO_PRODUCT_ID = process.env.APPLE_PRO_PRODUCT_ID || 'com.shiftlog.app.pro.monthly';
 
-// App Store Server API が「その transactionId は無いよ」と返すエラーコード。
-// 本番で見つからなければ Sandbox（TestFlight・審査時）を見に行く合図。
-const TRANSACTION_ID_NOT_FOUND = 4040010;
 
 const CERT_DIR = path.join(__dirname, '..', '..', 'certs');
 
@@ -79,19 +75,30 @@ export function isAppleIapConfigured(): boolean {
   return getConfig() !== null && loadAppleRootCertificates().length > 0;
 }
 
+// 環境ごとに生成済みのクライアントと検証器を再利用する。
+const clients = new Map<Environment, AppStoreServerAPIClient>();
+const verifiers = new Map<Environment, SignedDataVerifier>();
+function environments(): Environment[] {
+  return getConfig()?.appAppleId ? [Environment.PRODUCTION, Environment.SANDBOX] : [Environment.SANDBOX];
+}
+
 function getClient(environment: Environment): AppStoreServerAPIClient | null {
   const config = getConfig();
   if (!config) return null;
-  return new AppStoreServerAPIClient(
+  if (clients.has(environment)) return clients.get(environment)!;
+  const client = new AppStoreServerAPIClient(
     config.privateKey, config.keyId, config.issuerId, APPLE_BUNDLE_ID, environment
   );
+  clients.set(environment, client);
+  return client;
 }
 
 function getVerifier(environment: Environment): SignedDataVerifier | null {
   const config = getConfig();
   const roots = loadAppleRootCertificates();
   if (!config || roots.length === 0) return null;
-  return new SignedDataVerifier(
+  if (verifiers.has(environment)) return verifiers.get(environment)!;
+  const verifier = new SignedDataVerifier(
     roots,
     true,
     environment,
@@ -99,6 +106,8 @@ function getVerifier(environment: Environment): SignedDataVerifier | null {
     // Sandbox では appAppleId を渡してはいけない（Apple のライブラリ仕様）
     environment === Environment.PRODUCTION ? config.appAppleId : undefined,
   );
+  verifiers.set(environment, verifier);
+  return verifier;
 }
 
 export interface VerifiedAppleTransaction {
@@ -118,15 +127,14 @@ export async function verifyTransaction(transactionId: string): Promise<Verified
     throw new Error('APPLE_IAP_NOT_CONFIGURED');
   }
 
-  const environments = [Environment.PRODUCTION, Environment.SANDBOX];
+  const order = environments();
   let lastError: unknown = null;
 
-  for (const environment of environments) {
-    const client = getClient(environment);
-    const verifier = getVerifier(environment);
-    if (!client || !verifier) break;
-
+  for (const environment of order) {
     try {
+      const client = getClient(environment);
+      const verifier = getVerifier(environment);
+      if (!client || !verifier) continue;
       const info = await client.getTransactionInfo(transactionId);
       if (!info.signedTransactionInfo) throw new Error('APPLE_EMPTY_TRANSACTION');
 
@@ -161,9 +169,7 @@ export async function verifyTransaction(transactionId: string): Promise<Verified
       return { environment, transaction, status, expiresDate };
     } catch (e) {
       lastError = e;
-      // 本番に無ければ Sandbox を探す。それ以外のエラーは即座に投げる。
-      if (e instanceof APIException && e.apiError === TRANSACTION_ID_NOT_FOUND) continue;
-      throw e;
+      // 生成失敗や環境違いでも次の環境で検証を試す。
     }
   }
 
@@ -249,10 +255,10 @@ export async function decodeTransactionFromNotification(
     : [Environment.PRODUCTION, Environment.SANDBOX];
 
   let lastError: unknown = null;
-  for (const env of order) {
-    const verifier = getVerifier(env);
-    if (!verifier) break;
+  for (const env of order.filter(env => environments().includes(env))) {
     try {
+      const verifier = getVerifier(env);
+      if (!verifier) continue;
       return await verifier.verifyAndDecodeTransaction(signedTransactionInfo);
     } catch (e) {
       lastError = e;
@@ -264,10 +270,10 @@ export async function decodeTransactionFromNotification(
 /** App Store Server Notifications V2 を検証してデコードする（本番 → Sandbox の順に試す） */
 export async function verifyNotification(signedPayload: string) {
   const errors: string[] = [];
-  for (const environment of [Environment.PRODUCTION, Environment.SANDBOX]) {
-    const verifier = getVerifier(environment);
-    if (!verifier) break;
+  for (const environment of environments()) {
     try {
+      const verifier = getVerifier(environment);
+      if (!verifier) continue;
       return { environment, payload: await verifier.verifyAndDecodeNotification(signedPayload) };
     } catch (e) {
       errors.push(`${environment}: ${(e as Error).message}`);

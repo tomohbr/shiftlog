@@ -1,4 +1,4 @@
-import { track } from '../lib/analytics'
+import { startProUpgrade } from '../lib/proUpgrade'
 import { useState, useEffect, useCallback } from 'react'
 import { billingApi, timecardsApi, usersApi, TimeRecord, TimeRecordEdit, User } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
@@ -237,11 +237,8 @@ export default function TimecardPage() {
     try {
       const plan = await billingApi.getPlan()
       if (plan.data.plan !== 'pro' && !plan.data.in_trial) {
-        setCheckoutLoading(true)
-        // CSV導線からのStripe決済開始を計測する。
-        track('checkout_click', { platform: 'stripe' })
-        const checkout = await billingApi.createCheckout()
-        window.location.href = checkout.data.url
+        // CSVの購入導線もアプリではApp内課金を使う。
+        await startProUpgrade({ productId: plan.data.apple_product_id, setLoading: setCheckoutLoading })
         return
       }
     } catch (e: any) {

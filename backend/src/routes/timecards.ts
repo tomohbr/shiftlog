@@ -4,6 +4,7 @@ import { authenticateToken, requireCompany, AuthRequest } from '../middleware/au
 import { getJSTDate } from '../utils/jst';
 import {
   ResolvedPunchTime,
+  PunchAction,
   findProcessedPunch,
   markOfflinePunch,
   recordPunchReceipt,
@@ -65,14 +66,15 @@ function logTimeRecordEdit(opts: {
 function preparePunch(
   req: AuthRequest,
   res: Response,
-  userId: number
+  userId: number,
+  action: PunchAction
 ): ResolvedPunchTime | null {
-  const already = findProcessedPunch(req.body?.client_uuid, userId);
-  if (already) {
-    res.json({ record: already, duplicate: true });
-    return null;
-  }
   try {
+    const already = findProcessedPunch(req.body?.client_uuid, userId, action);
+    if (already) {
+      res.json({ record: already, duplicate: true });
+      return null;
+    }
     return resolvePunchTime(req.body);
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
@@ -122,7 +124,7 @@ router.post('/clock-in', authenticateToken, requireCompany, (req: AuthRequest, r
   // user_idが指定されていればそのユーザーの打刻（キオスクモード）
   const userId = req.body.user_id || req.user!.id;
 
-  const resolved = preparePunch(req, res, userId);
+  const resolved = preparePunch(req, res, userId, 'clock_in');
   if (!resolved) return;
 
   // Check if already clocked in that day
@@ -154,7 +156,7 @@ router.post('/clock-out', authenticateToken, requireCompany, (req: AuthRequest, 
   const companyId = req.companyId!;
   const userId = req.body.user_id || req.user!.id;
 
-  const resolved = preparePunch(req, res, userId);
+  const resolved = preparePunch(req, res, userId, 'clock_out');
   if (!resolved) return;
 
   const existing = db.prepare(
@@ -166,12 +168,18 @@ router.post('/clock-out', authenticateToken, requireCompany, (req: AuthRequest, 
     return;
   }
 
+  // 出退勤の逆転を拒否する。
+  if (resolved.time < existing.clock_in) {
+    res.status(400).json({ error: '退勤時刻が出勤時刻より前です' });
+    return;
+  }
+
   // Calculate break_minutes from break_start/break_end if set
-  let breakMins = existing.break_minutes || 0;
+  let breakMins = Math.max(0, existing.break_minutes || 0);
   if (existing.break_start && existing.break_end) {
     const bs = existing.break_start.split(':').map(Number);
     const be = existing.break_end.split(':').map(Number);
-    breakMins = (be[0] * 60 + be[1]) - (bs[0] * 60 + bs[1]);
+    breakMins = Math.max(0, (be[0] * 60 + be[1]) - (bs[0] * 60 + bs[1]));
   }
 
   db.prepare(
@@ -194,7 +202,7 @@ router.post('/break-start', authenticateToken, requireCompany, (req: AuthRequest
   const companyId = req.companyId!;
   const userId = req.body.user_id || req.user!.id;
 
-  const resolved = preparePunch(req, res, userId);
+  const resolved = preparePunch(req, res, userId, 'break_start');
   if (!resolved) return;
 
   const existing = db.prepare(
@@ -226,7 +234,7 @@ router.post('/break-end', authenticateToken, requireCompany, (req: AuthRequest, 
   const companyId = req.companyId!;
   const userId = req.body.user_id || req.user!.id;
 
-  const resolved = preparePunch(req, res, userId);
+  const resolved = preparePunch(req, res, userId, 'break_end');
   if (!resolved) return;
 
   const existing = db.prepare(
@@ -238,11 +246,16 @@ router.post('/break-end', authenticateToken, requireCompany, (req: AuthRequest, 
     return;
   }
 
+  // 休憩終了が開始より前なら記録しない。
+  if (existing.break_start && resolved.time < existing.break_start) {
+    res.status(400).json({ error: '休憩終了が休憩開始より前です' });
+    return;
+  }
   let breakMins = 0;
   if (existing.break_start) {
     const bs = existing.break_start.split(':').map(Number);
     const be = resolved.time.split(':').map(Number);
-    breakMins = (be[0] * 60 + be[1]) - (bs[0] * 60 + bs[1]);
+    breakMins = Math.max(0, (be[0] * 60 + be[1]) - (bs[0] * 60 + bs[1]));
   }
 
   db.prepare(

@@ -56,6 +56,14 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
     return;
   }
 
+  // 指名先は同じ会社に所属するユーザーに限定する。
+  if (target_user_id != null && (!Number.isInteger(Number(target_user_id)) || !db.prepare(
+    'SELECT 1 FROM user_companies WHERE user_id = ? AND company_id = ?'
+  ).get(Number(target_user_id), companyId))) {
+    res.status(400).json({ error: '依頼先のユーザーはこの会社に所属していません' });
+    return;
+  }
+
   const result = db.prepare(
     'INSERT INTO shift_swaps (company_id, requester_id, shift_id, target_user_id, reason) VALUES (?, ?, ?, ?, ?)'
   ).run(companyId, userId, shift_id, target_user_id || null, reason || null);

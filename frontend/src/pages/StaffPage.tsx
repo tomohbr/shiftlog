@@ -1,3 +1,4 @@
+import { startProUpgrade } from '../lib/proUpgrade'
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy, Crown, Share2, QrCode, Printer } from 'lucide-react'
 import { usersApi, billingApi, BillingPlan, User } from '../api/client'
@@ -231,16 +232,8 @@ export default function StaffPage() {
   const [qrOpen, setQrOpen] = useState(false)
   const companyPin = (selectedCompany as any)?.company_pin || ''
 
-  const startProCheckout = async () => {
-    setCheckoutLoading(true)
-    try {
-      const res = await billingApi.createCheckout()
-      window.location.href = res.data.url
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '決済ページの作成に失敗しました')
-      setCheckoutLoading(false)
-    }
-  }
+  // 共通の購入処理で端末に合った決済を開始する。
+  const startProCheckout = () => startProUpgrade({ setLoading: setCheckoutLoading })
 
   const loadUsers = async () => {
     setLoading(true)

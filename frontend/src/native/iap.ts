@@ -44,10 +44,10 @@ export async function getProProduct(): Promise<AppleProduct | null> {
  * Pro を購入する。
  * StoreKit の購入ダイアログ → 取引IDの取得 → サーバー検証、までを通しで行う。
  */
-export async function purchasePro(): Promise<{ plan: string; status: string; expires_at: string | null }> {
+export async function purchasePro(productId: string = PRO_PRODUCT_ID): Promise<{ plan: string; status: string; expires_at: string | null }> {
   if (!isNative) throw new IapError('App内課金はアプリからのみ利用できます')
 
-  const purchase = await Subscriptions.purchaseProduct({ productIdentifier: PRO_PRODUCT_ID })
+  const purchase = await Subscriptions.purchaseProduct({ productIdentifier: productId })
 
   switch (purchase.responseCode) {
     case 0:
@@ -64,7 +64,7 @@ export async function purchasePro(): Promise<{ plan: string; status: string; exp
       throw new IapError('購入を完了できませんでした。')
   }
 
-  return verifyLatestTransaction()
+  return verifyLatestTransaction(productId)
 }
 
 /**
@@ -82,8 +82,8 @@ export async function restorePro(): Promise<{ plan: string; status: string; expi
   return verifyOnServer(active.transactionId)
 }
 
-async function verifyLatestTransaction() {
-  const latest = await Subscriptions.getLatestTransaction({ productIdentifier: PRO_PRODUCT_ID })
+async function verifyLatestTransaction(productId: string) {
+  const latest = await Subscriptions.getLatestTransaction({ productIdentifier: productId })
   if (latest.responseCode !== 0 || !latest.data?.transactionId) {
     throw new IapError('購入は完了しましたが確認に失敗しました。設定画面の「購入を復元」をお試しください。')
   }

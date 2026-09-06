@@ -84,3 +84,14 @@ function setup({ blocked = false, id = '' } = {}) {
   assert.equal(stores.sessionStorage.getItem(key), saved)
 }
 console.log('流入保存・破損/期限切れ・保存拒否・GA4未設定・キュー・重複防止: OK')
+
+// direct訪問の後にUTMが判明したら更新し、以降はfirst-touchを保つ。
+{
+  const { attribution: a, window: w } = setup()
+  w.location.search = ''
+  assert.equal(a.captureAttribution().source, 'direct')
+  w.location.search = '?utm_source=note'
+  assert.equal(a.captureAttribution().source, 'note')
+  w.location.search = '?utm_source=x'
+  assert.equal(a.captureAttribution().source, 'note')
+}

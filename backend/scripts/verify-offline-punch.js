@@ -145,6 +145,19 @@ async function main() {
     });
     check('休憩開始', bs.data.record.break_start, breakStartAt.slice(11, 16));
 
+    // 時刻の逆転とUUIDの使い回しを拒否し、既存の打刻を保つ。
+    for (const [endpoint, stamp, uuid, message] of [
+      ['clock-out', jstStamp(-181), 'uuid-early-out', '退勤時刻が出勤時刻より前です'],
+      ['break-end', jstStamp(-121), 'uuid-early-break', '休憩終了が休憩開始より前です'],
+      ['clock-out', jstStamp(-30), 'uuid-clock-in-1', '同じ client_uuid を別の打刻に使い回しています'],
+    ]) {
+      const rejected = await apiCall('POST', `/api/timecards/${endpoint}`, {
+        user_id: userId, client_uuid: uuid, recorded_at: stamp,
+      });
+      check(message, rejected.status, 400);
+      check('拒否理由が一致する', rejected.data.error, message);
+    }
+
     const breakEndAt = jstStamp(-90);
     const be = await apiCall('POST', '/api/timecards/break-end', {
       user_id: userId, client_uuid: 'uuid-break-end-1', recorded_at: breakEndAt,
@@ -177,6 +190,12 @@ async function main() {
       user_id: userId, client_uuid: 'uuid-malformed', recorded_at: 'きのうの朝',
     });
     check('形式不正は拒否', malformed.status, 400);
+    for (const stamp of ['2026-09-31T23:60', `${jstStamp().slice(0, 10)}T23:60`]) {
+      const invalid = await apiCall('POST', '/api/timecards/clock-in', { recorded_at: stamp });
+      check('繰り上がる日時を拒否', invalid.status, 400);
+      check('日時の形式エラー', invalid.data.error, '打刻時刻の形式が正しくありません');
+    }
+
 
     check('拒否された打刻の受領記録は作られない',
       db.prepare("SELECT COUNT(*) as n FROM punch_receipts WHERE client_uuid IN ('uuid-future','uuid-too-old','uuid-malformed')").get().n, 0);
@@ -214,7 +233,7 @@ async function main() {
     // -----------------------------------------------------------------
     console.log('\n--- 8. アカウント削除で打刻の受領記録も消える（5.1.1(v)） ---');
     await apiCall('POST', '/api/timecards/clock-out', {
-      user_id: userId, client_uuid: 'uuid-final-out', recorded_at: jstStamp(-1),
+      user_id: userId, client_uuid: 'uuid-final-out', recorded_at: jstStamp(), // 通常出勤より前にならない時刻で退勤する
     });
     check('削除前に受領記録がある', db.prepare('SELECT COUNT(*) as n FROM punch_receipts').get().n, 1);
 

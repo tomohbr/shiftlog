@@ -15,7 +15,7 @@ import { isNative } from './platform'
 //   3. 通信が戻った / アプリが前面に来た / 一定時間ごとに、積んだ順に送り直す
 //   4. 各打刻は client_uuid を持ち、サーバー側で冪等化されるので再送しても二重打刻にならない
 //
-// 打刻時刻は「端末が打った時刻」をそのまま送る。サーバー到着時刻で記録すると、
+// 再送時だけ「端末が打った時刻」を送る。オンライン初回はサーバー時刻を使う。サーバー到着時刻で記録すると、
 // 圏外だった時間ぶんズレた勤怠が残ってしまう。
 
 const QUEUE_KEY = 'shiftlog.punchQueue.v1'
@@ -97,6 +97,18 @@ async function writeQueue(queue: QueuedPunch[]): Promise<void> {
   notify(queue)
 }
 
+// 読み取りから保存までを直列化し、同期中の追加を消さない。
+let queueUpdate: Promise<unknown> = Promise.resolve()
+function updateQueue(update: (queue: QueuedPunch[]) => QueuedPunch[]): Promise<QueuedPunch[]> {
+  const next = queueUpdate.then(async () => {
+    const queue = update(await readQueue())
+    await writeQueue(queue)
+    return queue
+  })
+  queueUpdate = next.catch(() => {})
+  return next
+}
+
 // ---------------------------------------------------------------------------
 // 未同期件数の購読（UI のバッジ用）
 // ---------------------------------------------------------------------------
@@ -146,6 +158,11 @@ export async function punch(
   action: PunchAction,
   ctx: { userId: number; userName: string; companyId: number }
 ): Promise<PunchResult> {
+  // Webは通常のPOSTだけで打刻する。
+  if (!isNative) {
+    const res = await api.post(ENDPOINTS[action], { user_id: ctx.userId })
+    return { synced: true, record: res.data?.record }
+  }
   const entry: QueuedPunch = {
     client_uuid: newUuid(),
     action,
@@ -157,26 +174,30 @@ export async function punch(
     attempts: 0,
   }
 
+  // 未同期分を追い越さず、必ず末尾へ追加する。
+  await refreshPending()
+  if (flushing || getPendingSnapshot().length > 0) {
+    await updateQueue(queue => [...queue, entry])
+    return { synced: false, queued: entry }
+  }
   try {
-    const res = await send(entry)
+    const res = await send(entry, { includeRecordedAt: false })
     return { synced: true, record: res }
   } catch (error: any) {
     if (!isNative || !isOfflineError(error)) throw error
 
-    const queue = await readQueue()
-    queue.push(entry)
-    await writeQueue(queue)
+    await updateQueue(queue => [...queue, entry])
     return { synced: false, queued: entry }
   }
 }
 
-async function send(entry: QueuedPunch): Promise<any> {
+async function send(entry: QueuedPunch, { includeRecordedAt }: { includeRecordedAt: boolean }): Promise<any> {
   const res = await api.post(
     ENDPOINTS[entry.action],
     {
       user_id: entry.user_id,
       client_uuid: entry.client_uuid,
-      recorded_at: entry.recorded_at,
+      ...(includeRecordedAt ? { recorded_at: entry.recorded_at } : {}),
     },
     // キューを流すときは選択中の会社が変わっている可能性があるので、
     // 打刻したときの会社を明示する
@@ -222,10 +243,9 @@ export async function flushQueue(): Promise<FlushResult> {
     while (queue.length > 0) {
       const entry = queue[0]
       try {
-        await send(entry)
+        await send(entry, { includeRecordedAt: true })
         result.synced++
-        queue = queue.slice(1)
-        await writeQueue(queue)
+        queue = await updateQueue(current => current.filter(item => item.client_uuid !== entry.client_uuid))
       } catch (error: any) {
         const status = error?.response?.status
 
@@ -236,15 +256,13 @@ export async function flushQueue(): Promise<FlushResult> {
             entry,
             reason: error?.response?.data?.error || '同期できませんでした',
           })
-          queue = queue.slice(1)
-          await writeQueue(queue)
+          queue = await updateQueue(current => current.filter(item => item.client_uuid !== entry.client_uuid))
           continue
         }
 
         // 通信エラー / 認証切れ / サーバーエラーは順序を保ったまま次回に回す
         entry.attempts++
-        queue[0] = entry
-        await writeQueue(queue)
+        queue = await updateQueue(current => current.map(item => item.client_uuid === entry.client_uuid ? entry : item))
         break
       }
     }
@@ -262,14 +280,28 @@ export async function flushQueue(): Promise<FlushResult> {
 
 type FlushHandler = (result: FlushResult) => void
 let onFlushed: FlushHandler | null = null
+// 画面側の購読開始前に完了した結果も一度だけ通知する。
+let pendingFlush: FlushResult | null = null
 
 export function setFlushHandler(handler: FlushHandler | null): void {
   onFlushed = handler
+  if (handler && pendingFlush) {
+    const result = pendingFlush
+    pendingFlush = null
+    handler(result)
+  }
 }
 
 async function tryFlush() {
   const result = await flushQueue()
-  if ((result.synced > 0 || result.rejected.length > 0) && onFlushed) onFlushed(result)
+  if (result.synced > 0 || result.rejected.length > 0) {
+    if (onFlushed) onFlushed(result)
+    else pendingFlush = {
+      synced: (pendingFlush?.synced || 0) + result.synced,
+      rejected: [...(pendingFlush?.rejected || []), ...result.rejected],
+      remaining: result.remaining,
+    }
+  }
 }
 
 let initialized = false

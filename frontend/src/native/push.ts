@@ -84,10 +84,10 @@ export async function registerPushIfAllowed(): Promise<void> {
 }
 
 /** ログアウト時にこの端末宛の通知を止める */
-export async function unregisterPush(): Promise<void> {
+export async function unregisterPush(token: string): Promise<void> {
   if (!isNative || !currentToken) return
   try {
-    await api.delete('/push/device', { data: { token: currentToken } })
+    await api.delete('/push/device', { data: { token: currentToken }, headers: { Authorization: `Bearer ${token}` } })
   } catch {
     /* 失敗しても次のログインで付け替わる */
   }

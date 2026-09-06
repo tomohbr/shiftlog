@@ -52,20 +52,26 @@ router.delete('/device', authenticateToken, (req: AuthRequest, res: Response): v
 
 // POST /api/push/test - 自分宛にテスト通知を送る（設定画面の動作確認用）
 router.post('/test', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
-  if (!isApnsConfigured()) {
-    res.status(503).json({ error: 'プッシュ通知はまだ設定されていません' });
-    return;
+  // 送信例外でも必ずHTTP応答を返す。
+  try {
+    if (!isApnsConfigured()) {
+      res.status(503).json({ error: 'プッシュ通知はまだ設定されていません' });
+      return;
+    }
+    const sent = await sendPushToUsers([req.user!.id], {
+      title: 'シフトログ',
+      body: 'プッシュ通知のテストです。正常に届いています。',
+      path: '/settings',
+    });
+    if (sent === 0) {
+      res.status(404).json({ error: '通知先の端末が登録されていません。アプリで通知を許可してください。' });
+      return;
+    }
+    res.json({ ok: true, sent });
+  } catch (e) {
+    console.error('[push] テスト通知に失敗:', e);
+    res.status(500).json({ error: 'テスト通知の送信に失敗しました' });
   }
-  const sent = await sendPushToUsers([req.user!.id], {
-    title: 'シフトログ',
-    body: 'プッシュ通知のテストです。正常に届いています。',
-    path: '/settings',
-  });
-  if (sent === 0) {
-    res.status(404).json({ error: '通知先の端末が登録されていません。アプリで通知を許可してください。' });
-    return;
-  }
-  res.json({ ok: true, sent });
 });
 
 export default router;

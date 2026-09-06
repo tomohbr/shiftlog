@@ -1,3 +1,5 @@
+import { isNative } from '../native/platform'
+import { startProUpgrade } from '../lib/proUpgrade'
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, X, Store, Crown, AlertTriangle } from 'lucide-react'
 import { storesApi, billingApi, Store as StoreType, PlanInfo } from '../api/client'
@@ -88,16 +90,8 @@ function UpgradeModal({ planInfo, onClose }: UpgradeModalProps) {
       .catch(() => setStripeConfigured(false))
   }, [])
 
-  const handleStripeCheckout = async () => {
-    setCheckoutLoading(true)
-    try {
-      const res = await billingApi.createCheckout(1)
-      window.location.href = res.data.url
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || '決済ページの作成に失敗しました')
-      setCheckoutLoading(false)
-    }
-  }
+  // 共通の購入処理で端末に合った決済を開始する。
+  const handleStripeCheckout = () => startProUpgrade({ setLoading: setCheckoutLoading, additionalStores: 1 })
 
   const handleCopyEmail = () => {
     navigator.clipboard.writeText('shibahara.724@gmail.com')
@@ -138,7 +132,8 @@ function UpgradeModal({ planInfo, onClose }: UpgradeModalProps) {
             </ul>
           </div>
 
-          {stripeConfigured ? (
+          {/* アプリには店舗追加の商品がないため購入導線を表示しない。 */}
+          {isNative ? <p className="text-sm text-gray-600">店舗の追加はアプリからは行えません</p> : stripeConfigured ? (
             <button
               type="button"
               onClick={handleStripeCheckout}

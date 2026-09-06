@@ -36,6 +36,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [justRegistered, setJustRegistered] = useState(false)
   const clearJustRegistered = () => setJustRegistered(false)
 
+  // 認証切れではプッシュ解除やKeychain削除を行わない。
+  useEffect(() => {
+    const clearSession = () => {
+      localStorage.removeItem('token')
+      localStorage.removeItem('selectedCompanyId')
+      delete api.defaults.headers.common['Authorization']
+      setUser(null)
+      setCompanies([])
+      setSelectedCompany(null)
+      setJustRegistered(false)
+    }
+    window.addEventListener('shiftlog:unauthorized', clearSession)
+    return () => window.removeEventListener('shiftlog:unauthorized', clearSession)
+  }, [])
+
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (token) {
@@ -120,7 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     // この端末宛の通知を止め、生体認証のかんたんログインも消す。
     // 共有端末で前のスタッフに通知が飛び続けるのを防ぐため。
-    void unregisterPush()
+    const token = localStorage.getItem('token')
+    if (token) void unregisterPush(token)
     void clearQuickLogin()
     localStorage.removeItem('token')
     localStorage.removeItem('selectedCompanyId')

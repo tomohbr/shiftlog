@@ -51,7 +51,11 @@ export function resolvePunchTime(body: any): ResolvedPunchTime {
   const [, y, mo, d, h, mi] = m;
   // JST の壁時計をそのまま UTC として解釈し、同じ基準の jstNow() と比較する
   const recorded = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi));
-  if (Number.isNaN(recorded)) {
+  // Date.UTCの繰り上がりで不正な日付・時刻を受け入れない。
+  const parsed = new Date(recorded);
+  if (Number.isNaN(recorded) || parsed.getUTCFullYear() !== Number(y)
+    || parsed.getUTCMonth() !== Number(mo) - 1 || parsed.getUTCDate() !== Number(d)
+    || parsed.getUTCHours() !== Number(h) || parsed.getUTCMinutes() !== Number(mi)) {
     throw new PunchTimeError('打刻時刻の形式が正しくありません');
   }
 
@@ -72,7 +76,7 @@ export function resolvePunchTime(body: any): ResolvedPunchTime {
 }
 
 /** 既に処理済みの client_uuid なら、そのときの打刻レコードを返す（再送の冪等化） */
-export function findProcessedPunch(clientUuid: unknown, userId: number): any | null {
+export function findProcessedPunch(clientUuid: unknown, userId: number, action: PunchAction): any | null {
   if (!clientUuid || typeof clientUuid !== 'string') return null;
   const receipt = db.prepare(
     'SELECT * FROM punch_receipts WHERE client_uuid = ?'
@@ -80,6 +84,8 @@ export function findProcessedPunch(clientUuid: unknown, userId: number): any | n
   if (!receipt) return null;
   // 他人の client_uuid を投げられても、そのユーザーの打刻は返さない
   if (receipt.user_id !== userId) return null;
+  // 同じUUIDを別種の打刻に使うことは許可しない。
+  if (receipt.action !== action) throw new PunchTimeError('同じ client_uuid を別の打刻に使い回しています');
   if (!receipt.time_record_id) return null;
   return db.prepare('SELECT * FROM time_records WHERE id = ?').get(receipt.time_record_id) || null;
 }

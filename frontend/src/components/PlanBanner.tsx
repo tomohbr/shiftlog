@@ -1,11 +1,8 @@
-import { track } from '../lib/analytics'
+import { startProUpgrade } from '../lib/proUpgrade'
 import { useEffect, useState } from 'react'
 import { billingApi, BillingPlan } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { Sparkles, X } from 'lucide-react'
-import toast from 'react-hot-toast'
-import { isNative } from '../native/platform'
-import { IapError, purchasePro } from '../native/iap'
 
 // 課金タイミング設計:
 // - トライアル残り7日以下: 黄色バナーで残日数と「Proを続ける」を常時表示
@@ -28,39 +25,8 @@ export default function PlanBanner() {
 
   if (!isAdminRole || !plan || plan.plan === 'pro') return null
 
-  const handleUpgrade = async () => {
-    setCheckoutLoading(true)
-
-    // iOS アプリ内から Stripe へ誘導することはできない（Guideline 3.1.1）。
-    // App内課金で購入し、サーバー側で検証する。
-    if (isNative) {
-      try {
-        // 購入開始とサーバー検証成功を区別して計測する。
-        track('checkout_click', { platform: 'apple' })
-        const result = await purchasePro()
-        if (result.plan === 'pro') track('pro_upgrade_success', { platform: 'apple' })
-        toast.success('Proプランが有効になりました')
-        setPlan(prev => (prev ? { ...prev, plan: result.plan, platform: 'apple' } : prev))
-      } catch (e: any) {
-        if (!(e instanceof IapError && e.message === 'CANCELLED')) {
-          toast.error(e?.message || '購入を完了できませんでした')
-        }
-      } finally {
-        setCheckoutLoading(false)
-      }
-      return
-    }
-
-    try {
-      // Stripe決済の開始を計測する。
-      track('checkout_click', { platform: 'stripe' })
-      const res = await billingApi.createCheckout()
-      window.location.href = res.data.url
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '決済ページの作成に失敗しました')
-      setCheckoutLoading(false)
-    }
-  }
+  // 共通の購入処理で端末に合った決済を開始する。
+  const handleUpgrade = () => startProUpgrade({ setLoading: setCheckoutLoading, productId: plan?.apple_product_id, onUpgraded: setPlan })
 
   // トライアル中・残り7日以下
   if (plan.in_trial && plan.trial_days_left != null && plan.trial_days_left <= 7) {

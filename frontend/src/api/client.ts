@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { apiBaseUrl, apiOrigin, isNative } from '../native/platform'
+import { apiBaseUrl, apiOrigin } from '../native/platform'
 
 // Web は同一オリジンの /api、iOS アプリはバンドル済みアセットから本番サーバーへ絶対URLで叩く
 const API_BASE = apiBaseUrl
@@ -12,9 +12,10 @@ export const api = axios.create({
 // Request interceptor - attach token + company
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
-  if (token) config.headers['Authorization'] = `Bearer ${token}`
+  // 明示された認証・会社情報は再送やログアウト時にも保持する。
+  if (token && !config.headers['Authorization']) config.headers['Authorization'] = `Bearer ${token}`
   const companyId = localStorage.getItem('selectedCompanyId')
-  if (companyId) config.headers['X-Company-Id'] = companyId
+  if (companyId && !config.headers['X-Company-Id']) config.headers['X-Company-Id'] = companyId
   return config
 })
 
@@ -24,14 +25,8 @@ api.interceptors.response.use(
   error => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      // ネイティブは capacitor://localhost/login というURLが存在しないので、
-      // ハッシュ無しのフルリロードではなく履歴APIで /login に戻す
-      if (isNative) {
-        window.history.replaceState(null, '', '/login')
-        window.dispatchEvent(new PopStateEvent('popstate'))
-      } else {
-        window.location.href = '/login'
-      }
+      // 認証状態も消し、ルーターにログイン画面への遷移を任せる。
+      window.dispatchEvent(new Event('shiftlog:unauthorized'))
     }
     return Promise.reject(error)
   }

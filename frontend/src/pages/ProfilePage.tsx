@@ -1,3 +1,4 @@
+import { startProUpgrade } from '../lib/proUpgrade'
 import { track } from '../lib/analytics'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -5,8 +6,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { authApi, usersApi, icalApi, billingApi, BillingPlan, AccountDeletionInfo } from '../api/client'
 import { User, Mail, Lock, Save, Calendar, Copy, Trash2, Sun, Moon, Crown, CreditCard, Sparkles, AlertTriangle, Bell, Fingerprint, RotateCcw, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { isNative } from '../native/platform'
-import { AppleProduct, IapError, getProProduct, openManageSubscriptions, purchasePro, restorePro } from '../native/iap'
+import { apiOrigin, isNative } from '../native/platform'
+import { AppleProduct, getProProduct, openManageSubscriptions, restorePro } from '../native/iap'
 import { getBiometricInfo, isAppLockEnabled, setAppLockEnabled, verifyIdentity } from '../native/biometric'
 import { getPushPermission, registerPush } from '../native/push'
 
@@ -86,38 +87,8 @@ export default function ProfilePage() {
     else if (result === 'denied') toast.error('iOSの「設定」→「シフトログ」→「通知」から許可してください')
   }
 
-  const handleUpgrade = async () => {
-    setBillingLoading(true)
-
-    // iOS アプリ内では Stripe の決済ページを開けない（Guideline 3.1.1）
-    if (isNative) {
-      try {
-        // 購入開始とサーバー検証成功を区別して計測する。
-        track('checkout_click', { platform: 'apple' })
-        const result = await purchasePro()
-        if (result.plan === 'pro') track('pro_upgrade_success', { platform: 'apple' })
-        toast.success('Proプランが有効になりました')
-        setPlan(prev => (prev ? { ...prev, plan: result.plan, platform: 'apple' } : prev))
-      } catch (e: any) {
-        if (!(e instanceof IapError && e.message === 'CANCELLED')) {
-          toast.error(e?.message || '購入を完了できませんでした')
-        }
-      } finally {
-        setBillingLoading(false)
-      }
-      return
-    }
-
-    try {
-      // Stripe決済の開始を計測する。
-      track('checkout_click', { platform: 'stripe' })
-      const res = await billingApi.createCheckout()
-      window.location.href = res.data.url
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '決済ページの作成に失敗しました')
-      setBillingLoading(false)
-    }
-  }
+  // 共通の購入処理で端末に合った決済を開始する。
+  const handleUpgrade = () => startProUpgrade({ setLoading: setBillingLoading, productId: plan?.apple_product_id, onUpgraded: setPlan })
 
   // Apple の要求: 購入の復元導線をアプリ内に必ず用意すること
   const handleRestore = async () => {
@@ -344,7 +315,7 @@ export default function ProfilePage() {
               {plan.plan === 'pro' && plan.platform === 'stripe' && (
                 <p className="text-sm text-gray-600">
                   この会社はWebサイトからProプランを契約しています。お支払い方法の変更・解約は、
-                  パソコンやスマホのブラウザから shiftlog-production.up.railway.app にログインして設定画面で行えます。
+                  パソコンやスマホのブラウザから {apiOrigin} にログインして設定画面で行えます。
                 </p>
               )}
 

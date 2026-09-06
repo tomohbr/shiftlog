@@ -1,7 +1,8 @@
+import { startProUpgrade } from '../lib/proUpgrade'
 import { useState, useEffect, useCallback } from 'react'
 import { format, addMonths, subMonths } from 'date-fns'
 import { Crown, Download, TrendingUp, Clock, DollarSign } from 'lucide-react'
-import { shiftsApi, csvApi, billingApi, Shift } from '../api/client'
+import { shiftsApi, csvApi, Shift } from '../api/client'
 import MonthNavigator from '../components/MonthNavigator'
 import toast from 'react-hot-toast'
 
@@ -25,16 +26,8 @@ export default function ReportPage() {
   const [upgradeRequired, setUpgradeRequired] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
 
-  const startProCheckout = async () => {
-    setCheckoutLoading(true)
-    try {
-      const res = await billingApi.createCheckout()
-      window.location.href = res.data.url
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '決済ページの作成に失敗しました')
-      setCheckoutLoading(false)
-    }
-  }
+  // 共通の購入処理で端末に合った決済を開始する。
+  const startProCheckout = () => startProUpgrade({ setLoading: setCheckoutLoading })
 
   const loadData = useCallback(async () => {
     setLoading(true)

@@ -33,7 +33,7 @@ const PORT = process.env.PORT || 3001;
 // iOS ネイティブアプリ（Capacitor）の WebView は capacitor://localhost をオリジンとして送ってくる。
 // ALLOWED_ORIGIN を本番URLに固定していると弾かれてアプリが一切通信できなくなるため、
 // ネイティブシェルのオリジンは常に許可する。
-const NATIVE_ORIGINS = ['capacitor://localhost', 'ionic://localhost', 'http://localhost'];
+const NATIVE_ORIGINS = ['capacitor://localhost', 'ionic://localhost'];
 const configuredOrigins = process.env.ALLOWED_ORIGIN
   ? process.env.ALLOWED_ORIGIN.split(',').map(o => o.trim()).filter(Boolean)
   : ['http://localhost:5173', 'http://localhost:3000'];

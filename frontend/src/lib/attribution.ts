@@ -41,7 +41,9 @@ function readStored(): StoredAttribution | null {
 export function captureAttribution(): Attribution {
   try {
     const params = new URLSearchParams(window.location.search)
-    memory = readStored() || {
+    const stored = readStored()
+    // UTMなしのdirectだけは、後から判明した流入元に置き換える。
+    memory = (stored && !(stored.source === 'direct' && params.get('utm_source')) ? stored : null) || {
       source: params.get('utm_source') || 'direct',
       medium: params.get('utm_medium') || 'none',
       campaign: params.get('utm_campaign') || 'none',
