@@ -21,7 +21,9 @@
 | App Store Connect のアプリレコード | ✅ 作成済み（2026-09-07） |
 | 初回ビルドのアップロード | ✅ **1.0.0 (1) をアップロード済み（2026-09-07 12:22）。処理後 TestFlight に表示される** |
 | App Store Connect の設定 | ✅ 2026-09-07 完了: 1.0 メタデータ・審査用サインイン情報・App情報（カテゴリ/年齢 4+/サーバ通知URL）・App Privacy（公開済み）・サブスクリプション2商品（月額 ¥980 / 年額 ¥9,800）・ビルド 1.0.0(1) 紐付け |
-| スクリーンショット（アプリ本体 / IAP審査用） | ❌ **未。ファイル添付は本人の操作が必要**（`store-assets/screenshots-ios/` を ASC にドラッグ） |
+| スクリーンショット（アプリ本体 / IAP審査用） | ✅ 2026-09-07 夜、ASC API（`store-assets/asc-upload.mjs`）で添付済み。7枚 COMPLETE、IAP 2商品 READY_TO_SUBMIT |
+| 説明文・プロモーション文 | ✅ 5名無料・年払い版に更新済み（API） |
+| ビルド 1.0.0 (2)（5名無料・年払い対応） | ⏳ 2026-09-07 夜アップロード中 → 処理後にバージョン 1.0 へ紐付け |
 | APNs / App内課金のサーバー設定（環境変数） | ❌ 未設定（キー発行は本人の操作。手順6） |
 
 Archive とエクスポートはコマンドで再現できる（付録参照）。App Store Connect のアプリ作成だけは Web 画面での操作が必要。
@@ -274,6 +276,10 @@ App Store Connect → バージョン情報 →
 ## 付録: よく使うコマンド
 
 ```bash
+# App Store Connect API（スクショ添付・状態確認）。キーは ~/.config/shiftlog/ に置く（git 外）
+ASC_KEY_ID=9X344AQPQ2 ASC_ISSUER_ID=3221befc-dfe8-4328-ab63-592870403e07 \
+ASC_KEY_PATH=~/.config/shiftlog/AuthKey_9X344AQPQ2.p8 node store-assets/asc-upload.mjs status   # app / iap も可
+
 # App Store 用の Archive → IPA（Bash ツールのサンドボックス外で実行すること。キーチェーンに届かない）
 cd ~/カンパニー/shiftlog/frontend && npm run build && npx cap sync ios && cd ios/App
 xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphoneos \
