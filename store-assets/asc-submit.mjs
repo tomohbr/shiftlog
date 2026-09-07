@@ -106,17 +106,17 @@ async function submit() {
     console.log(`提出を作成: ${submission.id}`);
   }
 
-  // バージョンと IAP（初回は必ずアプリバージョンと一緒に提出する）
-  const items = [
-    { type: 'appStoreVersions', id: version.id },
-    ...subs.filter(s => s.attributes.state === 'READY_TO_SUBMIT').map(s => ({ type: 'subscriptions', id: s.id })),
-  ];
+  // アプリバージョンだけを項目に入れる。
+  // サブスクリプションは Review Submission API の項目にできない（'subscription' は reviewSubmissionItems の
+  // 関係ではない）。App Store Connect の各サブスクリプション画面で「審査用に追加」→ 既存の下書きを選んでおく。
+  // その下書き（READY_FOR_REVIEW）をここで拾い、バージョンを追加して提出する（docs/ios-release.md §10）。
+  const items = [{ type: 'appStoreVersions', id: version.id }];
   for (const item of items) {
     try {
       await api('POST', '/reviewSubmissionItems', {
         data: { type: 'reviewSubmissionItems', relationships: {
           reviewSubmission: { data: { type: 'reviewSubmissions', id: submission.id } },
-          [item.type === 'appStoreVersions' ? 'appStoreVersion' : 'subscription']: { data: item },
+          appStoreVersion: { data: item },
         } },
       });
       console.log(`項目を追加: ${item.type} ${item.id}`);
@@ -131,6 +131,11 @@ async function submit() {
     data: { type: 'reviewSubmissions', id: submission.id, attributes: { submitted: true } },
   });
   console.log(`\n🚀 提出しました: state=${result.data.attributes.state}`);
+  // サブスクリプションがバージョンと一緒に審査待ちになったか確認
+  for (const s of subs) {
+    const now = (await api('GET', `/subscriptions/${s.id}`)).data;
+    console.log(`IAP ${now.attributes.productId}: ${now.attributes.state}`);
+  }
 }
 
 const cmd = process.argv[2] || 'check';
