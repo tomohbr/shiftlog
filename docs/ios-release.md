@@ -18,7 +18,8 @@
 | Xcode | ✅ 26.6 導入済み。署名IDあり。キーチェーンは codesign を「常に許可」済み |
 | Bundle ID | ✅ `com.tomohbr.shiftlog`（`com.shiftlog.app` は他チームに取られていたため変更。2026-09-07） |
 | Archive / IPA | ✅ **2026-09-07 `xcodebuild archive` → `-exportArchive`（app-store-connect）まで無人で成功** |
-| App Store Connect のアプリレコード | ❌ **未作成。次のブロッカー**（手順4） |
+| App Store Connect のアプリレコード | ✅ 作成済み（2026-09-07） |
+| 初回ビルドのアップロード | ✅ **1.0.0 (1) をアップロード済み（2026-09-07 12:22）。処理後 TestFlight に表示される** |
 | APNs / App内課金のサーバー設定（環境変数） | ❌ 未設定 |
 
 Archive とエクスポートはコマンドで再現できる（付録参照）。App Store Connect のアプリ作成だけは Web 画面での操作が必要。
