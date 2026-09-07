@@ -3,7 +3,13 @@ import db from '../db';
 import { AuthRequest } from '../middleware/auth';
 
 export const PRICE_PER_MONTH = 980;
-export const FREE_STAFF_LIMIT = 30;
+// 年払い。2ヶ月分お得（980×12=11,760 → 9,800）
+export const PRICE_PER_YEAR = 9800;
+// 無料枠のスタッフ数。2026-09-07 に 30 → 5 へ変更。
+// 30名では対象店（5〜15名）の日常業務が全部無料で済んでしまい、課金に繋がらなかった。
+// 5名なら Airシフトの最低料金（¥990/月・3名以下）を払っている小さな店を無料で取り込み、
+// 6名以上の店＝実際のターゲットは Pro に乗る。
+export const FREE_STAFF_LIMIT = 5;
 export const TRIAL_DAYS = 30;
 
 export function getSubscription(companyId: number): any {

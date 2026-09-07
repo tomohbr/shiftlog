@@ -27,10 +27,14 @@ import db from '../db';
 //   APPLE_IAP_PRIVATE_KEY  同 .p8 の中身（改行は \n エスケープ可）
 //   APPLE_APP_APPLE_ID     App Store のアプリID（数値）。本番の通知検証に必要
 //   APPLE_BUNDLE_ID        既定 com.tomohbr.shiftlog
-//   APPLE_PRO_PRODUCT_ID   既定 com.tomohbr.shiftlog.pro.monthly
+//   APPLE_PRO_PRODUCT_ID          既定 com.tomohbr.shiftlog.pro.monthly
+//   APPLE_PRO_YEARLY_PRODUCT_ID   既定 com.tomohbr.shiftlog.pro.yearly
 
 export const APPLE_BUNDLE_ID = process.env.APPLE_BUNDLE_ID || 'com.tomohbr.shiftlog';
 export const APPLE_PRO_PRODUCT_ID = process.env.APPLE_PRO_PRODUCT_ID || 'com.tomohbr.shiftlog.pro.monthly';
+export const APPLE_PRO_YEARLY_PRODUCT_ID = process.env.APPLE_PRO_YEARLY_PRODUCT_ID || 'com.tomohbr.shiftlog.pro.yearly';
+/** Pro を付与する商品ID（月額・年額）。どちらを買っても同じ Pro */
+export const APPLE_PRO_PRODUCT_IDS = [APPLE_PRO_PRODUCT_ID, APPLE_PRO_YEARLY_PRODUCT_ID];
 
 
 const CERT_DIR = path.join(__dirname, '..', '..', 'certs');

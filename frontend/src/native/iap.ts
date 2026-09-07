@@ -12,6 +12,9 @@ import { isNative } from './platform'
 // 端末が「買えました」と言うのを信用しない作りにしてある。
 
 export const PRO_PRODUCT_ID = 'com.tomohbr.shiftlog.pro.monthly'
+export const PRO_YEARLY_PRODUCT_ID = 'com.tomohbr.shiftlog.pro.yearly'
+/** Pro を付与する商品（月額・年額）。復元のときはどちらでも可 */
+export const PRO_PRODUCT_IDS = [PRO_PRODUCT_ID, PRO_YEARLY_PRODUCT_ID]
 
 export interface AppleProduct {
   productId: string
@@ -24,10 +27,10 @@ export interface AppleProduct {
 export class IapError extends Error {}
 
 /** ストアから価格などの商品情報を取得する。取れなければ null（画面側は既定の文言を出す）。 */
-export async function getProProduct(): Promise<AppleProduct | null> {
+export async function getProProduct(productId: string = PRO_PRODUCT_ID): Promise<AppleProduct | null> {
   if (!isNative) return null
   try {
-    const res = await Subscriptions.getProductDetails({ productIdentifier: PRO_PRODUCT_ID })
+    const res = await Subscriptions.getProductDetails({ productIdentifier: productId })
     if (res.responseCode !== 0 || !res.data) return null
     return {
       productId: res.data.productIdentifier,
@@ -75,7 +78,7 @@ export async function restorePro(): Promise<{ plan: string; status: string; expi
   if (!isNative) throw new IapError('App内課金はアプリからのみ利用できます')
 
   const entitlements = await Subscriptions.getCurrentEntitlements()
-  const active = entitlements.data?.find(t => t.productIdentifier === PRO_PRODUCT_ID)
+  const active = entitlements.data?.find(t => PRO_PRODUCT_IDS.includes(t.productIdentifier))
   if (!active?.transactionId) {
     throw new IapError('この Apple ID で有効な購入は見つかりませんでした。')
   }

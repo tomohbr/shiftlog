@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
-import { FREE_STAFF_LIMIT, PRICE_PER_MONTH, TRIAL_DAYS, getStaffCount, getTrialInfo } from '../utils/billing';
+import { FREE_STAFF_LIMIT, PRICE_PER_MONTH, PRICE_PER_YEAR, TRIAL_DAYS, getStaffCount, getTrialInfo } from '../utils/billing';
 import {
   APPLE_PRO_PRODUCT_ID,
+  APPLE_PRO_PRODUCT_IDS,
+  APPLE_PRO_YEARLY_PRODUCT_ID,
   AppleSubscriptionConflict,
   applyAppleSubscription,
   decodeTransactionFromNotification,
@@ -41,6 +43,7 @@ router.get('/plan', authenticateToken, requireCompany, (req: AuthRequest, res: R
     max_stores: subscription?.max_stores || 1,
     current_stores: storeCount,
     price_per_store: PRICE_PER_STORE,
+    price_per_year: PRICE_PER_YEAR,
     max_free_staff: FREE_STAFF_LIMIT,
     current_staff: getStaffCount(companyId),
     stripe_configured: !!process.env.STRIPE_SECRET_KEY,
@@ -48,6 +51,7 @@ router.get('/plan', authenticateToken, requireCompany, (req: AuthRequest, res: R
     platform: subscription?.platform || 'stripe',
     apple_configured: isAppleIapConfigured(),
     apple_product_id: APPLE_PRO_PRODUCT_ID,
+    apple_product_ids: { monthly: APPLE_PRO_PRODUCT_ID, yearly: APPLE_PRO_YEARLY_PRODUCT_ID },
     trial_days_total: TRIAL_DAYS,
     in_trial: trial.in_trial,
     trial_ends_at: trial.trial_ends_at,
@@ -67,6 +71,9 @@ router.post('/checkout', authenticateToken, requireCompany, async (req: AuthRequ
 
   const addStores = Math.max(0, Number(req.body.additional_stores ?? 0));
   const checkoutType = addStores > 0 ? 'additional_store' : 'pro';
+  // 年払いは Pro 本体のみ（追加店舗は月額のまま）
+  const yearly = checkoutType === 'pro' && req.body.interval === 'year';
+  const unitAmount = yearly ? PRICE_PER_YEAR : PRICE_PER_STORE;
 
   try {
     // Get or create Stripe customer
@@ -103,13 +110,17 @@ router.post('/checkout', authenticateToken, requireCompany, async (req: AuthRequ
       line_items: [{
         price_data: {
           currency: 'jpy',
-          unit_amount: PRICE_PER_STORE,
-          recurring: { interval: 'month' },
+          unit_amount: unitAmount,
+          recurring: { interval: yearly ? 'year' : 'month' },
           product_data: {
-            name: addStores > 0 ? `シフトログ 追加店舗プラン（${addStores}店舗）` : 'シフトログ Proプラン',
+            name: addStores > 0
+              ? `シフトログ 追加店舗プラン（${addStores}店舗）`
+              : yearly ? 'シフトログ Proプラン（年払い）' : 'シフトログ Proプラン',
             description: addStores > 0
               ? `追加店舗 ${addStores}店舗 / 月額¥${PRICE_PER_STORE}`
-              : `CSV出力・月次集計・スタッフ31名以上 / 月額¥${PRICE_PER_STORE}`,
+              : yearly
+                ? `CSV出力・過去月の集計・スタッフ${FREE_STAFF_LIMIT + 1}名以上 / 年額¥${PRICE_PER_YEAR}（2ヶ月分お得）`
+                : `CSV出力・過去月の集計・スタッフ${FREE_STAFF_LIMIT + 1}名以上 / 月額¥${PRICE_PER_STORE}`,
           },
         },
         quantity: Math.max(1, addStores),
@@ -118,6 +129,7 @@ router.post('/checkout', authenticateToken, requireCompany, async (req: AuthRequ
         company_id: String(companyId),
         additional_stores: String(addStores),
         checkout_type: checkoutType,
+        interval: yearly ? 'year' : 'month',
       },
       success_url: `${baseUrl}/settings?checkout=success`,
       cancel_url: `${baseUrl}/settings?checkout=cancel`,
@@ -215,7 +227,7 @@ router.post('/apple/verify', authenticateToken, requireCompany, async (req: Auth
   try {
     const verified = await verifyTransaction(transactionId);
 
-    if (verified.transaction.productId !== APPLE_PRO_PRODUCT_ID) {
+    if (!APPLE_PRO_PRODUCT_IDS.includes(verified.transaction.productId || '')) {
       res.status(400).json({ error: '対象外の商品です' });
       return;
     }

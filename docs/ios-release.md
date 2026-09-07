@@ -102,12 +102,14 @@ App Store Connect → 対象アプリ → 「App内課金」→ サブスクリ�
 
 | 項目 | 値 |
 |---|---|
-| 参照名 | シフトログ Pro（月額） |
-| 製品ID | `com.tomohbr.shiftlog.pro.monthly` |
-| 期間 | 1ヶ月 |
-| 価格 | ¥980 |
-| 表示名 | シフトログ Pro |
-| 説明 | 過去月の集計・CSV出力・給与ソフト連携・スタッフ数無制限が使えるプランです。 |
+| 参照名 | シフトログ Pro（月額） | シフトログ Pro（年額） |
+| 製品ID | `com.tomohbr.shiftlog.pro.monthly` | `com.tomohbr.shiftlog.pro.yearly` |
+| 期間 | 1ヶ月 | 1年 |
+| 価格 | ¥980 | ¥9,800 |
+| 表示名 | シフトログ Pro | シフトログ Pro（年払い） |
+| 説明 | 過去月の集計・CSV出力・給与ソフト連携・スタッフ数無制限が使えるプランです。 | 同左。2ヶ月分お得。 |
+
+2商品は**同じサブスクリプショングループ**に入れる。Free プランは 1店舗・スタッフ5名まで（2026-09-07 に 30名から変更）。
 
 3. **審査用の情報**にスクリーンショット（購入画面）と、以下のメモを入れる
    > 設定画面の「プラン」セクションから購入できます。審査用アカウントでログイン後、左メニュー「設定」→「プラン」→「Proにアップグレード」。
@@ -137,6 +139,7 @@ App Store Connect → ユーザーとアクセス → 「統合」→ App Store 
 | `APPLE_APP_APPLE_ID` | 手順4で控えたアプリID（数値） |
 | `APPLE_BUNDLE_ID` | `com.tomohbr.shiftlog`（既定値と同じなので省略可） |
 | `APPLE_PRO_PRODUCT_ID` | `com.tomohbr.shiftlog.pro.monthly`（同上） |
+| `APPLE_PRO_YEARLY_PRODUCT_ID` | `com.tomohbr.shiftlog.pro.yearly`（同上） |
 
 ### 6-2. App Store Server Notifications V2
 

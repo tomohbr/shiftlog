@@ -7,23 +7,27 @@ import { track } from './analytics'
 // 購入導線を共通化し、アプリでは必ずApp内課金を使う。
 export async function startProUpgrade(opts: {
   productId?: string
+  /** 月払い（既定）か年払いか */
+  interval?: 'month' | 'year'
   onUpgraded?: (plan: BillingPlan) => void
   setLoading?: (loading: boolean) => void
   additionalStores?: number
 } = {}): Promise<void> {
   if (isNative && opts.additionalStores) return
+  const interval = opts.interval || 'month'
   opts.setLoading?.(true)
   try {
     if (isNative) {
-      const productId = opts.productId || (await billingApi.getPlan()).data.apple_product_id
-      track('checkout_click', { platform: 'apple' })
+      const ids = (await billingApi.getPlan()).data.apple_product_ids
+      const productId = opts.productId || (interval === 'year' ? ids.yearly : ids.monthly)
+      track('checkout_click', { platform: 'apple', interval })
       const result = await purchasePro(productId)
-      if (result.plan === 'pro') track('pro_upgrade_success', { platform: 'apple' })
+      if (result.plan === 'pro') track('pro_upgrade_success', { platform: 'apple', interval })
       toast.success('Proプランが有効になりました')
       opts.onUpgraded?.((await billingApi.getPlan()).data)
     } else {
-      track('checkout_click', { platform: 'stripe' })
-      const res = await billingApi.createCheckout(opts.additionalStores)
+      track('checkout_click', { platform: 'stripe', interval })
+      const res = await billingApi.createCheckout(opts.additionalStores, interval)
       window.location.href = res.data.url
     }
   } catch (e: any) {

@@ -177,8 +177,8 @@ const PAINS = [
   },
 ]
 
-const FREE_ITEMS = ['出退勤打刻（スマホ / 店舗タブレット）', 'シフト作成・希望収集', '当月の勤務集計・人件費', 'スタッフ30名まで', 'LINE通知・シフト自動生成']
-const PRO_ITEMS = ['Freeの全機能', '過去月の集計・履歴', '勤怠・シフトのCSV出力', '給与ソフト連携（freee / マネフォ / KOT）', 'スタッフ無制限', '追加店舗（+¥980/店舗）']
+const FREE_ITEMS = ['出退勤打刻（スマホ / 店舗タブレット）', 'シフト作成・希望収集', '当月の勤務集計・人件費', 'スタッフ5名まで', 'LINE通知・シフト自動生成']
+const PRO_ITEMS = ['Freeの全機能', '過去月の集計・履歴', '勤怠・シフトのCSV出力', '給与ソフト連携（freee / マネフォ / KOT）', 'スタッフ無制限', '年払いなら ¥9,800/年（2ヶ月分お得）', '追加店舗（+¥980/店舗）']
 
 const FAQS = [
   {
@@ -269,7 +269,7 @@ export default function LandingPage() {
             </h1>
             <p className="text-base sm:text-lg text-slate-300 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0">
               シフトログなら<span className="text-blue-400 font-bold">10分</span>で乗り換えできます。
-              1店舗・スタッフ30名までずっと無料。全機能使っても月980円（税込）です。
+              1店舗・スタッフ5名までずっと無料。何人使っても月980円（税込）です。
             </p>
             <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
               <CTAButton large location="hero" />
@@ -309,10 +309,10 @@ export default function LandingPage() {
               </thead>
               <tbody className="text-gray-700">
                 {[
+                  { staff: '3名', air: '月990円', log: '¥0（Freeプラン）' },
                   { staff: '5名', air: '月1,650円', log: '¥0（Freeプラン）' },
-                  { staff: '10名', air: '月3,300円', log: '¥0（Freeプラン）' },
-                  { staff: '30名', air: '月9,900円', log: '¥0（Freeプラン）' },
-                  { staff: '31名以上', air: '人数分の月額', log: '月980円（定額）' },
+                  { staff: '10名', air: '月3,300円', log: '月980円（定額）' },
+                  { staff: '30名', air: '月9,900円', log: '月980円（定額）' },
                 ].map(r => (
                   <tr key={r.staff} className="border-b border-gray-100 last:border-0">
                     <td className="px-2.5 sm:px-6 py-3.5 font-medium whitespace-nowrap">{r.staff}</td>
@@ -545,7 +545,7 @@ export default function LandingPage() {
               <p className="text-4xl font-bold text-gray-900 mt-3 mb-1">
                 ¥0<span className="text-base font-normal text-gray-400">/月</span>
               </p>
-              <p className="text-sm text-gray-500 mb-7">1店舗の日々の運用は、ずっと無料</p>
+              <p className="text-sm text-gray-500 mb-7">スタッフ5名までの店は、ずっと無料</p>
               <ul className="space-y-3">
                 {FREE_ITEMS.map(item => (
                   <li key={item} className="flex items-start gap-2.5 text-sm text-gray-600">
@@ -563,7 +563,7 @@ export default function LandingPage() {
               <p className="text-4xl font-bold text-gray-900 mt-3 mb-1">
                 ¥980<span className="text-base font-normal text-gray-400">/月（税込）</span>
               </p>
-              <p className="text-sm text-gray-500 mb-7">月末の給与計算まで、これひとつで</p>
+              <p className="text-sm text-gray-500 mb-7">年払いなら ¥9,800/年。月末の給与計算まで、これひとつで</p>
               <ul className="space-y-3">
                 {PRO_ITEMS.map(item => (
                   <li key={item} className="flex items-start gap-2.5 text-sm text-gray-600">
@@ -575,7 +575,7 @@ export default function LandingPage() {
             </div>
           </div>
           <p className="text-center text-sm text-gray-600 mt-8">
-            Airシフトのスタッフ3人分の料金（¥330/人 × 3人 = ¥990/月）より安く、シフトログのProは何人使っても月¥980です。
+            Airシフトはスタッフ10人で月¥3,300（¥330/人）。シフトログのProは何人使っても月¥980です。
           </p>
           <p className="text-center text-sm text-gray-400 mt-2">
             トライアル終了後は自動でFreeプランに。<span className="font-medium text-gray-500">データは消えず、請求も発生しません。</span>

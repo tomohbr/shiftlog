@@ -20,8 +20,8 @@ export default function TokushohoPage() {
       label: '販売価格',
       value: (
         <div className="space-y-1">
-          <p>Freeプラン: 無料（1店舗・スタッフ30名まで）</p>
-          <p>Proプラン: 月額980円（税込）</p>
+          <p>Freeプラン: 無料（1店舗・スタッフ5名まで）</p>
+          <p>Proプラン: 月額980円（税込）／年払い 9,800円（税込）</p>
           <p>追加店舗: 1店舗あたり月額980円（税込）</p>
         </div>
       ),

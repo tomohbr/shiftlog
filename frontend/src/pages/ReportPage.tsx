@@ -121,7 +121,7 @@ export default function ReportPage() {
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-yellow-900">過去月の集計・CSV出力はPro機能です</p>
-            <p className="text-sm text-yellow-800 mt-1">打刻・シフト管理・当月の集計は無料のまま使えます。過去月の履歴、CSV出力、スタッフ31名以上は月額¥980で利用できます。</p>
+            <p className="text-sm text-yellow-800 mt-1">打刻・シフト管理・当月の集計は無料のまま使えます。過去月の履歴、CSV出力、スタッフ6名以上は月額¥980（年払い¥9,800）で利用できます。</p>
           </div>
           <button
             onClick={startProCheckout}

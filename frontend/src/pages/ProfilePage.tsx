@@ -7,7 +7,7 @@ import { authApi, usersApi, icalApi, billingApi, BillingPlan, AccountDeletionInf
 import { User, Mail, Lock, Save, Calendar, Copy, Trash2, Sun, Moon, Crown, CreditCard, Sparkles, AlertTriangle, Bell, Fingerprint, RotateCcw, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { apiOrigin, isNative } from '../native/platform'
-import { AppleProduct, getProProduct, openManageSubscriptions, restorePro } from '../native/iap'
+import { AppleProduct, PRO_YEARLY_PRODUCT_ID, getProProduct, openManageSubscriptions, restorePro } from '../native/iap'
 import { getBiometricInfo, isAppLockEnabled, setAppLockEnabled, verifyIdentity } from '../native/biometric'
 import { getPushPermission, registerPush } from '../native/push'
 
@@ -54,6 +54,7 @@ export default function ProfilePage() {
 
   // ---- iOS: App内課金 / 生体認証 / プッシュ通知 ----
   const [appleProduct, setAppleProduct] = useState<AppleProduct | null>(null)
+  const [appleYearly, setAppleYearly] = useState<AppleProduct | null>(null)
   const [biometry, setBiometry] = useState<{ available: boolean; label: string | null }>({ available: false, label: null })
   const [appLock, setAppLock] = useState(false)
   const [pushPermission, setPushPermission] = useState<'granted' | 'denied' | 'prompt' | 'unavailable'>('unavailable')
@@ -61,6 +62,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!isNative) return
     void getProProduct().then(setAppleProduct)
+    void getProProduct(PRO_YEARLY_PRODUCT_ID).then(setAppleYearly)
     void getBiometricInfo().then(setBiometry)
     void isAppLockEnabled().then(setAppLock)
     void getPushPermission().then(setPushPermission)
@@ -88,7 +90,9 @@ export default function ProfilePage() {
   }
 
   // 共通の購入処理で端末に合った決済を開始する。
-  const handleUpgrade = () => startProUpgrade({ setLoading: setBillingLoading, productId: plan?.apple_product_id, onUpgraded: setPlan })
+  // 月払い / 年払い。iOS は App内課金、Web は Stripe（lib/proUpgrade.ts で分岐）
+  const handleUpgrade = (interval: 'month' | 'year' = 'month') =>
+    startProUpgrade({ setLoading: setBillingLoading, interval, onUpgraded: setPlan })
 
   // Apple の要求: 購入の復元導線をアプリ内に必ず用意すること
   const handleRestore = async () => {
@@ -271,7 +275,7 @@ export default function ProfilePage() {
           {plan.plan !== 'pro' && (
             <div className="text-sm text-gray-600 mb-4 space-y-1">
               <p>Free: 打刻・シフト管理・当月の勤務集計（1店舗・スタッフ{plan.max_free_staff}名まで）</p>
-              <p>Pro（月額¥{plan.price_per_store.toLocaleString()}）: 過去月の集計・CSV出力・給与ソフト連携・スタッフ無制限</p>
+              <p>Pro（月額¥{plan.price_per_store.toLocaleString()} / 年払い¥{plan.price_per_year.toLocaleString()}）: 過去月の集計・CSV出力・給与ソフト連携・スタッフ無制限</p>
             </div>
           )}
 
@@ -280,17 +284,27 @@ export default function ProfilePage() {
             <div className="space-y-3">
               {plan.plan !== 'pro' && (
                 <>
-                  <button
-                    onClick={handleUpgrade}
-                    disabled={billingLoading}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium disabled:opacity-50"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    {plan.in_trial ? 'Proを続ける' : 'Proにアップグレード'}
-                    （{appleProduct?.price || `¥${plan.price_per_store.toLocaleString()}`}／月）
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleUpgrade('month')}
+                      disabled={billingLoading}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      {plan.in_trial ? 'Proを続ける' : 'Proにアップグレード'}
+                      （{appleProduct?.price || `¥${plan.price_per_store.toLocaleString()}`}／月）
+                    </button>
+                    <button
+                      onClick={() => handleUpgrade('year')}
+                      disabled={billingLoading}
+                      className="flex items-center gap-2 px-5 py-2.5 border border-amber-400 text-amber-700 rounded-lg hover:bg-amber-50 font-medium disabled:opacity-50"
+                    >
+                      年払い（{appleYearly?.price || `¥${plan.price_per_year.toLocaleString()}`}／年・2ヶ月分お得）
+                    </button>
+                  </div>
                   <p className="text-xs text-gray-500 leading-relaxed">
-                    シフトログ Pro — 月額{appleProduct?.price || `¥${plan.price_per_store.toLocaleString()}`}（1ヶ月ごとの自動更新）。
+                    シフトログ Pro — 月額{appleProduct?.price || `¥${plan.price_per_store.toLocaleString()}`}（1ヶ月ごとの自動更新）、
+                    または年額{appleYearly?.price || `¥${plan.price_per_year.toLocaleString()}`}（1年ごとの自動更新）。
                     お支払いは Apple ID に請求されます。期間終了の24時間前までに解約されない場合、自動的に更新されます。
                     購入後は「設定」→ Apple ID →「サブスクリプション」からいつでも解約できます。
                   </p>
@@ -337,14 +351,23 @@ export default function ProfilePage() {
             <>
               <div className="flex flex-wrap gap-2">
                 {plan.plan !== 'pro' && (
-                  <button
-                    onClick={handleUpgrade}
-                    disabled={billingLoading}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium disabled:opacity-50"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    {plan.in_trial ? 'Proを続ける' : 'Proにアップグレード'}（月額¥{plan.price_per_store.toLocaleString()}）
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleUpgrade('month')}
+                      disabled={billingLoading}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      {plan.in_trial ? 'Proを続ける' : 'Proにアップグレード'}（月額¥{plan.price_per_store.toLocaleString()}）
+                    </button>
+                    <button
+                      onClick={() => handleUpgrade('year')}
+                      disabled={billingLoading}
+                      className="flex items-center gap-2 px-5 py-2.5 border border-amber-400 text-amber-700 rounded-lg hover:bg-amber-50 font-medium disabled:opacity-50"
+                    >
+                      年払い（¥{plan.price_per_year.toLocaleString()}／年・2ヶ月分お得）
+                    </button>
+                  </>
                 )}
                 {plan.plan === 'pro' && plan.platform === 'apple' && (
                   <p className="text-sm text-gray-600">

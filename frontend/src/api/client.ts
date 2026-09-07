@@ -199,6 +199,8 @@ export interface BillingPlan {
   max_stores: number
   current_stores: number
   price_per_store: number
+  /** 年払いの価格（2ヶ月分お得） */
+  price_per_year: number
   max_free_staff: number
   current_staff: number
   stripe_configured: boolean
@@ -206,6 +208,7 @@ export interface BillingPlan {
   platform: 'stripe' | 'apple'
   apple_configured: boolean
   apple_product_id: string
+  apple_product_ids: { monthly: string; yearly: string }
   trial_days_total: number
   in_trial: boolean
   trial_ends_at: string | null
@@ -218,8 +221,8 @@ export const billingApi = {
     api.post<{ plan: string; status: string; platform: string; expires_at: string | null }>(
       '/billing/apple/verify', { transaction_id }
     ),
-  createCheckout: (additional_stores: number = 0) =>
-    api.post<{ url: string }>('/billing/checkout', { additional_stores }),
+  createCheckout: (additional_stores: number = 0, interval: 'month' | 'year' = 'month') =>
+    api.post<{ url: string }>('/billing/checkout', { additional_stores, interval }),
   createPortal: () => api.post<{ url: string }>('/billing/portal'),
 }
 

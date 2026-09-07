@@ -349,7 +349,7 @@ export default function StaffPage() {
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-yellow-900">無料プランのスタッフ上限に達しています</p>
-            <p className="text-sm text-yellow-800 mt-1">30名までは無料です。31名以上のスタッフ登録、月次集計、CSV出力はPro（月額¥980）で利用できます。</p>
+            <p className="text-sm text-yellow-800 mt-1">5名までは無料です。6名以上のスタッフ登録、過去月の集計、CSV出力はPro（月額¥980・年払い¥9,800）で利用できます。</p>
           </div>
           <button
             onClick={startProCheckout}
