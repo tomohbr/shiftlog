@@ -14,12 +14,14 @@
 | iOS プロジェクト（`frontend/ios`） | ✅ 生成済み・Info.plist と署名設定を調整済み |
 | アプリアイコン（1024×1024・アルファなし） | ✅ 生成済み |
 | App Store 用スクリーンショット（1320×2868） | ✅ 撮影済み（`store-assets/screenshots-ios/`） |
-| Apple Developer Program | ❌ **未加入。ここが最初のブロッカー** |
-| Xcode | ❌ **未インストール。約15GB** |
-| App Store Connect のアプリレコード | ❌ 未作成 |
+| Apple Developer Program | ✅ 加入済み（個人 / Team ID `A6T9273A37`） |
+| Xcode | ✅ 26.6 導入済み。署名IDあり。キーチェーンは codesign を「常に許可」済み |
+| Bundle ID | ✅ `com.tomohbr.shiftlog`（`com.shiftlog.app` は他チームに取られていたため変更。2026-09-07） |
+| Archive / IPA | ✅ **2026-09-07 `xcodebuild archive` → `-exportArchive`（app-store-connect）まで無人で成功** |
+| App Store Connect のアプリレコード | ❌ **未作成。次のブロッカー**（手順4） |
 | APNs / App内課金のサーバー設定（環境変数） | ❌ 未設定 |
 
-Xcode と Apple Developer Program は本人確認とサインインが必要なため、代わりに実行できない。この2つが揃えば、あとはこの手順書のとおりに進められる。
+Archive とエクスポートはコマンドで再現できる（付録参照）。App Store Connect のアプリ作成だけは Web 画面での操作が必要。
 
 ---
 
@@ -266,6 +268,16 @@ App Store Connect → バージョン情報 →
 ## 付録: よく使うコマンド
 
 ```bash
+# App Store 用の Archive → IPA（Bash ツールのサンドボックス外で実行すること。キーチェーンに届かない）
+cd ~/カンパニー/shiftlog/frontend && npm run build && npx cap sync ios && cd ios/App
+xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphoneos \
+  -destination 'generic/platform=iOS' -archivePath /tmp/shiftlog.xcarchive \
+  -derivedDataPath /tmp/shiftlog-dd-archive -allowProvisioningUpdates archive
+xcodebuild -exportArchive -archivePath /tmp/shiftlog.xcarchive \
+  -exportOptionsPlist ../ExportOptions.plist -exportPath /tmp/shiftlog-export -allowProvisioningUpdates
+# App Store Connect にアプリレコードを作った後は、ExportOptions.plist の destination を upload にすれば
+# エクスポートと同時にアップロードされる（Xcode にサインイン済みの Apple ID を使う）
+
 # Web を更新して iOS に反映する（変更のたびに必要）
 cd ~/カンパニー/shiftlog/frontend && npm run build && npx cap sync ios
 
