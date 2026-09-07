@@ -11,7 +11,7 @@ import db from '../db';
 //   APNS_TEAM_ID      Apple Developer の Team ID（10文字）
 //   APNS_KEY_ID       APNs 認証キーの Key ID（10文字）
 //   APNS_PRIVATE_KEY  .p8 の中身。改行は \n でエスケープしてもよい
-//   APNS_BUNDLE_ID    既定 com.shiftlog.app
+//   APNS_BUNDLE_ID    既定 com.tomohbr.shiftlog
 //   APNS_ENVIRONMENT  'production'（既定） or 'sandbox'。TestFlight は production 側。
 //                     Xcode から直接実機に入れたビルドだけ sandbox。
 
@@ -52,7 +52,7 @@ function getConfig(): ApnsConfig | null {
     keyId,
     // Railway の環境変数に貼るとき改行が \n になりがちなので戻す
     privateKey: rawKey.replace(/\\n/g, '\n'),
-    bundleId: process.env.APNS_BUNDLE_ID || 'com.shiftlog.app',
+    bundleId: process.env.APNS_BUNDLE_ID || 'com.tomohbr.shiftlog',
     host: process.env.APNS_ENVIRONMENT === 'sandbox' ? SANDBOX_HOST : PROD_HOST,
   };
 }

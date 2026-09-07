@@ -11,7 +11,7 @@ import { isNative } from './platform'
 // App Store Server API に問い合わせて Apple 署名の取引情報を検証し、Pro を付与する。
 // 端末が「買えました」と言うのを信用しない作りにしてある。
 
-export const PRO_PRODUCT_ID = 'com.shiftlog.app.pro.monthly'
+export const PRO_PRODUCT_ID = 'com.tomohbr.shiftlog.pro.monthly'
 
 export interface AppleProduct {
   productId: string

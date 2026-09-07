@@ -20,7 +20,7 @@
    - PWA対応済みなのでパスするはず
 
 4. **「Package for stores」→「Android」を選択**
-   - Package IDに `com.shiftlog.app` を入力
+   - Package IDに `com.tomohbr.shiftlog` を入力
    - App nameに `シフトログ` を入力
    - 「Generate」でAPK/AABがダウンロードされる
 

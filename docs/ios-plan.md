@@ -113,7 +113,7 @@ iOS アプリ             →  StoreKit 2 (IAP)     → subscriptions.platform =
 ```
 
 1. **App Store Connect でサブスクリプション商品を作成**
-   - 商品ID: `com.shiftlog.app.pro.monthly`
+   - 商品ID: `com.tomohbr.shiftlog.pro.monthly`
    - 価格: ¥980/月（Apple の価格帯から選択）
    - 手数料: 15%（Small Business Program 適用時。年間100万ドル以下なら申請可能）→ 手取り ¥833
    - Stripe の場合の手数料は3.6%程度なので、**iOS経由だと1件あたり約110円/月の目減り**
@@ -211,7 +211,7 @@ LP（`shiftlog-lp/index.html`）内に記載があるが、**単独の公開URL�
 
 ```
 frontend/
-  capacitor.config.ts          appId=com.shiftlog.app / webDir=dist
+  capacitor.config.ts          appId=com.tomohbr.shiftlog / webDir=dist
   .npmrc                       legacy-peer-deps（StoreKitプラグインのpeer競合回避）
   ios/App/                     Xcode プロジェクト（SPM。Podfile は無い）
     App/Info.plist             NSFaceIDUsageDescription / ITSAppUsesNonExemptEncryption 等
@@ -237,7 +237,7 @@ backend/
   scripts/create-review-account.js   審査用デモアカウントの生成
 ```
 
-`com.shiftlog.app` は Google Play（TWA）で使っている Package ID と揃えてある（`store-assets/twa-manifest.json`）。
+`com.tomohbr.shiftlog` は Google Play（TWA）で使っている Package ID と揃えてある（`store-assets/twa-manifest.json`）。
 
 ### DB の追加分（既存DBには起動時に自動マイグレーション）
 

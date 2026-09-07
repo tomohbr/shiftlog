@@ -6,7 +6,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 // - Guideline 4.2「Webサイトのラッパー」で弾かれやすい
 // - オフライン打刻が成立しない
 const config: CapacitorConfig = {
-  appId: 'com.shiftlog.app',
+  appId: 'com.tomohbr.shiftlog',
   appName: 'シフトログ',
   webDir: 'dist',
   ios: {

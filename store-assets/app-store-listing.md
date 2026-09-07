@@ -8,7 +8,7 @@ App Store Connect に入力する内容。文字数はすべて上限内に収�
 
 | 項目 | 値 |
 |---|---|
-| Bundle ID | `com.shiftlog.app`（Google Play の Package ID と統一） |
+| Bundle ID | `com.tomohbr.shiftlog`（Google Play の Package ID と統一） |
 | SKU | `shiftlog-ios-001` |
 | プライマリカテゴリ | ビジネス |
 | セカンダリカテゴリ | 仕事効率化 |
@@ -130,7 +130,7 @@ App内課金の購入画面からも、プライバシーポリシーと利用�
 | 項目 | 値 |
 |---|---|
 | 参照名 | シフトログ Pro（月額） |
-| 商品ID | `com.shiftlog.app.pro.monthly` |
+| 商品ID | `com.tomohbr.shiftlog.pro.monthly` |
 | 期間 | 1ヶ月 |
 | 価格 | ¥980 |
 | 表示名 | シフトログ Pro |
@@ -282,7 +282,7 @@ Resolution Center への返信は英語で書く。以下は要点。
 - [x] 利用規約（EULA）が単独URLで公開されている（`/legal/terms`）
 - [x] アプリアイコン 1024×1024（アルファなし）を用意した
 - [x] スクリーンショットを 6.9インチ サイズで撮り直した
-- [ ] App Store Connect で App内課金の商品（`com.shiftlog.app.pro.monthly`）を登録した
+- [ ] App Store Connect で App内課金の商品（`com.tomohbr.shiftlog.pro.monthly`）を登録した
 - [ ] Railway に APNs / App内課金の環境変数を設定した
 - [ ] App Store Server Notifications V2 のURLを登録し、テスト通知が届いた
 - [ ] 審査用デモアカウントを本番で作成し、認証情報を控えた

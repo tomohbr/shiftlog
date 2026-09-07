@@ -26,11 +26,11 @@ import db from '../db';
 //   APPLE_IAP_ISSUER_ID    同 Issuer ID（UUID）
 //   APPLE_IAP_PRIVATE_KEY  同 .p8 の中身（改行は \n エスケープ可）
 //   APPLE_APP_APPLE_ID     App Store のアプリID（数値）。本番の通知検証に必要
-//   APPLE_BUNDLE_ID        既定 com.shiftlog.app
-//   APPLE_PRO_PRODUCT_ID   既定 com.shiftlog.app.pro.monthly
+//   APPLE_BUNDLE_ID        既定 com.tomohbr.shiftlog
+//   APPLE_PRO_PRODUCT_ID   既定 com.tomohbr.shiftlog.pro.monthly
 
-export const APPLE_BUNDLE_ID = process.env.APPLE_BUNDLE_ID || 'com.shiftlog.app';
-export const APPLE_PRO_PRODUCT_ID = process.env.APPLE_PRO_PRODUCT_ID || 'com.shiftlog.app.pro.monthly';
+export const APPLE_BUNDLE_ID = process.env.APPLE_BUNDLE_ID || 'com.tomohbr.shiftlog';
+export const APPLE_PRO_PRODUCT_ID = process.env.APPLE_PRO_PRODUCT_ID || 'com.tomohbr.shiftlog.pro.monthly';
 
 
 const CERT_DIR = path.join(__dirname, '..', '..', 'certs');

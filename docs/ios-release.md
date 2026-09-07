@@ -61,7 +61,7 @@ Xcode 側で以下を確認する。
 
 1. **Signing & Capabilities タブ**
    - Team: 加入した Apple Developer アカウントを選択
-   - Bundle Identifier: `com.shiftlog.app`（設定済み）
+   - Bundle Identifier: `com.tomohbr.shiftlog`（設定済み）
    - Automatically manage signing: オン
 2. **Capabilities に以下が入っているか**（`App.entitlements` を先に用意してあるので、Push Notifications は自動で認識されるはず）
    - **Push Notifications** — 入っていなければ「+ Capability」から追加
@@ -81,7 +81,7 @@ https://appstoreconnect.apple.com/ → マイApp → 「+」
 | プラットフォーム | iOS |
 | 名前 | シフトログ - シフト管理・勤怠打刻 |
 | プライマリ言語 | 日本語 |
-| バンドルID | `com.shiftlog.app` |
+| バンドルID | `com.tomohbr.shiftlog` |
 | SKU | `shiftlog-ios-001` |
 
 作成後、**App Store 上のアプリID（数値）** を控える。URL の `/app/` の後ろの数字。あとで `APPLE_APP_APPLE_ID` に設定する。
@@ -100,7 +100,7 @@ App Store Connect → 対象アプリ → 「App内課金」→ サブスクリ�
 | 項目 | 値 |
 |---|---|
 | 参照名 | シフトログ Pro（月額） |
-| 製品ID | `com.shiftlog.app.pro.monthly` |
+| 製品ID | `com.tomohbr.shiftlog.pro.monthly` |
 | 期間 | 1ヶ月 |
 | 価格 | ¥980 |
 | 表示名 | シフトログ Pro |
@@ -132,8 +132,8 @@ App Store Connect → ユーザーとアクセス → 「統合」→ App Store 
 | `APPLE_IAP_ISSUER_ID` | 同じ画面に表示される Issuer ID（UUID） |
 | `APPLE_IAP_PRIVATE_KEY` | `.p8` の中身をそのまま貼る（改行は `\n` にエスケープしてもよい） |
 | `APPLE_APP_APPLE_ID` | 手順4で控えたアプリID（数値） |
-| `APPLE_BUNDLE_ID` | `com.shiftlog.app`（既定値と同じなので省略可） |
-| `APPLE_PRO_PRODUCT_ID` | `com.shiftlog.app.pro.monthly`（同上） |
+| `APPLE_BUNDLE_ID` | `com.tomohbr.shiftlog`（既定値と同じなので省略可） |
+| `APPLE_PRO_PRODUCT_ID` | `com.tomohbr.shiftlog.pro.monthly`（同上） |
 
 ### 6-2. App Store Server Notifications V2
 
@@ -157,7 +157,7 @@ Apple Developer → Certificates, Identifiers & Profiles → Keys → 「+」→
 | `APNS_TEAM_ID` | Apple Developer の Team ID（10文字） |
 | `APNS_KEY_ID` | 作成した APNs キーの Key ID |
 | `APNS_PRIVATE_KEY` | `.p8` の中身 |
-| `APNS_BUNDLE_ID` | `com.shiftlog.app`（省略可） |
+| `APNS_BUNDLE_ID` | `com.tomohbr.shiftlog`（省略可） |
 | `APNS_ENVIRONMENT` | `production`（既定）。**Xcode から実機に直接入れたビルドで試すときだけ `sandbox`** |
 
 > TestFlight と App Store 配信のビルドは `production` 側。Xcode から直挿ししたビルドだけが `sandbox`。ここを間違えると通知が届かない。
