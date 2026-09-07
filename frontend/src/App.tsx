@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { trackPageView } from './lib/analytics'
 import LoginPage from './pages/LoginPage'
 import LandingPage from './pages/LandingPage'
 import TokushohoPage from './pages/TokushohoPage'
@@ -41,6 +43,9 @@ import { isNative } from './native/platform'
 function AppRoutes() {
   const { user, selectedCompany, loading, justRegistered } = useAuth()
   const location = useLocation()
+
+  // どの画面まで来たかを記録する（離脱箇所の把握用。ログイン前も含む）
+  useEffect(() => { trackPageView(location.pathname) }, [location.pathname])
 
   // 法的ページはログイン状態に関係なく表示。
   // プライバシーポリシーは App Store Connect に提出する単独URLでもあるため、

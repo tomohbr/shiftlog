@@ -37,6 +37,8 @@ export function deleteCompanyData(companyId: number): void {
   db.prepare('DELETE FROM absence_reports WHERE company_id = ?').run(companyId);
 
   db.prepare('DELETE FROM punch_receipts WHERE company_id = ?').run(companyId);
+  db.prepare('DELETE FROM usage_events WHERE company_id = ?').run(companyId);
+  db.prepare('DELETE FROM client_errors WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM time_records WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shifts WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_publications WHERE company_id = ?').run(companyId);
@@ -79,6 +81,8 @@ function deleteUserPersonalData(userId: number): void {
   db.prepare('DELETE FROM ical_tokens WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM device_tokens WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM usage_events WHERE user_id = ?').run(userId);
+  db.prepare('UPDATE client_errors SET user_id = NULL WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM user_line_ids WHERE user_id = ?').run(userId);
 
   // 監査ログ・フィードバックは記録として残すが、個人との紐付けは外す

@@ -3,6 +3,7 @@ import { MessageCircle, Send, Bug, Lightbulb, HelpCircle, MoreHorizontal, CheckC
 import { feedbackApi, FeedbackCategory } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
+import { isNative } from '../native/platform'
 
 const CATEGORIES: { id: FeedbackCategory; label: string; desc: string; icon: any; color: string }[] = [
   { id: 'bug', label: 'バグ報告', desc: '動作がおかしい・エラーが出る', icon: Bug, color: 'red' },
@@ -27,7 +28,7 @@ export default function FeedbackPage() {
     }
     setSubmitting(true)
     try {
-      await feedbackApi.submit({ category, message: message.trim(), email: email.trim() || undefined })
+      await feedbackApi.submit({ category, message: message.trim(), email: email.trim() || undefined, platform: isNative ? 'ios' : 'web', path: window.location.pathname })
       toast.success('フィードバックを送信しました。ありがとうございました！')
       setSubmitted(true)
       setMessage('')

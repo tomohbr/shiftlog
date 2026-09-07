@@ -25,6 +25,9 @@ import autoScheduleRoutes from './routes/auto-schedule';
 import payrollRoutes from './routes/payroll';
 import seedRoutes from './routes/seed';
 import pushRoutes from './routes/push';
+import telemetryRoutes from './routes/telemetry';
+import { reportServerError } from './utils/ops-alerts';
+import { startDailyDigest } from './utils/daily-digest';
 import { startTrialNotifier } from './utils/trial-notify';
 
 const app = express();
@@ -82,6 +85,7 @@ app.use('/api/auto-schedule', autoScheduleRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/seed', seedRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/telemetry', telemetryRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -96,11 +100,34 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
+// API の未処理例外は 500 を返しつつ運営者に通知する（静的ファイル配信より後ろ、listen より前）
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // JSON の壊れたリクエストなど body-parser 由来の 4xx は利用者側の問題。通知せずそのまま返す
+  if (err && typeof err.status === 'number' && err.status >= 400 && err.status < 500) {
+    if (!res.headersSent) res.status(err.status).json({ error: 'リクエストの形式が正しくありません' });
+    return;
+  }
+  reportServerError(err, {
+    path: `${req.method} ${req.originalUrl}`,
+    userId: (req as any).user?.id ?? null,
+    companyId: (req as any).companyId ?? null,
+  });
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'サーバーでエラーが発生しました。時間をおいて再度お試しください。' });
+});
+
+// プロセス全体の取りこぼし（非同期の例外など）。落とさずに記録して通知する
+process.on('unhandledRejection', reason => reportServerError(reason, { path: 'unhandledRejection' }));
+process.on('uncaughtException', err => reportServerError(err, { path: 'uncaughtException' }));
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 
 // トライアル終了前後のメール通知（SMTP未設定時は自動スキップ）
 startTrialNotifier();
+
+// 運営者向け日次レポート（毎朝 9:00 JST）
+startDailyDigest();
 
 export default app;

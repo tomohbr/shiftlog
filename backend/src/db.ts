@@ -374,6 +374,40 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
 `);
 
+// ---- 利用状況・不具合の記録（運営者がどこで詰まっているかを見るため） ----
+db.exec(`
+  -- 画面遷移・主要操作。ログイン前の動きも入るので user_id / company_id は NULL 可
+  CREATE TABLE IF NOT EXISTS usage_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    company_id INTEGER,
+    platform TEXT NOT NULL DEFAULT 'web',
+    app_version TEXT,
+    event TEXT NOT NULL,
+    path TEXT,
+    meta TEXT,
+    session_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_usage_events_company ON usage_events(company_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_usage_events_created ON usage_events(created_at DESC);
+
+  -- クライアント／サーバーの例外
+  CREATE TABLE IF NOT EXISTS client_errors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    company_id INTEGER,
+    platform TEXT NOT NULL DEFAULT 'web',
+    app_version TEXT,
+    path TEXT,
+    message TEXT NOT NULL,
+    stack TEXT,
+    fingerprint TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_client_errors_created ON client_errors(created_at DESC);
+`);
+
 // ---- Migrations for existing DBs ----
 try {
   const userCols = db.prepare("PRAGMA table_info(users)").all().map((c: any) => c.name);

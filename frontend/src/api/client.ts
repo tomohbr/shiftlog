@@ -233,6 +233,9 @@ export interface FeedbackPayload {
   category: FeedbackCategory
   message: string
   email?: string
+  /** 送信元（web / ios）と、送ったときの画面。運営者への通知メールに載せる */
+  platform?: string
+  path?: string
 }
 export interface FeedbackItem {
   id: number

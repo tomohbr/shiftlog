@@ -29,6 +29,20 @@ interface Funnel {
   activeLast7d: number
 }
 
+// 会社ごとの「次にやるべきこと」と、そこで止まっている日数（/admin/progress）
+interface Progress {
+  id: number
+  step: 'store' | 'staff' | 'shift' | 'publish' | 'timecard' | 'done'
+  stuck_days: number
+  last_seen_at: string | null
+  last_path: string | null
+}
+const STEP_LABEL: Record<Progress['step'], string> = {
+  store: '店舗未作成', staff: 'スタッフ未登録', shift: 'シフト未作成', publish: 'シフト未公開', timecard: '打刻なし', done: '打刻まで到達',
+}
+
+interface ErrorSummary { fingerprint: string; platform: string; message: string; count: number; last_at: string }
+
 function daysSince(iso: string | null): number | null {
   if (!iso) return null
   const d = new Date(iso.replace(' ', 'T') + 'Z').getTime()
@@ -42,18 +56,36 @@ function pct(n: number, total: number): number {
 export default function CompanyActivityPage() {
   const [companies, setCompanies] = useState<CompanyUsage[]>([])
   const [funnel, setFunnel] = useState<Funnel | null>(null)
+  const [progress, setProgress] = useState<Record<number, Progress>>({})
+  const [errors, setErrors] = useState<ErrorSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [sendingDigest, setSendingDigest] = useState(false)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [c, f] = await Promise.all([
+      const [c, f, p, e] = await Promise.all([
         api.get<{ companies: CompanyUsage[] }>('/admin/companies'),
         api.get<Funnel>('/admin/activation-funnel'),
+        api.get<{ companies: Progress[] }>('/admin/progress').catch(() => ({ data: { companies: [] as Progress[] } })),
+        api.get<{ summary: ErrorSummary[] }>('/admin/errors?limit=1').catch(() => ({ data: { summary: [] as ErrorSummary[] } })),
       ])
       setCompanies(c.data.companies)
       setFunnel(f.data)
+      setProgress(Object.fromEntries(p.data.companies.map(x => [x.id, x])))
+      setErrors(e.data.summary)
     } finally { setLoading(false) }
+  }
+
+  // 日次レポート（毎朝9時に自動送信）を今すぐメールで受け取る
+  const sendDigest = async () => {
+    setSendingDigest(true)
+    try {
+      await api.post('/admin/daily-digest')
+      alert('日次レポートを送信しました（Gmail を確認してください）')
+    } catch {
+      alert('送信に失敗しました（メール設定を確認してください）')
+    } finally { setSendingDigest(false) }
   }
   useEffect(() => { load() }, [])
 
@@ -77,10 +109,32 @@ export default function CompanyActivityPage() {
           </h3>
           <p className="text-xs text-gray-500 mt-1">各会社がどこまでセットアップし、どれくらい使っているかを可視化（super_admin専用）</p>
         </div>
-        <button onClick={load} className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded hover:bg-gray-50">
-          <RefreshCw className="w-3.5 h-3.5" /> 再読込
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={sendDigest} disabled={sendingDigest} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50 disabled:opacity-50">
+            {sendingDigest ? '送信中...' : '日次レポートを今すぐ送る'}
+          </button>
+          <button onClick={load} className="flex items-center gap-1 px-3 py-1.5 text-sm border rounded hover:bg-gray-50">
+            <RefreshCw className="w-3.5 h-3.5" /> 再読込
+          </button>
+        </div>
       </div>
+
+      {/* 直近7日のエラー（同じ原因ごとにまとめる） */}
+      {errors.length > 0 && (
+        <div className="bg-white rounded-xl border border-red-200 p-4">
+          <p className="text-sm font-semibold text-red-700 mb-2">直近7日のエラー（原因ごと）</p>
+          <ul className="space-y-1 text-xs">
+            {errors.slice(0, 8).map(e => (
+              <li key={e.fingerprint} className="flex items-start gap-2">
+                <span className="shrink-0 px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-mono">{e.platform} ×{e.count}</span>
+                <span className="text-gray-700 break-all">{e.message.slice(0, 140)}</span>
+                <span className="shrink-0 text-gray-400">{e.last_at.slice(5, 16)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-gray-400 mt-2">発生時は Gmail にも通知されます（同じ原因は6時間に1通）。</p>
+        </div>
+      )}
 
       {/* ファネル */}
       {funnel && (
@@ -123,6 +177,7 @@ export default function CompanyActivityPage() {
               <tr>
                 <th className="text-left px-3 py-2 font-medium text-gray-600">会社</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-600">状態</th>
+                <th className="text-left px-2 py-2 font-medium text-gray-600">詰まり / 最後の画面</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-600">登録経過</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-600">プラン</th>
                 <th className="text-center px-2 py-2 font-medium text-gray-600">ユーザー</th>
@@ -150,6 +205,20 @@ export default function CompanyActivityPage() {
                         <HIcon className="w-3 h-3" />
                         {h.label}
                       </span>
+                    </td>
+                    <td className="px-2 py-2 text-gray-600">
+                      {(() => {
+                        const p = progress[c.id]
+                        if (!p) return <span className="text-gray-400">—</span>
+                        return (
+                          <div>
+                            <span className={`font-semibold ${p.step === 'done' ? 'text-green-700' : p.stuck_days >= 2 ? 'text-red-600' : 'text-amber-700'}`}>
+                              {STEP_LABEL[p.step]}{p.step !== 'done' && p.stuck_days > 0 ? `（${p.stuck_days}日）` : ''}
+                            </span>
+                            <p className="text-[10px] text-gray-400 font-mono">{p.last_path || '未アクセス'}{p.last_seen_at ? ` ${p.last_seen_at.slice(5, 16)}` : ''}</p>
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-2 py-2 text-center text-gray-600">
                       {sinceCreated !== null ? `${sinceCreated}日前` : '—'}

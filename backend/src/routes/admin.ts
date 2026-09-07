@@ -4,6 +4,7 @@ import { authenticateToken, requireSuperAdmin, AuthRequest } from '../middleware
 import { sendMailWithResult } from '../utils/mailer';
 import { trackingLinks } from '../data/tracking-links';
 import { runTrialNotifications } from '../utils/trial-notify';
+import { buildDigest, companyProgress, runDailyDigest } from '../utils/daily-digest';
 
 const router = Router();
 
@@ -173,6 +174,53 @@ router.get('/tracking-clicks', (_req: AuthRequest, res: Response): void => {
     if (!counts.has(code)) counts.set(code, { code, total: 0, last7d: 0 });
   }
   res.json({ clicks: [...counts.values()] });
+});
+
+// GET /api/admin/progress - 会社ごとの「次のステップ」と停滞日数、最後に見た画面
+router.get('/progress', (_req: AuthRequest, res: Response): void => {
+  res.json({ companies: companyProgress() });
+});
+
+// GET /api/admin/errors - 直近のエラー（クライアント／サーバー）
+router.get('/errors', (req: AuthRequest, res: Response): void => {
+  const limit = Math.min(200, parseInt(String(req.query.limit || '50')) || 50);
+  const errors = db.prepare(`
+    SELECT e.id, e.platform, e.app_version, e.path, e.message, e.stack, e.fingerprint, e.created_at,
+      e.user_id, e.company_id, u.name AS user_name, c.name AS company_name
+    FROM client_errors e
+    LEFT JOIN users u ON u.id = e.user_id
+    LEFT JOIN companies c ON c.id = e.company_id
+    ORDER BY e.id DESC LIMIT ?
+  `).all(limit);
+  const summary = db.prepare(`
+    SELECT fingerprint, platform, message, COUNT(*) AS count, MAX(created_at) AS last_at
+    FROM client_errors WHERE created_at >= datetime('now', '-7 days')
+    GROUP BY fingerprint ORDER BY count DESC LIMIT 20
+  `).all();
+  res.json({ errors, summary });
+});
+
+// GET /api/admin/usage - 直近の画面利用（会社別の最終アクセス・よく見られる画面）
+router.get('/usage', (_req: AuthRequest, res: Response): void => {
+  const topPaths = db.prepare(`
+    SELECT path, COUNT(*) AS views, COUNT(DISTINCT COALESCE(session_id, user_id)) AS sessions
+    FROM usage_events WHERE event = 'page_view' AND created_at >= datetime('now', '-7 days') AND path IS NOT NULL
+    GROUP BY path ORDER BY views DESC LIMIT 20
+  `).all();
+  const events = db.prepare(`
+    SELECT event, COUNT(*) AS count FROM usage_events
+    WHERE event != 'page_view' AND created_at >= datetime('now', '-7 days') GROUP BY event ORDER BY count DESC LIMIT 20
+  `).all();
+  res.json({ topPaths, events });
+});
+
+// GET /api/admin/daily-digest - 日次レポートのプレビュー / POST で即時送信
+router.get('/daily-digest', (_req: AuthRequest, res: Response): void => {
+  res.json(buildDigest());
+});
+router.post('/daily-digest', async (_req: AuthRequest, res: Response): Promise<void> => {
+  const ok = await runDailyDigest(true);
+  res.status(ok ? 200 : 502).json({ ok });
 });
 
 export default router;

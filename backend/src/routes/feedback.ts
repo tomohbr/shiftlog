@@ -29,8 +29,8 @@ router.post('/', authenticateToken, (req: AuthRequest, res: Response): void => {
   const safeCategory = validCategories.includes(category) ? category : 'other';
 
   const userId = req.user?.id || null;
-  // companyId は req.companyId があれば使うが、authenticateToken だけだと set されないので null でOK
-  const companyId = null;
+  // 選択中の会社（X-Company-Id）があれば紐づける。無ければ null のまま
+  const companyId = req.companyId || null;
 
   const result = db.prepare(
     'INSERT INTO feedbacks (user_id, company_id, category, message, email) VALUES (?, ?, ?, ?, ?)'
@@ -39,8 +39,10 @@ router.post('/', authenticateToken, (req: AuthRequest, res: Response): void => {
   // 運営者にメール通知（未読のまま埋もれるのを防ぐ）。送信失敗してもフィードバック自体はDBに保存済みなので握りつぶす。
   const senderName = req.user?.name || '(不明)';
   const senderEmail = email || req.user?.email || '(未記入)';
-  const subject = `【シフトログ】新しいフィードバック（${CATEGORY_LABEL[safeCategory]}） - ${senderName}様`;
-  const body = `${senderName}様より新しいフィードバックが届きました。\n\n分類: ${CATEGORY_LABEL[safeCategory]}\n連絡先: ${senderEmail}\n\n--- 本文 ---\n${message.trim()}\n---\n\n管理画面で確認・返信: https://shiftlog-production.up.railway.app/feedback-admin\nフィードバックID: ${result.lastInsertRowid}`;
+  const companyName = companyId ? ((db.prepare('SELECT name FROM companies WHERE id = ?').get(companyId) as any)?.name || '-') : '-';
+  const platform = typeof req.body.platform === 'string' ? req.body.platform.slice(0, 16) : 'web';
+  const subject = `【シフトログ】${CATEGORY_LABEL[safeCategory]}: ${senderName}様（${companyName}）`;
+  const body = `${senderName}様より新しいフィードバックが届きました。\n\n分類: ${CATEGORY_LABEL[safeCategory]}\n会社: ${companyName}\n連絡先: ${senderEmail}\n送信元: ${platform}${typeof req.body.path === 'string' ? ` / 画面 ${req.body.path.slice(0, 120)}` : ''}\n\n--- 本文 ---\n${message.trim()}\n---\n\n管理画面で確認・返信: https://shiftlog-production.up.railway.app/admin-hub\nフィードバックID: ${result.lastInsertRowid}`;
   sendMail(SUPER_ADMIN_EMAIL, subject, body).catch(() => {});
 
   res.status(201).json({ message: 'フィードバックを送信しました。ありがとうございました。' });

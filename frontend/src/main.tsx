@@ -5,11 +5,16 @@ import App from './App.tsx'
 import './index.css'
 import { Toaster } from 'react-hot-toast'
 import { bootstrapNative } from './native/bootstrap'
+import { installErrorReporting } from './lib/errorReporting'
+import ErrorBoundary from './components/ErrorBoundary'
 
 import { captureAttribution } from './lib/attribution'
 import { initializeAnalytics, trackCampaignLanding } from './lib/analytics'
 
 // 描画前に初回流入を保存し、GA4の準備後に着地を計測する。
+// 未処理の例外を運営者に届ける（最初に仕掛ける）
+installErrorReporting()
+
 captureAttribution()
 initializeAnalytics()
 trackCampaignLanding()
@@ -27,7 +32,9 @@ void bootstrapNative()
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
       <Toaster
         position="top-right"
         toastOptions={{
