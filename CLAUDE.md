@@ -54,6 +54,6 @@ Railway が自動でビルド・デプロイする。
 
 ## 注意事項
 - 日本語で会話すること
-- 作業完了後はTelegramで通知すること
+- Telegram での完了通知はしない（2026-09-07 本人指示。以前の「作業完了後はTelegramで通知」は廃止）
 - `frontend/package.json` の `overrides`（`@squareetlabs/capacitor-subscriptions` → `@capacitor/core`）は消さないこと。StoreKitプラグインの peer 競合で `npm install` が ERESOLVE になり Railway のビルドが落ちる
 - CORS の設定で許可外オリジンに例外を投げないこと（静的ファイルの配信まで500になる）
