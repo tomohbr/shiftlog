@@ -5,6 +5,7 @@ import { sendMailWithResult } from '../utils/mailer';
 import { trackingLinks } from '../data/tracking-links';
 import { runTrialNotifications } from '../utils/trial-notify';
 import { buildDigest, companyProgress, runDailyDigest } from '../utils/daily-digest';
+import { companyTimeline, customerJourneys, signupFunnel } from '../utils/journey';
 
 const router = Router();
 
@@ -212,6 +213,24 @@ router.get('/usage', (_req: AuthRequest, res: Response): void => {
     WHERE event != 'page_view' AND created_at >= datetime('now', '-7 days') GROUP BY event ORDER BY count DESC LIMIT 20
   `).all();
   res.json({ topPaths, events });
+});
+
+// GET /api/admin/journeys - 会社ごとの流入元・到達ステップ・詰まり・離脱の判定
+router.get('/journeys', (_req: AuthRequest, res: Response): void => {
+  res.json({ companies: customerJourneys() });
+});
+
+// GET /api/admin/journeys/:id/timeline - 1社の足取り（セッション単位）と業務上の出来事
+router.get('/journeys/:id/timeline', (req: AuthRequest, res: Response): void => {
+  const id = parseInt(req.params.id);
+  const days = parseInt(String(req.query.days || '60')) || 60;
+  res.json({ items: companyTimeline(id, days) });
+});
+
+// GET /api/admin/signup-funnel - 登録前（LP → 登録完了）のどこで離れたか
+router.get('/signup-funnel', (req: AuthRequest, res: Response): void => {
+  const days = parseInt(String(req.query.days || '30')) || 30;
+  res.json(signupFunnel(days));
 });
 
 // GET /api/admin/daily-digest - 日次レポートのプレビュー / POST で即時送信

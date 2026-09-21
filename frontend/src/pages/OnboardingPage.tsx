@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import StaffLoginQR, { simpleInviteMessage } from '../components/StaffLoginQR'
 import LineShareButton from '../components/LineShareButton'
 import toast from 'react-hot-toast'
+import { track } from '../lib/analytics'
 
 type Step = 1 | 2 | 3 | 4
 
@@ -49,7 +50,15 @@ export default function OnboardingPage() {
   const companyPin = (selectedCompany as any)?.company_pin || ''
   const companyName = selectedCompany?.name || ''
 
-  const finish = () => {
+  // 初期設定ウィザードはURLが変わらないので、どのステップで止まったかを明示的に記録する
+  useEffect(() => { track('onboarding_view', { step: STEP_LABELS[step] }) }, [step])
+  const go = (next: Step, action: 'next' | 'skip') => {
+    track('onboarding_step', { step: STEP_LABELS[step], action })
+    setStep(next)
+  }
+
+  const finish = (via: 'complete' | 'skip_all') => {
+    track('onboarding_exit', { step: STEP_LABELS[step], via })
     clearJustRegistered()
     navigate('/dashboard')
   }
@@ -65,14 +74,14 @@ export default function OnboardingPage() {
         <StepDots current={step} />
 
         <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
-          {step === 1 && <StoreStep onNext={() => setStep(2)} onSkip={() => setStep(2)} />}
-          {step === 2 && <StaffStep onNext={() => setStep(3)} onSkip={() => setStep(4)} />}
-          {step === 3 && <ShiftStep onNext={() => setStep(4)} onSkip={() => setStep(4)} />}
-          {step === 4 && <InviteStep companyPin={companyPin} companyName={companyName} onFinish={finish} />}
+          {step === 1 && <StoreStep onNext={() => go(2, 'next')} onSkip={() => go(2, 'skip')} />}
+          {step === 2 && <StaffStep onNext={() => go(3, 'next')} onSkip={() => go(4, 'skip')} />}
+          {step === 3 && <ShiftStep onNext={() => go(4, 'next')} onSkip={() => go(4, 'skip')} />}
+          {step === 4 && <InviteStep companyPin={companyPin} companyName={companyName} onFinish={() => finish('complete')} />}
         </div>
 
         <button
-          onClick={finish}
+          onClick={() => finish('skip_all')}
           className="w-full mt-4 text-xs text-gray-400 hover:text-gray-600 text-center"
         >
           スキップしてダッシュボードへ

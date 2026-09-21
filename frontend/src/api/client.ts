@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { apiBaseUrl, apiOrigin } from '../native/platform'
+import { track } from '../lib/analytics'
 
 // Web は同一オリジンの /api、iOS アプリはバンドル済みアセットから本番サーバーへ絶対URLで叩く
 const API_BASE = apiBaseUrl
@@ -23,6 +24,18 @@ api.interceptors.request.use(config => {
 api.interceptors.response.use(
   response => response,
   error => {
+    // 保存や読み込みの失敗は「その画面で詰まった」証拠なので記録する（URL内の数値IDは :id に丸める）
+    try {
+      const status = error.response?.status
+      if (status && status !== 401) {
+        const endpoint = String(error.config?.url || '').split('?')[0].replace(/\/\d+(?=\/|$)/g, '/:id')
+        const message = error.response?.data?.error
+        track('api_error', {
+          status, endpoint, method: String(error.config?.method || '').toUpperCase(),
+          message: typeof message === 'string' ? message.slice(0, 120) : undefined,
+        })
+      }
+    } catch { /* 計測失敗は無視 */ }
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
       // 認証状態も消し、ルーターにログイン画面への遷移を任せる。

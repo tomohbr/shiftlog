@@ -1,6 +1,7 @@
 import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { isMailConfigured, sendMail } from './mailer';
 import { shouldNotify } from './ops-alerts';
+import { customerJourneys } from './journey';
 
 // 運営者向けの日次ダイジェスト（毎朝 9:00 JST に 1 通）。
 //
@@ -119,6 +120,14 @@ export function buildDigest(): { subject: string; text: string } {
     lines.push(`  ・${p.name}: ${STEP_LABEL[p.step]}（${p.stuck_days}日）最後に見た画面: ${p.last_path || '-'}${p.last_seen_at ? ` @${p.last_seen_at.slice(5, 16)}` : ''}`);
   }
   if (!stuck.length) lines.push('  （なし）');
+  lines.push('');
+
+  // 打刻まで到達したのに動きが落ちた会社は、放っておくと静かに解約する
+  const journeys = customerJourneys().filter(j => !j.internal);
+  const atRisk = journeys.filter(j => j.status === 'at_risk' || j.status === 'churned');
+  lines.push(`■ 離脱の恐れ・離脱: ${atRisk.length}社（定着 ${journeys.filter(j => j.status === 'active').length}社）`);
+  for (const j of atRisk) lines.push(`  ・${j.name}: ${j.status_reason} → ${j.next_action}`);
+  if (!atRisk.length) lines.push('  （なし）');
   lines.push('');
 
   lines.push(`■ 利用（24時間）: ${activeCompanies}社が利用、画面表示 ${pageViews}回`);
