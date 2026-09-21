@@ -3,6 +3,7 @@ import { Calendar, Clock, ChevronLeft, ChevronRight, EyeOff } from 'lucide-react
 import { shiftsApi, Shift } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
+import LineLinkCard from '../components/LineLinkCard'
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -90,6 +91,7 @@ export default function MyShiftsPage() {
 
   return (
     <div className="space-y-4">
+      <LineLinkCard />
       {/* Month navigator */}
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-center gap-2">

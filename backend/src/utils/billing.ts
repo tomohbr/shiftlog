@@ -29,9 +29,17 @@ export function isInTrial(companyId: number): boolean {
   return new Date(subscription.trial_ends_at).getTime() > Date.now();
 }
 
-// Pro機能を使えるか（有料Pro or トライアル中）
+// 運営者（super_admin）が管理者として入っている自社の会社。自分の現場で使うため制限をかけない
+export function isOperatorCompany(companyId: number): boolean {
+  return !!db.prepare(`
+    SELECT 1 FROM user_companies uc JOIN users u ON u.id = uc.user_id
+    WHERE uc.company_id = ? AND uc.role = 'admin' AND u.role = 'super_admin' LIMIT 1
+  `).get(companyId);
+}
+
+// Pro機能を使えるか（有料Pro or トライアル中 or 運営者の自社）
 export function hasProAccess(companyId: number): boolean {
-  return isProCompany(companyId) || isInTrial(companyId);
+  return isProCompany(companyId) || isInTrial(companyId) || isOperatorCompany(companyId);
 }
 
 export function getTrialInfo(companyId: number): { in_trial: boolean; trial_ends_at: string | null; trial_days_left: number | null } {

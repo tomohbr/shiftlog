@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
-import { FREE_STAFF_LIMIT, PRICE_PER_MONTH, PRICE_PER_YEAR, TRIAL_DAYS, getStaffCount, getTrialInfo } from '../utils/billing';
+import { FREE_STAFF_LIMIT, PRICE_PER_MONTH, PRICE_PER_YEAR, TRIAL_DAYS, getStaffCount, getTrialInfo, isOperatorCompany } from '../utils/billing';
 import {
   APPLE_PRO_PRODUCT_ID,
   APPLE_PRO_PRODUCT_IDS,
@@ -38,9 +38,10 @@ router.get('/plan', authenticateToken, requireCompany, (req: AuthRequest, res: R
   ).get(companyId) as any).count;
 
   const trial = getTrialInfo(companyId);
+  const operator = isOperatorCompany(companyId);
   res.json({
-    plan: subscription?.plan || 'free',
-    max_stores: subscription?.max_stores || 1,
+    plan: operator ? 'pro' : (subscription?.plan || 'free'),
+    max_stores: operator ? 99 : (subscription?.max_stores || 1),
     current_stores: storeCount,
     price_per_store: PRICE_PER_STORE,
     price_per_year: PRICE_PER_YEAR,

@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { isOperatorCompany } from '../utils/billing';
 
 const router = Router();
 
@@ -17,8 +18,8 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   res.json({
     stores,
     plan: {
-      name: subscription?.plan || 'free',
-      max_stores: subscription?.max_stores || 1,
+      name: isOperatorCompany(companyId) ? 'pro' : (subscription?.plan || 'free'),
+      max_stores: isOperatorCompany(companyId) ? 99 : (subscription?.max_stores || 1),
       current_stores: stores.length,
     }
   });
@@ -59,7 +60,8 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   const currentStoreCount = (db.prepare(
     'SELECT COUNT(*) as count FROM stores WHERE company_id = ?'
   ).get(companyId) as any).count;
-  const maxStores = subscription?.max_stores || 1;
+  // 運営者の自社（クリスマスマーケット等の複数ブース運用）は店舗数の上限なし
+  const maxStores = isOperatorCompany(companyId) ? 99 : (subscription?.max_stores || 1);
 
   if (currentStoreCount >= maxStores) {
     res.status(403).json({

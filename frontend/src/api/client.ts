@@ -579,6 +579,9 @@ export const lineApi = {
   saveSettings: (data: any) => api.post('/line/settings', data),
   register: (line_user_id: string) => api.post('/line/register', { line_user_id }),
   testNotify: () => api.post('/line/test'),
+  linkCode: () => api.post<{ code: string; minutes: number; bot_name: string | null; basic_id: string; add_friend_url: string; send_code_url: string }>('/line/link-code'),
+  me: () => api.get<{ configured: boolean; bot_name: string | null; linked: boolean }>('/line/me'),
+  unlink: () => api.delete('/line/me'),
 }
 
 // プッシュ通知（iOSアプリ）

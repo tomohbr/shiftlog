@@ -4,6 +4,7 @@ import { authenticateToken, requireCompany, AuthRequest } from '../middleware/au
 import { logAudit } from '../utils/audit';
 import { pushToCompanyAsync } from '../utils/apns';
 import { requireProForPastMonths } from '../utils/billing';
+import { notifyShiftPublished } from './line';
 
 const router = Router();
 
@@ -325,6 +326,7 @@ router.post('/publication', authenticateToken, requireCompany, (req: AuthRequest
       body: `${year}年${month}月のシフトが確定しました。自分の勤務を確認してください。`,
       path: '/my-shifts',
     }, req.user!.id);
+    notifyShiftPublished(companyId, Number(year), Number(month));
   }
 
   const publication = db.prepare(

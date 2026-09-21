@@ -56,6 +56,8 @@ app.use(cors({
 
 // Stripe webhook needs raw body for signature verification
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
+// LINE の Webhook も署名検証のため生の本文で受ける
+app.use('/api/line/webhook', express.raw({ type: '*/*' }));
 app.use(express.json());
 
 // 短縮URLはSPAのフォールバックより先に処理する。

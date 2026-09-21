@@ -471,6 +471,20 @@ try {
   if (!lineCols.includes('notify_request_open')) {
     db.exec("ALTER TABLE line_settings ADD COLUMN notify_request_open INTEGER DEFAULT 1");
   }
+  // LINE公式アカウントとスタッフを「連携コード」で結びつけるための列と表
+  // channel_secret は Webhook の署名検証、bot_basic_id は友だち追加リンク（@xxxx）に使う
+  for (const column of ['channel_secret', 'bot_basic_id', 'bot_name']) {
+    if (!lineCols.includes(column)) db.exec(`ALTER TABLE line_settings ADD COLUMN ${column} TEXT`);
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS line_link_codes (
+      code TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      company_id INTEGER NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
   // Ensure existing companies have a subscription record (free plan)
   const companiesWithoutSub = db.prepare(`
     SELECT c.id FROM companies c
