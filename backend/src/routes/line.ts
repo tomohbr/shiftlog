@@ -102,6 +102,16 @@ router.post('/settings', authenticateToken, requireCompany, async (req: AuthRequ
   const token = String(req.body.channel_access_token || '').trim();
   const secret = String(req.body.channel_secret || '').trim();
 
+  // ブラウザの自動入力でメールアドレス等が入る事故があったため、形式を先に確かめる
+  if (secret && !/^[0-9a-f]{32}$/i.test(secret)) {
+    res.status(400).json({ error: 'チャネルシークレットの形式が違います（32文字の英数字です）。ブラウザの自動入力が入っていないか確認して、LINE Developers からコピーし直してください' });
+    return;
+  }
+  if (token && /[\s@]/.test(token)) {
+    res.status(400).json({ error: 'チャネルアクセストークンの形式が違います。LINE Developers の「Messaging API設定」からコピーし直してください' });
+    return;
+  }
+
   const check: { bot?: string; webhook?: string; error?: string } = {};
   let basicId: string | null = null;
   let botName: string | null = null;

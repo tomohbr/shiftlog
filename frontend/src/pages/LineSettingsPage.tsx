@@ -131,7 +131,11 @@ export default function LineSettingsPage() {
           <label className="text-sm font-medium text-gray-700">チャネルアクセストークン（長期）</label>
           <div className="relative mt-1">
             <input
-              type={showToken ? 'text' : 'password'}
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              name="line-channel-access-token"
+              style={showToken ? undefined : ({ WebkitTextSecurity: 'disc' } as any)}
               value={settings.channel_access_token}
               onChange={e => setSettings(prev => ({ ...prev, channel_access_token: e.target.value }))}
               className="input-field pr-20 font-mono text-sm"
@@ -145,7 +149,11 @@ export default function LineSettingsPage() {
         <div>
           <label className="text-sm font-medium text-gray-700">チャネルシークレット</label>
           <input
-            type={showToken ? 'text' : 'password'}
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            name="line-channel-secret"
+            style={showToken ? undefined : ({ WebkitTextSecurity: 'disc' } as any)}
             value={settings.channel_secret}
             onChange={e => setSettings(prev => ({ ...prev, channel_secret: e.target.value }))}
             className="input-field mt-1 font-mono text-sm"
