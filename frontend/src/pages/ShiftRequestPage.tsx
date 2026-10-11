@@ -340,6 +340,22 @@ function AdminView({
     period.deadline
   )
 
+  const [reminding, setReminding] = useState(false)
+  const remindByLine = async () => {
+    setReminding(true)
+    try {
+      const res = await shiftRequestsApi.remindByLine(year, month)
+      const { sent, not_linked } = res.data
+      const rest = not_linked.length ? `（LINE未連携: ${not_linked.join('、')}）` : ''
+      if (sent > 0) toast.success(`${sent}人にLINEで催促しました${rest}`, { duration: 6000 })
+      else toast.error(`LINEで送れる未提出の人がいません${rest}`, { duration: 6000 })
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '催促の送信に失敗しました')
+    } finally {
+      setReminding(false)
+    }
+  }
+
   const copyText = (text: string, doneMsg: string) => {
     navigator.clipboard.writeText(text)
     toast.success(doneMsg)
@@ -498,6 +514,14 @@ function AdminView({
               <Copy className="w-3 h-3" /> 催促文をコピー
             </button>
             <LineShareButton text={reminderMessage} />
+            <button
+              onClick={remindByLine}
+              disabled={reminding}
+              className="px-3 py-1.5 text-xs bg-[#06C755] text-white rounded hover:opacity-90 disabled:opacity-50 flex items-center gap-1 font-semibold"
+              title="シフトログとLINE連携している未提出の人に、本人専用の提出リンクを送ります"
+            >
+              <Send className="w-3 h-3" /> {reminding ? '送信中…' : 'LINEで個別に催促'}
+            </button>
           </div>
         </div>
       )}
@@ -1163,9 +1187,14 @@ export default function ShiftRequestPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
+  // LINE のリンクから来たときは ?year=&month= の月を開く
   const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth() + 1)
+  const qs = new URLSearchParams(window.location.search)
+  const qYear = Number(qs.get('year'))
+  const qMonth = Number(qs.get('month'))
+  const fromLink = qYear >= 2000 && qMonth >= 1 && qMonth <= 12
+  const [year, setYear] = useState(fromLink ? qYear : now.getFullYear())
+  const [month, setMonth] = useState(fromLink ? qMonth : now.getMonth() + 1)
 
   const days = buildDays(year, month)
 

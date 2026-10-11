@@ -470,6 +470,8 @@ export const shiftRequestsApi = {
     api.get('/shift-requests/period', { params: { year, month } }),
   setPeriod: (year: number, month: number, deadline?: string, status?: string, start_date?: string, end_date?: string) =>
     api.post('/shift-requests/period', { year, month, deadline, status, start_date, end_date }),
+  remindByLine: (year: number, month: number) =>
+    api.post<{ sent: number; unsubmitted: number; not_linked: string[] }>('/shift-requests/remind', { year, month }),
 }
 
 // Labor costs & alerts

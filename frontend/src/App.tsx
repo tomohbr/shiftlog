@@ -34,6 +34,7 @@ import AdminHubPage from './pages/AdminHubPage'
 import SetupGuidePage from './pages/SetupGuidePage'
 import OrganizationPage from './pages/OrganizationPage'
 import QrPosterPage from './pages/QrPosterPage'
+import LineLinkPage from './pages/LineLinkPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -58,6 +59,10 @@ function AppRoutes() {
   }
   if (location.pathname === '/legal/terms') {
     return <TermsPage />
+  }
+  // LINE の希望提出リンク。ログイン中かどうかに関係なく、リンクの本人で入り直す
+  if (location.pathname.startsWith('/l/')) {
+    return <LineLinkPage token={location.pathname.slice(3)} />
   }
 
   if (loading) {

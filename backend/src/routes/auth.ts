@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { JWT_SECRET, authenticateToken, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { verifyRequestLink } from './line';
 import { getJSTDate, getJSTTime } from '../utils/jst';
 import { sendMail } from '../utils/mailer';
 import { findSoleAdminCompanies, cancelCompanySubscription, deleteAccount } from '../utils/account-deletion';
@@ -235,6 +236,42 @@ router.post('/pin-login', (req: Request, res: Response): void => {
 });
 
 // POST /api/auth/register - 新規登録（管理者アカウント + 会社作成）
+// POST /api/auth/line-link - LINE で届いた希望提出リンクからのログイン（名前選択を省く）
+router.post('/line-link', (req: Request, res: Response): void => {
+  const link = verifyRequestLink(String(req.body?.token || ''));
+  if (!link) {
+    res.status(401).json({ error: 'このリンクは期限切れか無効です。LINE のトークで「希望」と送ると新しいリンクが届きます' });
+    return;
+  }
+  const userRow = db.prepare(`
+    SELECT u.id, u.email, u.name, u.role FROM users u
+    JOIN user_companies uc ON u.id = uc.user_id AND uc.company_id = ?
+    WHERE u.id = ? AND u.is_active = 1
+  `).get(link.cid, link.uid) as any;
+  if (!userRow) {
+    res.status(401).json({ error: 'スタッフが見つかりません' });
+    return;
+  }
+  const companies = db.prepare(`
+    SELECT c.id, c.name, c.company_pin, c.staff_home, uc.role as company_role
+    FROM user_companies uc JOIN companies c ON uc.company_id = c.id
+    WHERE uc.user_id = ?
+  `).all(userRow.id);
+  const token = jwt.sign(
+    { id: userRow.id, email: userRow.email, role: userRow.role, name: userRow.name },
+    JWT_SECRET,
+    { expiresIn: '90d' }
+  );
+  res.json({
+    token,
+    user: { id: userRow.id, email: userRow.email, name: userRow.name, role: userRow.role },
+    companies,
+    selectedCompanyId: link.cid,
+    year: link.y,
+    month: link.m,
+  });
+});
+
 router.post('/register', (req: Request, res: Response): void => {
   const { email, password, name, companyName, attribution } = req.body;
   // 任意の流入データは文字列だけを最大200文字で保存する。

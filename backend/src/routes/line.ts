@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import db from '../db';
-import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../middleware/auth';
 
 // LINE 連携（お店ごとの LINE 公式アカウント → スタッフへの通知）
 //
@@ -12,6 +13,8 @@ import { authenticateToken, requireCompany, AuthRequest } from '../middleware/au
 //      （oaMessage リンクでコード入りのトーク画面が開くので、押して送信するだけ）
 //   3. Webhook がコードを受け取り、そのスタッフと LINE の userId を結びつける
 //   4. 以後、シフト公開・希望収集の開始などを LINE で送る
+//   5. 希望収集の案内・催促には本人専用のリンクを付ける。LINE から開くと名前選択なしで
+//      その月の希望提出画面に入れる（トークで「希望」と送っても同じリンクが返ってくる）
 
 const router = Router();
 const APP_URL = process.env.APP_URL || 'https://shiftlog-production.up.railway.app';
@@ -22,6 +25,24 @@ const webhookUrl = (companyId: number) => `${APP_URL}/api/line/webhook/${company
 const addFriendUrl = (basicId: string) => `https://line.me/R/ti/p/${encodeURIComponent(basicId)}`;
 // コード入りでトーク画面を開くリンク（押して送信するだけで連携できる）
 const sendCodeUrl = (basicId: string, code: string) => `https://line.me/R/oaMessage/${encodeURIComponent(basicId)}/?${encodeURIComponent(code)}`;
+
+// 希望提出リンク用の署名鍵。通常のログイントークンとは鍵を分け、リンクの文字列がそのまま
+// API の Bearer トークンとして通らないようにする
+const LINK_SECRET = `${JWT_SECRET}:line-request-link`;
+const REQUEST_LINK_DAYS = 21;
+
+export function requestLinkUrl(userId: number, companyId: number, year: number, month: number): string {
+  const t = jwt.sign({ uid: userId, cid: companyId, y: year, m: month }, LINK_SECRET, { expiresIn: `${REQUEST_LINK_DAYS}d` });
+  return `${APP_URL}/l/${t}`;
+}
+
+export function verifyRequestLink(token: string): { uid: number; cid: number; y: number; m: number } | null {
+  try {
+    const d = jwt.verify(token, LINK_SECRET) as any;
+    if (!d?.uid || !d?.cid || !d?.y || !d?.m) return null;
+    return { uid: Number(d.uid), cid: Number(d.cid), y: Number(d.y), m: Number(d.m) };
+  } catch { return null; }
+}
 
 async function lineApi(token: string, path: string, init: { method?: string; body?: unknown } = {}) {
   const res = await fetch(`https://api.line.me${path}`, {
@@ -70,6 +91,37 @@ export function notifyShiftPublished(companyId: number, year: number, month: num
   if (!s || s.notify_shift_published === 0) return;
   const msg = `【シフトログ】${year}年${month}月のシフトが公開されました。\n自分の勤務を確認してください。\n\n${APP_URL}/my-shifts`;
   notifyCompanyStaff(companyId, msg).catch(() => {});
+}
+
+/**
+ * 希望シフトの案内を、LINE 連携済みの人へ本人専用リンク付きで送る。
+ * onlyUserIds を渡すとその人だけ（未提出者への催促用）。
+ */
+export async function sendRequestLinks(
+  companyId: number, year: number, month: number, heading: string, detail: string, onlyUserIds?: number[],
+): Promise<{ sent: number; targets: number }> {
+  const settings = db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  if (!settings?.channel_access_token) return { sent: 0, targets: 0 };
+  let rows = db.prepare(`
+    SELECT uli.user_id, uli.line_user_id, u.name FROM user_line_ids uli
+    JOIN user_companies uc ON uc.user_id = uli.user_id AND uc.company_id = ?
+    JOIN users u ON u.id = uli.user_id AND u.is_active = 1
+  `).all(companyId) as { user_id: number; line_user_id: string; name: string }[];
+  if (onlyUserIds) {
+    const only = new Set(onlyUserIds);
+    rows = rows.filter(r => only.has(r.user_id));
+  }
+  let sent = 0;
+  for (const r of rows) {
+    const msg = `【シフトログ】${heading}\n${detail}\n\n${r.name}さん専用の提出ページ（名前を選ばずに開けます）:\n${requestLinkUrl(r.user_id, companyId, year, month)}`;
+    if (await sendLineMessage(settings.channel_access_token, r.line_user_id, msg)) sent++;
+  }
+  return { sent, targets: rows.length };
+}
+
+export function periodText(p: { year: number; month: number; start_date?: string | null; end_date?: string | null; deadline?: string | null }): string {
+  const range = p.start_date && p.end_date ? `対象期間: ${p.start_date} 〜 ${p.end_date}` : `対象: ${p.year}年${p.month}月`;
+  return p.deadline ? `${range}\n締切: ${p.deadline}` : range;
 }
 
 function membersWithLink(companyId: number) {
@@ -245,8 +297,12 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
       } else if (event.type === 'unfollow') {
         db.prepare('DELETE FROM user_line_ids WHERE line_user_id = ?').run(lineUserId);
       } else if (event.type === 'message' && event.message?.type === 'text' && event.replyToken) {
-        const m = String(event.message.text).match(/\d{6}/);
-        if (!m) continue;
+        const text = String(event.message.text);
+        const m = text.match(/\d{6}/);
+        if (!m) {
+          if (/希望|シフト/.test(text)) await replyRequestLink(companyId, lineUserId, s.channel_access_token, event.replyToken);
+          continue;
+        }
         const row = db.prepare(`
           SELECT lc.user_id, u.name FROM line_link_codes lc JOIN users u ON u.id = lc.user_id
           WHERE lc.code = ? AND lc.company_id = ? AND lc.expires_at >= datetime('now')
@@ -267,6 +323,30 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
     }
   }
 });
+
+// トークで「希望」と送られたら、受付中の月の本人専用リンクを返す（返信なので通数に数えられない）
+async function replyRequestLink(companyId: number, lineUserId: string, token: string, replyToken: string) {
+  const who = db.prepare(`
+    SELECT u.id, u.name FROM user_line_ids uli
+    JOIN users u ON u.id = uli.user_id AND u.is_active = 1
+    JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ?
+    WHERE uli.line_user_id = ?
+  `).get(companyId, lineUserId) as any;
+  if (!who) {
+    await replyLine(token, replyToken, 'まだシフトログと連携されていません。アプリの「LINEで通知を受け取る」に出る6桁のコードをこのトークに送ってください。');
+    return;
+  }
+  const open = db.prepare(`
+    SELECT year, month, start_date, end_date, deadline FROM shift_request_periods
+    WHERE company_id = ? AND status = 'open' ORDER BY year DESC, month DESC
+  `).all(companyId) as any[];
+  if (open.length === 0) {
+    await replyLine(token, replyToken, '今はシフト希望の受付をしていません。受付が始まったらこのLINEでお知らせします。');
+    return;
+  }
+  const lines = open.map(p => `■ ${p.year}年${p.month}月（${periodText(p).replace(/\n/g, '／')}）\n${requestLinkUrl(who.id, companyId, p.year, p.month)}`);
+  await replyLine(token, replyToken, `${who.name}さんの希望提出ページです。\n\n${lines.join('\n\n')}`);
+}
 
 // POST /api/line/webhook - 旧URL（会社IDなし）。何もしない
 router.post('/webhook', (_req, res) => { res.json({ status: 'ok' }); });

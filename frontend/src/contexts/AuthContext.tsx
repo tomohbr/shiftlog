@@ -20,6 +20,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, name: string, companyName: string) => Promise<void>
   pinLogin?: (companyPin: string, userId: number) => Promise<void>
+  lineLinkLogin: (linkToken: string) => Promise<{ year: number; month: number }>
   logout: () => void
   selectCompany: (company: Company) => void
   justRegistered: boolean
@@ -132,6 +133,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // LINE で届いた希望提出リンク（/l/:token）からのログイン。返り値はリンクが指す月
+  const lineLinkLogin = async (linkToken: string) => {
+    const res = await api.post('/auth/line-link', { token: linkToken })
+    const { token, user: u, companies: comps, selectedCompanyId, year, month } = res.data
+    localStorage.setItem('token', token)
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    setUser(u)
+    setCompanies(comps || [])
+    const found = comps?.find((c: Company) => c.id === selectedCompanyId) || comps?.[0]
+    if (found) {
+      setSelectedCompany(found)
+      localStorage.setItem('selectedCompanyId', found.id.toString())
+    }
+    return { year, month }
+  }
+
   const logout = () => {
     // この端末宛の通知を止め、生体認証のかんたんログインも消す。
     // 共有端末で前のスタッフに通知が飛び続けるのを防ぐため。
@@ -153,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, companies, selectedCompany, loading, login, register, pinLogin, logout, selectCompany, justRegistered, clearJustRegistered }}>
+    <AuthContext.Provider value={{ user, companies, selectedCompany, loading, login, register, pinLogin, lineLinkLogin, logout, selectCompany, justRegistered, clearJustRegistered }}>
       {children}
     </AuthContext.Provider>
   )

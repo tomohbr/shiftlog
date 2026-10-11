@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
-import { notifyCompanyStaff } from './line';
+import { sendRequestLinks, periodText } from './line';
 import { pushToCompanyAsync } from '../utils/apns';
 
 const router = Router();
@@ -140,16 +140,61 @@ router.post('/period', authenticateToken, requireCompany, (req: AuthRequest, res
 
     const lineSettings = db.prepare('SELECT notify_request_open FROM line_settings WHERE company_id = ?').get(companyId) as any;
     if (lineSettings?.notify_request_open) {
-      const rangeText = start_date && end_date
-        ? `対象期間: ${start_date} 〜 ${end_date}`
-        : `対象: ${year}年${month}月`;
-      const deadlineText = deadline ? `\n締切: ${deadline}` : '';
-      const msg = `【シフトログ】シフト希望の受付が始まりました。\n${rangeText}${deadlineText}\n\n提出はこちら:\nhttps://shiftlog-production.up.railway.app/`;
-      notifyCompanyStaff(companyId, msg).catch(() => {});
+      const detail = periodText({ year: Number(year), month: Number(month), start_date, end_date, deadline });
+      sendRequestLinks(companyId, Number(year), Number(month), 'シフト希望の受付が始まりました。', detail).catch(() => {});
     }
   }
 
   res.json({ message: '収集期間を設定しました' });
+});
+
+// POST /api/shift-requests/remind - 未提出のスタッフにだけ、本人専用リンク付きで LINE を送る (admin)
+router.post('/remind', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!['admin','super_admin'].includes(req.user!.role)) {
+    res.status(403).json({ error: '管理者権限が必要です' });
+    return;
+  }
+  const companyId = req.companyId!;
+  const year = Number(req.body.year);
+  const month = Number(req.body.month);
+  const period = db.prepare(
+    'SELECT * FROM shift_request_periods WHERE company_id = ? AND year = ? AND month = ?'
+  ).get(companyId, year, month) as any;
+  if (!period || period.status !== 'open') {
+    res.status(400).json({ error: 'この月は希望を受付中ではありません' });
+    return;
+  }
+  const line = db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  if (!line?.channel_access_token) {
+    res.status(409).json({ error: 'LINE 通知の設定がまだです（LINE設定の画面から設定してください）' });
+    return;
+  }
+
+  const ym = `${year}-${String(month).padStart(2, '0')}`;
+  const from = period.start_date || `${ym}-01`;
+  const to = period.end_date || `${ym}-31`;
+  const unsubmitted = db.prepare(`
+    SELECT u.id, u.name, (uli.line_user_id IS NOT NULL) AS linked
+    FROM user_companies uc JOIN users u ON u.id = uc.user_id AND u.is_active = 1
+    LEFT JOIN user_line_ids uli ON uli.user_id = u.id
+    WHERE uc.company_id = ? AND uc.role = 'staff'
+      AND NOT EXISTS (
+        SELECT 1 FROM shift_requests sr
+        WHERE sr.company_id = uc.company_id AND sr.user_id = u.id AND sr.date BETWEEN ? AND ?
+      )
+    ORDER BY u.name
+  `).all(companyId, from, to) as { id: number; name: string; linked: number }[];
+
+  const linkedIds = unsubmitted.filter(u => u.linked).map(u => u.id);
+  const result = linkedIds.length
+    ? await sendRequestLinks(companyId, year, month, 'シフト希望がまだ届いていません。', periodText({ year, month, ...period }), linkedIds)
+    : { sent: 0, targets: 0 };
+
+  res.json({
+    sent: result.sent,
+    unsubmitted: unsubmitted.length,
+    not_linked: unsubmitted.filter(u => !u.linked).map(u => u.name),
+  });
 });
 
 // GET /api/shift-requests/summary?year=2026&month=3 - Summary view for admin
