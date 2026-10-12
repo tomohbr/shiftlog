@@ -53,11 +53,11 @@ export default function TodayByVenue({ stores }: { stores: Store[] }) {
 
   return (
     <div className="card p-0 overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-200">
-        <h3 className="text-base font-bold text-gray-900">今日の会場</h3>
-        <span className="text-sm text-gray-500">{m}月{Number(today.slice(8))}日（{'日月火水木金土'[now.getDay()]}）</span>
-        {lateCount > 0 && <span className="text-sm font-bold px-2.5 py-0.5 rounded-full bg-red-500 text-white">まだ来ていない {lateCount}人</span>}
-        <button onClick={load} className="ml-auto text-xs text-gray-500 flex items-center gap-1 hover:text-gray-700"><RefreshCw className="w-3.5 h-3.5" />{now.toTimeString().slice(0, 5)} 更新</button>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 sm:px-5 py-3 border-b border-gray-200">
+        <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">今日の会場</h3>
+        <span className="text-sm text-gray-500 whitespace-nowrap">{m}/{Number(today.slice(8))}（{'日月火水木金土'[now.getDay()]}）</span>
+        <button onClick={load} className="ml-auto text-xs text-gray-500 flex items-center gap-1 hover:text-gray-700 whitespace-nowrap"><RefreshCw className="w-3.5 h-3.5" />{now.toTimeString().slice(0, 5)} 更新</button>
+        {lateCount > 0 && <span className="w-full sm:w-auto sm:order-none text-sm font-bold px-2.5 py-1 rounded-full bg-red-500 text-white text-center whitespace-nowrap">まだ来ていない {lateCount}人</span>}
       </div>
       {loading ? (
         <div className="py-8 text-center text-sm text-gray-400">読み込み中…</div>

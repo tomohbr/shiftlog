@@ -111,7 +111,8 @@ export default function DashboardPage() {
   const noStaff = users.length === 0
   const noShift = shifts.length === 0
   const noTimecard = !hasAnyTimecard
-  const criticalEmpty = noStore && noShift // 店舗もシフトもない = ほぼ未使用
+  // 読み込み中は店舗0・シフト0に見えるので、案内は読み込みが終わってから出す
+  const criticalEmpty = !loading && noStore && noShift // 店舗もシフトもない = ほぼ未使用
   // 店舗・スタッフ・シフトが揃っても、スタッフが一度も打刻していなければ「定着」できていない。
   // 実データで全社がこの段階で止まっていたため、打刻ゼロの間は案内を消さない。
   // シフトは月ごとに空になるので、店舗とスタッフがそろえば準備は済んだとみなす（空の月は下のカレンダーで案内する）
@@ -180,7 +181,7 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-      {!setupStepsDone && !criticalEmpty && (
+      {!loading && !setupStepsDone && !criticalEmpty && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
@@ -225,7 +226,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {noTimecard && (
+      {!loading && noTimecard && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
           <div className="flex flex-col lg:flex-row lg:items-start gap-5 justify-between">
             <div className="flex-1">
@@ -311,8 +312,9 @@ export default function DashboardPage() {
         })}
       </div>
 
-      <div className="card p-0 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+      {/* スマホではカレンダーを端から端まで使う（名前を読めるように） */}
+      <div className="card p-0 overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl border-x-0 sm:border-x">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
           <MonthNavigator
             currentDate={currentDate}
             onPrev={() => setCurrentDate(d => subMonths(d, 1))}
@@ -322,7 +324,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={handlePublish}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                 isPublished
                   ? 'bg-green-100 text-green-700 hover:bg-green-200'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'

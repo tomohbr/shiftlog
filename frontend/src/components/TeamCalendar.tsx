@@ -62,22 +62,22 @@ export default function TeamCalendar({ year, month, shifts, stores, today, onPic
               key={date}
               disabled={!inMonth}
               onClick={() => onPick(date)}
-              className={`min-h-[110px] pb-1.5 flex flex-col items-stretch text-left border-b border-r border-gray-100 ${inMonth ? 'hover:bg-blue-50/40' : 'bg-gray-50/60'}`}
+              className={`min-h-[96px] sm:min-h-[110px] pb-1.5 flex flex-col items-stretch text-left border-b border-r border-gray-100 ${inMonth ? 'hover:bg-blue-50/40' : 'bg-gray-50/60'}`}
             >
-              <div className="flex items-center justify-between px-1.5 pt-1">
+              <div className="flex items-center justify-center sm:justify-between px-1.5 pt-1">
                 <span className={`text-[13px] font-semibold w-6 h-6 flex items-center justify-center rounded-full ${
                   date === today ? 'bg-red-500 text-white' : !inMonth ? 'text-gray-300' : col === 5 ? 'text-blue-500' : col === 6 ? 'text-red-500' : 'text-gray-800'
                 }`}>{Number(date.slice(8))}</span>
-                {people > 0 && <span className="text-[11px] text-gray-400">{people}人</span>}
+                {people > 0 && <span className="hidden sm:inline text-[11px] text-gray-400">{people}人</span>}
               </div>
               {day.slice(0, maxChips).map(s => (
                 <span
                   key={s.id}
                   title={`${s.user_name} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}${s.store_name ? ` ${s.store_name}` : ''}`}
-                  className="mx-1 mt-[3px] rounded-[5px] px-1 text-[12px] leading-[21px] font-bold text-white flex items-center justify-between gap-1 overflow-hidden"
+                  className="mx-[2px] sm:mx-1 mt-[3px] rounded-[5px] px-0.5 sm:px-1 text-[12px] leading-[21px] font-bold text-white flex items-center justify-center sm:justify-between gap-1 overflow-hidden"
                   style={{ backgroundColor: s.store_id ? colorOf(s.store_id).solid : '#4C6EF5' }}
                 >
-                  <span className="truncate">{label(s.user_name)}</span>
+                  <span className="whitespace-nowrap overflow-hidden text-clip tracking-tighter sm:tracking-normal">{label(s.user_name)}</span>
                   <span className="text-[10px] font-semibold opacity-90 tabular-nums shrink-0 hidden xl:inline">{s.start_time.slice(0, 5).replace(/^0/, '')}</span>
                 </span>
               ))}

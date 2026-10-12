@@ -11,10 +11,10 @@ interface MonthNavigatorProps {
 
 export default function MonthNavigator({ currentDate, onPrev, onNext, onToday }: MonthNavigatorProps) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1 sm:gap-2">
       <button
         onClick={onToday}
-        className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        className="px-2.5 sm:px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
       >
         今月
       </button>
@@ -30,7 +30,7 @@ export default function MonthNavigator({ currentDate, onPrev, onNext, onToday }:
       >
         <ChevronRight className="w-5 h-5" />
       </button>
-      <h2 className="text-xl font-bold text-gray-900 min-w-[8rem]">
+      <h2 className="text-lg sm:text-xl font-bold text-gray-900 whitespace-nowrap">
         {format(currentDate, 'yyyy年M月', { locale: ja })}
       </h2>
     </div>
