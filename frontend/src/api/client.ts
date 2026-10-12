@@ -178,6 +178,17 @@ export const shiftsApi = {
     api.get(`/shifts/publication/${year}/${month}`),
   setPublication: (year: number, month: number, is_published: boolean) =>
     api.post('/shifts/publication', { year, month, is_published }),
+  pendingChanges: () => api.get<{ pending: PendingShiftChange[] }>('/shifts/changes/pending'),
+  notifyChanges: (user_ids?: number[]) =>
+    api.post<{ people: number; sent_line: number; not_linked: string[]; failed: string[] }>('/shifts/changes/notify', { user_ids }),
+}
+
+export interface ShiftSnap { date: string; start_time: string; end_time: string; store_id: number | null; store_name: string | null }
+export interface PendingShiftChange {
+  user_id: number
+  name: string
+  linked: boolean
+  changes: { ids: number[]; shift_id: number; before: ShiftSnap | null; after: ShiftSnap | null }[]
 }
 
 export const usersApi = {

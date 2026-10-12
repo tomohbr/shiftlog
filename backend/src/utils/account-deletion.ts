@@ -44,6 +44,7 @@ export function deleteCompanyData(companyId: number): void {
   db.prepare('DELETE FROM punch_events WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM time_records WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shifts WHERE company_id = ?').run(companyId);
+  db.prepare('DELETE FROM shift_changes WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_publications WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_requests WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_request_periods WHERE company_id = ?').run(companyId);
@@ -80,6 +81,7 @@ function deleteUserPersonalData(userId: number): void {
   db.prepare('DELETE FROM punch_events WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM time_records WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shifts WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM shift_changes WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shift_requests WHERE user_id = ?').run(userId);
 
   db.prepare('DELETE FROM user_skills WHERE user_id = ?').run(userId);

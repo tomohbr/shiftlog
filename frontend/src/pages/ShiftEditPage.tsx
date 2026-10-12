@@ -8,6 +8,7 @@ import { shiftsApi, usersApi, shiftRequestsApi, storesApi, Shift, User, Store } 
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import { storeColorMap } from '../lib/storeColors'
+import ShiftChangeNotice from '../components/ShiftChangeNotice'
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -137,6 +138,9 @@ export default function ShiftEditPage() {
           </button>
         </div>
       </div>
+
+      {/* 公開済みシフトの変更で、まだ本人に知らせていないもの */}
+      <ShiftChangeNotice refreshKey={shifts} />
 
       {/* 会場の切り替え（会場が2つ以上あるお店だけ） */}
       {multiStore && (

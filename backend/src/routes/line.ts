@@ -162,6 +162,47 @@ function shiftsCard(companyId: number, userId: number, name: string, heading: st
   };
 }
 
+// シフト変更のお知らせカード（変更前は取り消し線、変更後を太字で）
+type Snap = { date: string; start_time: string; end_time: string; store_name: string | null };
+const snapText = (x: Snap) => `${x.store_name ? x.store_name + ' ' : ''}${String(x.start_time).slice(0, 5)}–${String(x.end_time).slice(0, 5)}`;
+
+export async function sendShiftChangeCard(companyId: number, userId: number, name: string, changes: { before: Snap | null; after: Snap | null }[]): Promise<boolean> {
+  const s = db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  const to = db.prepare('SELECT line_user_id FROM user_line_ids WHERE user_id = ?').get(userId) as any;
+  if (!s?.channel_access_token || !to) return false;
+  const rows = changes.slice(0, 12).map(c => {
+    const d = (c.after || c.before)!.date;
+    const lines: any[] = [{ type: 'text', text: md2(d), weight: 'bold', size: 'md' }];
+    if (c.before && c.after && c.before.date !== c.after.date) lines[0].text = `${md2(c.before.date)} → ${md2(c.after.date)}`;
+    if (c.before) lines.push({ type: 'text', text: c.after ? snapText(c.before) : `${snapText(c.before)}`, size: 'sm', color: '#999999', decoration: 'line-through', wrap: true });
+    lines.push(c.after
+      ? { type: 'text', text: `${c.before ? '→ ' : '追加 '}${snapText(c.after)}`, size: 'md', weight: 'bold', color: c.before ? '#1C7ED6' : '#2F9E44', wrap: true }
+      : { type: 'text', text: 'この日はお休みになりました', size: 'md', weight: 'bold', color: '#E03131', wrap: true });
+    return { type: 'box', layout: 'vertical', spacing: 'xs', contents: lines };
+  });
+  const first = (changes[0].after || changes[0].before)!.date;
+  const card = {
+    type: 'flex',
+    altText: `【シフトログ】シフトが変わりました（${changes.length}件）`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'lg',
+        contents: [
+          { type: 'text', text: `${name}さんのシフトが変わりました`, weight: 'bold', size: 'md', wrap: true },
+          ...rows,
+          ...(changes.length > 12 ? [{ type: 'text', text: `ほか${changes.length - 12}件`, size: 'sm', color: '#888888' }] : []),
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical',
+        contents: [{ type: 'button', style: 'primary', color: '#1C7ED6', action: { type: 'uri', label: 'シフトを見る', uri: requestLinkUrl(userId, companyId, Number(first.slice(0, 4)), Number(first.slice(5, 7)), 'shifts') } }],
+      },
+    },
+  };
+  return sendLineMessage(s.channel_access_token, to.line_user_id, card);
+}
+
 // 希望提出の案内カード（長いURLを見せず、ボタン1つで提出ページを開く）
 type CardPeriod = { year: number; month: number; start_date?: string | null; end_date?: string | null; deadline?: string | null };
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;

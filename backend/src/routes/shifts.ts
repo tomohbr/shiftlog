@@ -2,9 +2,10 @@ import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
-import { pushToCompanyAsync } from '../utils/apns';
+import { pushToCompanyAsync, pushToUsersAsync } from '../utils/apns';
 import { requireProForPastMonths } from '../utils/billing';
-import { notifyShiftPublished } from './line';
+import { notifyShiftPublished, sendShiftChangeCard } from './line';
+import { recordShiftChange, snapOf, pendingChanges, markNotified } from '../utils/shiftChanges';
 
 const router = Router();
 
@@ -64,6 +65,31 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
 
   const shifts = db.prepare(query).all(...params);
   res.json({ shifts });
+});
+
+// GET /api/shifts/changes/pending - 公開済みシフトのうち、まだ本人に知らせていない変更（管理者）
+router.get('/changes/pending', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  res.json({ pending: pendingChanges(req.companyId!) });
+});
+
+// POST /api/shifts/changes/notify { user_ids? } - 変更を本人に知らせる（LINE＋アプリ通知）。省略時は全員
+router.post('/changes/notify', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  const companyId = req.companyId!;
+  const only: number[] | null = Array.isArray(req.body?.user_ids) ? req.body.user_ids.map(Number) : null;
+  const targets = pendingChanges(companyId).filter(p => !only || only.includes(p.user_id));
+  let sentLine = 0;
+  const notLinked: string[] = [];
+  const failed: string[] = [];
+  for (const p of targets) {
+    const ok = p.linked ? await sendShiftChangeCard(companyId, p.user_id, p.name, p.changes) : false;
+    if (ok) sentLine++; else (p.linked ? failed : notLinked).push(p.name);
+    pushToUsersAsync([p.user_id], { title: 'シフトが変わりました', body: `${p.changes.length}件の変更があります`, path: '/my-shifts' });
+    markNotified(p.changes.flatMap(c => c.ids));
+  }
+  logAudit({ userId: req.user!.id, companyId, action: 'notify', entity: 'shift_change', summary: `シフト変更を${targets.length}人に通知（LINE ${sentLine}人）` });
+  res.json({ people: targets.length, sent_line: sentLine, not_linked: notLinked, failed });
 });
 
 // GET /api/shifts/:id
@@ -147,6 +173,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   `).get(result.lastInsertRowid) as any;
 
   logAudit({ userId: req.user!.id, companyId, action: 'create', entity: 'shift', entityId: Number(result.lastInsertRowid), summary: `${shift?.user_name} ${date} ${start_time}-${end_time} のシフトを追加` });
+  recordShiftChange(companyId, Number(user_id), Number(result.lastInsertRowid), null, snapOf(result.lastInsertRowid));
   res.status(201).json({ shift });
 });
 
@@ -166,6 +193,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   }
 
   const { user_id, date, start_time, end_time, break_minutes, notes, status } = req.body;
+  const beforeSnap = snapOf(shift.id);
   // store_id は送られたときだけ変える（null で会場なしに戻す）
   let storeId: number | null = shift.store_id ?? null;
   if ('store_id' in req.body) {
@@ -202,7 +230,16 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
     LEFT JOIN stores st ON st.id = s.store_id
     WHERE s.id = ?
-  `).get(req.params.id);
+  `).get(req.params.id) as any;
+
+  // 変更の記録（担当の人が変わったら、元の人には「なくなった」、新しい人には「増えた」）
+  const afterSnap = snapOf(shift.id);
+  if (updated && updated.user_id !== shift.user_id) {
+    recordShiftChange(companyId, shift.user_id, shift.id, beforeSnap, null);
+    recordShiftChange(companyId, updated.user_id, shift.id, null, afterSnap);
+  } else {
+    recordShiftChange(companyId, shift.user_id, shift.id, beforeSnap, afterSnap);
+  }
 
   res.json({ shift: updated });
 });
@@ -216,13 +253,15 @@ router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res:
     return;
   }
 
-  const shift = db.prepare('SELECT * FROM shifts WHERE id = ? AND company_id = ?').get(req.params.id, companyId);
+  const shift = db.prepare('SELECT * FROM shifts WHERE id = ? AND company_id = ?').get(req.params.id, companyId) as any;
   if (!shift) {
     res.status(404).json({ error: 'シフトが見つかりません' });
     return;
   }
 
+  const beforeSnap = snapOf(shift.id);
   db.prepare('DELETE FROM shifts WHERE id = ? AND company_id = ?').run(req.params.id, companyId);
+  recordShiftChange(companyId, shift.user_id, shift.id, beforeSnap, null);
   logAudit({ userId: req.user!.id, companyId, action: 'delete', entity: 'shift', entityId: Number(req.params.id), summary: `シフト #${req.params.id} を削除` });
   res.json({ message: 'シフトを削除しました' });
 });
