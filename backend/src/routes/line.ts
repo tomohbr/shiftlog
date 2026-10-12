@@ -578,8 +578,10 @@ async function replyMenu(what: string, companyId: number, lineUserId: string, to
   if (what === 'requests') return replyRequestLink(companyId, lineUserId, token, replyToken);
   if (what === 'absent') return replyAbsentPicker(companyId, lineUserId, token, replyToken);
   if (what === 'howto') {
-    return replyLine(token, replyToken,
-      '【打刻のしかた】\n① 会場のブースに貼ってある「打刻用QR」をスマホのカメラで読み取る\n② 初めてのときだけ自分の名前を選ぶ\n③「出勤」「休憩」「休憩終わり」「退勤」の大きなボタンを押す\n\n押した時刻と会場が記録されます。今日の予定と違う会場のQRだと注意が出ますが、ヘルプで入るときはそのまま押してOKです。');
+    const liff = (db.prepare('SELECT liff_id FROM line_settings WHERE company_id = ?').get(companyId) as any)?.liff_id;
+    return replyLine(token, replyToken, liff
+      ? `【打刻のしかた】\n① このトーク画面の下のメニュー「打刻する」を押す\n②「ブースのQRを読む」を押して、ブースに貼ってあるQRを読む\n③「出勤」「休憩開始」「休憩終了」「退勤」を押す\n\nLINEで本人を確かめるので、名前を選ぶ必要はありません。自分の分しか打刻できません。\nhttps://liff.line.me/${liff}`
+      : '【打刻のしかた】\n① 会場のブースに貼ってある「打刻用QR」をスマホのカメラで読み取る\n② 初めてのときだけ自分の名前を選ぶ\n③「出勤」「休憩」「休憩終わり」「退勤」の大きなボタンを押す\n\n押した時刻と会場が記録されます。今日の予定と違う会場のQRだと注意が出ますが、ヘルプで入るときはそのまま押してOKです。');
   }
   if (what !== 'shifts') return;
   const who = db.prepare(`

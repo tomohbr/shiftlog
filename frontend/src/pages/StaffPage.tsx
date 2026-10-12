@@ -310,6 +310,15 @@ export default function StaffPage() {
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {lineReady && (
             <button
+              onClick={() => window.open('/staff-guide', '_blank')}
+              className="flex items-center justify-center whitespace-nowrap min-h-[44px] sm:min-h-0 gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-[#06C755] bg-white border-2 border-[#06C755] rounded-lg hover:bg-green-50"
+            >
+              <Send className="w-4 h-4" />
+              <span>スタッフ向けの使い方</span>
+            </button>
+          )}
+          {lineReady && (
+            <button
               onClick={() => window.open('/line-invites/print', '_blank')}
               className="flex items-center justify-center whitespace-nowrap min-h-[44px] sm:min-h-0 gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-white bg-[#06C755] rounded-lg hover:opacity-90"
             >

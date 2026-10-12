@@ -40,6 +40,7 @@ import StoreQrPosterPage from './pages/StoreQrPosterPage'
 import LineInvitePage from './pages/LineInvitePage'
 import LiffPunchPage from './pages/LiffPunchPage'
 import LineInvitePrintPage from './pages/LineInvitePrintPage'
+import StaffGuidePage from './pages/StaffGuidePage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -134,6 +135,10 @@ function AppRoutes() {
   // 印刷用QRポスターはレイアウト（サイドバー等）なしの独立ページとして表示する
   if (isAdminRole && location.pathname === '/qr-poster') {
     return <QrPosterPage />
+  }
+  // スタッフ向けの使い方（印刷・LINEで送る）
+  if (isAdminRole && location.pathname === '/staff-guide') {
+    return <StaffGuidePage />
   }
   // LINE 招待カードの一括印刷
   if (isAdminRole && location.pathname === '/line-invites/print') {
