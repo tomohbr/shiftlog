@@ -114,7 +114,8 @@ export default function DashboardPage() {
   const criticalEmpty = noStore && noShift // 店舗もシフトもない = ほぼ未使用
   // 店舗・スタッフ・シフトが揃っても、スタッフが一度も打刻していなければ「定着」できていない。
   // 実データで全社がこの段階で止まっていたため、打刻ゼロの間は案内を消さない。
-  const setupStepsDone = !noStore && !noStaff && !noShift
+  // シフトは月ごとに空になるので、店舗とスタッフがそろえば準備は済んだとみなす（空の月は下のカレンダーで案内する）
+  const setupStepsDone = !noStore && !noStaff
   const companyPin = (selectedCompany as any)?.company_pin || ''
 
   return (
@@ -285,70 +286,30 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <div className="card flex items-center gap-3 p-4">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-            <Calendar className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">今月のシフト</p>
-            <p className="text-xl font-bold text-gray-900">{totalShifts}</p>
-          </div>
-        </div>
-
-        <div className="card flex items-center gap-3 p-4">
-          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-            <Clock className="w-5 h-5 text-green-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">本日の出勤</p>
-            <p className="text-xl font-bold text-gray-900">{todayShifts.length}</p>
-          </div>
-        </div>
-
-        <div className="card flex items-center gap-3 p-4">
-          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-            <Users className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">スタッフ数</p>
-            <p className="text-xl font-bold text-gray-900">{users.length}</p>
-          </div>
-        </div>
-
-        <Link to="/labor" className="card flex items-center gap-3 p-4 hover:ring-2 hover:ring-yellow-400 transition">
-          <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-            <DollarSign className="w-5 h-5 text-yellow-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">今月の人件費</p>
-            <p className="text-xl font-bold text-gray-900">¥{monthlyLabor.toLocaleString()}</p>
-          </div>
-        </Link>
-
-        <Link to="/labor" className={`card flex items-center gap-3 p-4 hover:ring-2 hover:ring-red-400 transition ${alertCount > 0 ? 'bg-red-50 border-red-200' : ''}`}>
-          <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-            <AlertTriangle className="w-5 h-5 text-red-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">労務アラート</p>
-            <p className="text-xl font-bold text-gray-900">{alertCount}</p>
-          </div>
-        </Link>
-
-        <Link to="/swaps" className={`card flex items-center gap-3 p-4 hover:ring-2 hover:ring-orange-400 transition ${pendingSwaps > 0 ? 'bg-orange-50 border-orange-200' : ''}`}>
-          <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-            <Repeat className="w-5 h-5 text-orange-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">交代リクエスト</p>
-            <p className="text-xl font-bold text-gray-900">{pendingSwaps}</p>
-          </div>
-        </Link>
-      </div>
-
       {/* 今日の会場ごとの状況（いちばん上に） */}
       {stores.length > 0 && <TodayByVenue stores={stores} />}
+
+      {/* 数字は1本の帯に小さくまとめる（主役は今日の会場とカレンダー） */}
+      <div className="card p-0 grid grid-cols-3 lg:grid-cols-6 divide-x divide-y lg:divide-y-0 divide-gray-100 overflow-hidden">
+        {([
+          ['今月のシフト', `${totalShifts}件`, null, ''],
+          ['今日の出勤予定', `${todayShifts.length}人`, null, ''],
+          ['スタッフ', `${users.length}人`, '/staff', ''],
+          ['今月の人件費', `¥${monthlyLabor.toLocaleString()}`, '/labor', ''],
+          ['労務アラート', `${alertCount}件`, '/labor', alertCount > 0 ? 'text-red-600' : ''],
+          ['交代リクエスト', `${pendingSwaps}件`, '/swaps', pendingSwaps > 0 ? 'text-orange-600' : ''],
+        ] as const).map(([label, value, to, cls]) => {
+          const body = (
+            <>
+              <p className="text-[11px] text-gray-500">{label}</p>
+              <p className={`text-lg font-bold text-gray-900 tabular-nums ${cls}`}>{value}</p>
+            </>
+          )
+          return to
+            ? <Link key={label} to={to} className="px-4 py-2.5 hover:bg-gray-50">{body}</Link>
+            : <div key={label} className="px-4 py-2.5">{body}</div>
+        })}
+      </div>
 
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
@@ -378,6 +339,14 @@ export default function DashboardPage() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         ) : (
+          <>
+          {shifts.length === 0 && (
+            <div className="mx-4 mt-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 flex flex-wrap items-center gap-3">
+              <p className="text-sm text-blue-900 flex-1 min-w-[200px]"><b>{currentDate.getMonth() + 1}月のシフトはまだありません。</b>スタッフの希望から下書きを作るか、シフト管理で入れてください。</p>
+              <Link to="/auto-schedule" className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold">希望から自動で作る</Link>
+              <Link to="/shifts" className="px-3 py-2 rounded-lg border border-blue-300 text-blue-700 text-sm font-bold bg-white">シフト管理で作る</Link>
+            </div>
+          )}
           <TeamCalendar
             year={currentDate.getFullYear()}
             month={currentDate.getMonth() + 1}
@@ -386,6 +355,7 @@ export default function DashboardPage() {
             today={new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
             onPick={setDayOpen}
           />
+          </>
         )}
       </div>
 
