@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import db from '../db';
-import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { authenticateToken, requireCompany, requireAdmin, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { pushToCompanyAsync, pushToUsersAsync } from '../utils/apns';
 import { requireProForPastMonths } from '../utils/billing';
@@ -296,7 +296,7 @@ router.post('/bulk', authenticateToken, requireCompany, (req: AuthRequest, res: 
 });
 
 // GET /api/shifts/report/summary
-router.get('/report/summary', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/report/summary', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const { year, month } = req.query;
 

@@ -102,7 +102,15 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
     JOIN user_companies uc ON u.id = uc.user_id AND uc.company_id = ?
     WHERE u.is_active = 1
     ORDER BY u.role DESC, u.name ASC
-  `).all(companyId, companyId, companyId);
+  `).all(companyId, companyId, companyId) as any[];
+
+  // スタッフには名前と色だけ返す（時給・電話・メール・打刻用PINなどは管理者だけ）
+  const isAdmin = ['admin', 'super_admin'].includes(req.user!.role) ||
+    (db.prepare('SELECT role FROM user_companies WHERE user_id = ? AND company_id = ?').get(req.user!.id, companyId) as any)?.role === 'admin';
+  if (!isAdmin) {
+    res.json({ users: users.map(u => ({ id: u.id, name: u.name, role: u.role, company_role: u.company_role, color: u.color, is_active: u.is_active })) });
+    return;
+  }
 
   res.json({ users });
 });

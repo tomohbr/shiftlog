@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
-import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { authenticateToken, requireCompany, requireAdmin, AuthRequest } from '../middleware/auth';
+import { lineOnlyInfo } from './qr-clock';
 import { getJSTDate } from '../utils/jst';
 import {
   ResolvedPunchTime,
@@ -140,6 +141,19 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
 function punchHandler(action: PunchAction) {
   return (req: AuthRequest, res: Response): void => {
     const companyId = req.companyId!;
+    const isAdmin = ['admin', 'super_admin'].includes(req.user!.role) ||
+      (db.prepare('SELECT role FROM user_companies WHERE user_id = ? AND company_id = ?').get(req.user!.id, companyId) as any)?.role === 'admin';
+    // ほかの人の分を打刻できるのは管理者だけ（以前はスタッフでも user_id を指定すれば他人の打刻ができた）
+    if (req.body.user_id && Number(req.body.user_id) !== req.user!.id && !isAdmin) {
+      res.status(403).json({ error: 'ほかの人の打刻はできません' });
+      return;
+    }
+    // 「打刻は本人のLINEからだけ」のお店は、スタッフのアプリ・Webからの打刻も受け付けない
+    const lineOnly = lineOnlyInfo(companyId);
+    if (lineOnly && !isAdmin) {
+      res.status(403).json({ error: 'このお店は、LINEのメニュー「打刻する」から打刻してください', line_only: true, liff_url: lineOnly });
+      return;
+    }
     const userId = req.body.user_id ? Number(req.body.user_id) : req.user!.id;
     if (req.body.user_id && !userBelongsToCompany(userId, companyId)) {
       res.status(403).json({ error: 'このスタッフは会社に所属していません' });
@@ -300,7 +314,7 @@ router.get('/:id/edits', authenticateToken, requireCompany, (req: AuthRequest, r
 });
 
 // GET /api/timecards/summary - 月別集計
-router.get('/summary', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/summary', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const { year, month, store_id } = req.query;
 

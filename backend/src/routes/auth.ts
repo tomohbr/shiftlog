@@ -5,6 +5,7 @@ import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { JWT_SECRET, authenticateToken, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { verifyRequestLink } from './line';
+import { lineOnlyInfo } from './qr-clock';
 import { getJSTDate, getJSTTime } from '../utils/jst';
 import { ClockAction, ClockError, applyPunch, parseLocation, userBelongsToCompany } from '../utils/clock';
 import { sendMail } from '../utils/mailer';
@@ -109,6 +110,10 @@ router.post('/kiosk-clock', (req: Request, res: Response): void => {
     res.status(401).json({ error: 'PINが正しくありません' });
     return;
   }
+  if (lineOnlyInfo(company.id)) {
+    res.status(403).json({ error: 'このお店は、LINEのメニュー「打刻する」から打刻してください', line_only: true });
+    return;
+  }
 
   // Verify user belongs to this company
   if (!userBelongsToCompany(userId, company.id)) {
@@ -176,6 +181,18 @@ router.post('/pin-login', (req: Request, res: Response): void => {
 
   if (!userRow) {
     res.status(401).json({ error: 'スタッフが見つかりません' });
+    return;
+  }
+
+  // 「LINEからだけ」のお店は、会社PINで名前を選ぶログイン自体を止める（他人になりすませるため）。スタッフはLINEのリンクから入る
+  if (lineOnlyInfo(company.id)) {
+    res.status(403).json({ error: 'このお店は、LINEのメニューから開いてください（会社PINでのログインは使えません）', line_only: true });
+    return;
+  }
+
+  // 会社PINだけで管理者としてログインできないようにする（会社PINはスタッフ用のQRに載っているため）
+  if (['admin', 'super_admin'].includes(userRow.role) || userRow.company_role === 'admin') {
+    res.status(403).json({ error: '管理者はメールアドレスとパスワードでログインしてください' });
     return;
   }
 

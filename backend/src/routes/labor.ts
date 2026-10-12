@@ -1,11 +1,11 @@
 import { Router, Response } from 'express';
 import db from '../db';
-import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { authenticateToken, requireCompany, requireAdmin, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 // GET /api/labor/costs?year=2026&month=3 - Labor cost calculation
-router.get('/costs', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/costs', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const datePrefix = `${year}-${String(Number(month as string)).padStart(2, '0')}`;
@@ -44,7 +44,7 @@ router.get('/costs', authenticateToken, requireCompany, (req: AuthRequest, res: 
 });
 
 // GET /api/labor/alerts?year=2026&month=3 - Labor law alerts
-router.get('/alerts', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/alerts', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const datePrefix = `${year}-${String(Number(month as string)).padStart(2, '0')}`;
@@ -168,7 +168,7 @@ router.get('/alerts', authenticateToken, requireCompany, (req: AuthRequest, res:
 });
 
 // GET /api/labor/ratio?year=2026&month=3 - Labor cost ratio
-router.get('/ratio', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/ratio', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const datePrefix = `${year}-${String(Number(month as string)).padStart(2, '0')}`;
@@ -240,7 +240,7 @@ router.post('/sales', authenticateToken, requireCompany, (req: AuthRequest, res:
 });
 
 // GET /api/labor/sales?year=2026&month=3
-router.get('/sales', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/sales', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const sales = db.prepare(
