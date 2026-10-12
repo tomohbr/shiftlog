@@ -24,3 +24,8 @@ export function storeColorMap(stores: { id: number }[]): (storeId?: number | nul
     return i < 0 ? NONE : PALETTE[i % PALETTE.length]
   }
 }
+
+/** 並び順（id 昇順で何番目か）から色を引く。会場一覧を持たない画面（QR打刻）用 */
+export function storeColorByIndex(index?: number | null): StoreColor {
+  return index == null || index < 0 ? NONE : PALETTE[index % PALETTE.length]
+}

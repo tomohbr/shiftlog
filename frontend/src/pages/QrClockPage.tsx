@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MapPin, Play, Square, Coffee, CheckCircle2, UserRound, Loader2, Search } from 'lucide-react'
+import { MapPin, Play, Square, Coffee, CheckCircle2, UserRound, Loader2, Search, CalendarClock, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { qrClockApi, QrClockAction, QrClockInfo, QrClockStatus } from '../api/client'
+import { storeColorByIndex } from '../lib/storeColors'
 import { useAuth } from '../contexts/AuthContext'
 
 // 会場QRの打刻画面（/q/<token>）。ブースに貼ったポスターをスタッフが自分のスマホで読み取って開く。
@@ -66,6 +67,8 @@ export default function QrClockPage({ token }: { token: string }) {
   const [me, setMe] = useState<Me | null>(null)
   const [choosing, setChoosing] = useState(false)
   const [status, setStatus] = useState<QrClockStatus | null>(null)
+  // 今日のシフト（違う会場のQRを読んだら気づけるように）
+  const [todayShifts, setTodayShifts] = useState<{ start_time: string; end_time: string; store_id: number | null; store_name: string | null }[]>([])
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<Done | null>(null)
   const [query, setQuery] = useState('')
@@ -108,6 +111,7 @@ export default function QrClockPage({ token }: { token: string }) {
     try {
       const res = await qrClockApi.status(token, target.id)
       setStatus(res.data)
+      setTodayShifts(res.data.today_shifts || [])
       setPhase('punch')
     } catch (e: any) {
       // 退職などで会社から外れた人を覚えていた場合は、名前選択からやり直す
@@ -167,11 +171,13 @@ export default function QrClockPage({ token }: { token: string }) {
   }
 
   const venueName = info?.store.name || ''
+  // 会場の色（シフト画面・管理画面と同じ色）。ブースを間違えていないか色でも分かるように
+  const venueColor = storeColorByIndex(info?.store.color_index)
   const header = (
-    <header className="bg-white border-b border-gray-200 px-4 pt-5 pb-4 text-center">
+    <header className="bg-white border-b border-gray-200 px-4 pt-5 pb-4 text-center border-t-8" style={{ borderTopColor: venueName ? venueColor.solid : 'transparent' }}>
       {info && <p className="text-xs text-gray-500 break-words">{info.company.name}</p>}
       <h1 className="mt-1 flex items-center justify-center gap-1.5 text-2xl font-bold text-gray-900 break-words">
-        {venueName && <MapPin className="w-6 h-6 text-blue-600 shrink-0" />}
+        {venueName && <MapPin className="w-6 h-6 shrink-0" style={{ color: venueColor.solid }} />}
         <span className="min-w-0">{venueName || 'シフトログ'}</span>
       </h1>
       <p className="mt-2 text-4xl font-mono font-bold text-gray-900 tabular-nums">{now.toTimeString().slice(0, 5)}</p>
@@ -309,6 +315,34 @@ export default function QrClockPage({ token }: { token: string }) {
             別の人で打刻
           </button>
         </div>
+
+        {/* 今日の予定。違う会場のQRなら注意を出す（打刻はそのままできる） */}
+        {todayShifts.length > 0 && (() => {
+          const here = todayShifts.some(t => !t.store_id || t.store_id === info?.store.id)
+          const elsewhere = todayShifts.find(t => t.store_id && t.store_id !== info?.store.id)
+          return (
+            <div className="space-y-2">
+              <div className="rounded-xl bg-white border border-gray-200 px-4 py-3">
+                <p className="text-xs font-bold text-gray-500 flex items-center gap-1"><CalendarClock className="w-4 h-4" />今日の予定</p>
+                {todayShifts.map((t, i) => (
+                  <p key={i} className="text-lg font-bold text-gray-900 tabular-nums">
+                    {t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)}
+                    {t.store_name && <span className="ml-2 text-base">{t.store_name}</span>}
+                  </p>
+                ))}
+              </div>
+              {!here && elsewhere && (
+                <div className="rounded-xl bg-amber-50 border-2 border-amber-300 px-4 py-3 flex gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-900">
+                    今日は<span className="font-bold">{elsewhere.store_name}</span>の予定です。ここは<span className="font-bold">{venueName}</span>のQRです。<br />
+                    ヘルプなどでこちらに入るなら、このまま打刻してください。
+                  </p>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         <div className={`rounded-xl px-4 py-3 text-center text-base font-semibold ${
           state === 'not_started' ? 'bg-gray-100 text-gray-700' :

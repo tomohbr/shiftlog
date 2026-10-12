@@ -204,7 +204,7 @@ export const storesApi = {
 // 会場QRの打刻（/q/<token>。ログイン不要）
 export type QrClockAction = 'clock-in' | 'clock-out' | 'break-start' | 'break-end'
 export interface QrClockInfo {
-  store: { id: number; name: string }
+  store: { id: number; name: string; color_index?: number }
   company: { id: number; name: string }
   staff: { id: number; name: string; color?: string }[]
 }
@@ -225,7 +225,7 @@ export interface QrClockStatus {
 export const qrClockApi = {
   info: (token: string) => api.get<QrClockInfo>(`/qr/${encodeURIComponent(token)}`),
   status: (token: string, userId: number) =>
-    api.get<QrClockStatus & { user: { id: number; name: string } }>(`/qr/${encodeURIComponent(token)}/status`, { params: { userId } }),
+    api.get<QrClockStatus & { user: { id: number; name: string }; today_shifts?: { start_time: string; end_time: string; store_id: number | null; store_name: string | null }[] }>(`/qr/${encodeURIComponent(token)}/status`, { params: { userId } }),
   punch: (token: string, payload: { userId: number; action: QrClockAction; lat?: number; lng?: number; accuracy?: number }) =>
     api.post<QrClockStatus & { ok: true; action: QrClockAction; date: string; time: string; store_name: string; user: { id: number; name: string } }>(
       `/qr/${encodeURIComponent(token)}/punch`, payload

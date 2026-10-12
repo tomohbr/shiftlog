@@ -67,8 +67,10 @@ router.get('/:token', (req: Request, res: Response): void => {
     WHERE u.is_active = 1
     ORDER BY u.name ASC
   `).all(store.company_id);
+  // 会場の色（管理・スタッフ画面と同じ並び＝id順で何番目か）
+  const ids = (db.prepare('SELECT id FROM stores WHERE company_id = ? ORDER BY id').all(store.company_id) as { id: number }[]).map(r => r.id);
   res.json({
-    store: { id: store.id, name: store.name },
+    store: { id: store.id, name: store.name, color_index: ids.indexOf(store.id) },
     company: { id: store.company_id, name: store.company_name },
     staff,
   });
@@ -87,7 +89,17 @@ router.get('/:token/status', (req: Request, res: Response): void => {
     return;
   }
   const user = db.prepare('SELECT id, name FROM users WHERE id = ?').get(userId);
-  res.json({ user, ...todayStatus(store.company_id, userId) });
+  // 今日のシフト（公開済みの月だけ）。違う会場のQRを読んだときに気づけるように会場も返す
+  const today = getJSTDate();
+  const published = db.prepare(
+    'SELECT 1 FROM shift_publications WHERE company_id = ? AND year = ? AND month = ? AND is_published = 1'
+  ).get(store.company_id, Number(today.slice(0, 4)), Number(today.slice(5, 7)));
+  const todayShifts = published ? db.prepare(`
+    SELECT s.start_time, s.end_time, s.store_id, st.name AS store_name
+    FROM shifts s LEFT JOIN stores st ON st.id = s.store_id
+    WHERE s.company_id = ? AND s.user_id = ? AND s.date = ? ORDER BY s.start_time
+  `).all(store.company_id, userId, today) : [];
+  res.json({ user, ...todayStatus(store.company_id, userId), today_shifts: todayShifts });
 });
 
 // POST /api/qr/:token/punch - 打刻 { userId, action, lat?, lng?, accuracy? }
