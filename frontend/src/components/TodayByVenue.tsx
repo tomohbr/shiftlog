@@ -11,7 +11,7 @@ const toMin = (t?: string | null) => { if (!t) return 0; const [h, m] = t.split(
 
 type State = { key: 'before' | 'late' | 'working' | 'break' | 'done'; label: string; cls: string; order: number }
 
-export default function TodayByVenue({ stores }: { stores: Store[] }) {
+export default function TodayByVenue({ stores, onlyStoreId = null }: { stores: Store[]; onlyStoreId?: number | null }) {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [records, setRecords] = useState<TimeRecord[]>([])
   const [now, setNow] = useState(new Date())
@@ -48,8 +48,8 @@ export default function TodayByVenue({ stores }: { stores: Store[] }) {
 
   const groups = [...sorted.map(st => ({ id: st.id as number | null, name: st.name })), { id: null, name: '会場なし' }]
     .map(g => ({ ...g, rows: shifts.filter(s => (s.store_id ?? null) === g.id).sort((a, b) => a.start_time.localeCompare(b.start_time)) }))
-    .filter(g => g.rows.length > 0)
-  const lateCount = shifts.filter(s => stateOf(s).key === 'late').length
+    .filter(g => g.rows.length > 0 && (onlyStoreId === null || g.id === onlyStoreId))
+  const lateCount = groups.flatMap(g => g.rows).filter(s => stateOf(s).key === 'late').length
 
   return (
     <div className="card p-0 overflow-hidden">
@@ -62,7 +62,7 @@ export default function TodayByVenue({ stores }: { stores: Store[] }) {
       {loading ? (
         <div className="py-8 text-center text-sm text-gray-400">読み込み中…</div>
       ) : groups.length === 0 ? (
-        <div className="py-8 text-center text-sm text-gray-400">今日のシフトはありません</div>
+        <div className="py-8 text-center text-sm text-gray-400">今日の{onlyStoreId ? `${stores.find(s => s.id === onlyStoreId)?.name || ''}の` : ''}シフトはありません</div>
       ) : (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
           {groups.map(g => {

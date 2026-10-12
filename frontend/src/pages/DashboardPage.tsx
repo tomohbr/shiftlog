@@ -24,6 +24,15 @@ export default function DashboardPage() {
   const [isPublished, setIsPublished] = useState(false)
   const [stores, setStores] = useState<Store[]>([])
   const [dayOpen, setDayOpen] = useState<string | null>(null)
+  // 見る会場（null = 全会場）。ブースの責任者が自分の会場だけ見られるように、端末に覚えておく
+  const VENUE_KEY = `shiftlog:dashboardVenue:${selectedCompany?.id ?? ''}`
+  const [venue, setVenueState] = useState<number | null>(() => {
+    try { const v = localStorage.getItem(VENUE_KEY); return v ? Number(v) : null } catch { return null }
+  })
+  const setVenue = (v: number | null) => {
+    setVenueState(v)
+    try { v ? localStorage.setItem(VENUE_KEY, String(v)) : localStorage.removeItem(VENUE_KEY) } catch { /* 覚えられなくても切り替えはできる */ }
+  }
 
   const loadData = useCallback(async () => {
     if (!selectedCompany) return
@@ -83,8 +92,8 @@ export default function DashboardPage() {
   }
 
   const todayStr = format(new Date(), 'yyyy-MM-dd')
-  const todayShifts = shifts.filter(s => s.date === todayStr)
-  const totalShifts = shifts.length
+  const todayShifts = shifts.filter(s => s.date === todayStr && (!venue || s.store_id === venue))
+  const totalShifts = venue ? shifts.filter(s => s.store_id === venue).length : shifts.length
 
   const [monthlyLabor, setMonthlyLabor] = useState<number>(0)
   const [alertCount, setAlertCount] = useState<number>(0)
@@ -288,7 +297,31 @@ export default function DashboardPage() {
       )}
 
       {/* 今日の会場ごとの状況（いちばん上に） */}
-      {stores.length > 0 && <TodayByVenue stores={stores} />}
+      {/* 会場の切り替え（全画面で同じ色） */}
+      {stores.length > 1 && (() => {
+        const colorOf = storeColorMap(stores)
+        return (
+          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+            {[{ id: null as number | null, name: '全会場' }, ...[...stores].sort((a, b) => a.id - b.id)].map(st => {
+              const active = venue === st.id
+              const c = st.id ? colorOf(st.id) : null
+              return (
+                <button
+                  key={st.id ?? 'all'}
+                  onClick={() => setVenue(st.id)}
+                  className={`shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border-2 transition-colors ${active ? 'text-white' : 'bg-white text-gray-700 border-gray-200'}`}
+                  style={active ? { backgroundColor: c?.solid || '#212529', borderColor: c?.solid || '#212529' } : undefined}
+                >
+                  {c && <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: active ? '#fff' : c.solid }} />}
+                  {st.name}
+                </button>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {stores.length > 0 && <TodayByVenue stores={stores} onlyStoreId={venue} />}
 
       {/* 数字は1本の帯に小さくまとめる（主役は今日の会場とカレンダー） */}
       <div className="card p-0 grid grid-cols-3 lg:grid-cols-6 divide-x divide-y lg:divide-y-0 divide-gray-100 overflow-hidden">
@@ -352,7 +385,7 @@ export default function DashboardPage() {
           <TeamCalendar
             year={currentDate.getFullYear()}
             month={currentDate.getMonth() + 1}
-            shifts={shifts}
+            shifts={venue ? shifts.filter(x => x.store_id === venue) : shifts}
             stores={stores}
             today={new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
             onPick={setDayOpen}
@@ -365,7 +398,7 @@ export default function DashboardPage() {
       {dayOpen && (() => {
         const colorOf = storeColorMap(stores)
         const sorted = [...stores].sort((a, b) => a.id - b.id)
-        const day = shifts.filter(x => x.date === dayOpen)
+        const day = shifts.filter(x => x.date === dayOpen && (!venue || x.store_id === venue))
         const groups = [...sorted.map(st => ({ id: st.id as number | null, name: st.name })), { id: null, name: '会場なし' }]
           .map(g => ({ ...g, rows: day.filter(x => (x.store_id ?? null) === g.id).sort((a, b) => a.start_time.localeCompare(b.start_time)) }))
           .filter(g => g.rows.length > 0)
