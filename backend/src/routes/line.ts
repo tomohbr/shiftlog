@@ -805,19 +805,24 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
 
 // トーク画面の下のメニューを付ける（画像は backend/assets/richmenu.png、2500x843 の4分割）
 export async function installRichMenu(companyId: number): Promise<{ ok: boolean; error?: string }> {
-  const s = db.prepare('SELECT channel_access_token, rich_menu_id FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  const s = db.prepare('SELECT channel_access_token, rich_menu_id, liff_id FROM line_settings WHERE company_id = ?').get(companyId) as any;
   if (!s?.channel_access_token) return { ok: false, error: 'LINE 通知の設定がまだです' };
   const token = s.channel_access_token;
   const W = 2500, H = 843, w = Math.floor(W / 4);
+  const bounds = (i: number) => ({ x: i * w, y: 0, width: i === 3 ? W - 3 * w : w, height: H });
   const area = (i: number, data: string, label: string) => ({
-    bounds: { x: i * w, y: 0, width: i === 3 ? W - 3 * w : w, height: H },
+    bounds: bounds(i),
     action: { type: 'postback', data: `menu=${data}`, displayText: label },
   });
+  // 「打刻する」は LIFF があれば本人専用の打刻画面を開く。なければ打刻のしかたを返す
+  const punchArea = s.liff_id
+    ? { bounds: bounds(3), action: { type: 'uri', uri: `https://liff.line.me/${s.liff_id}` } }
+    : area(3, 'howto', '打刻のしかた');
   const created = await lineApi(token, '/v2/bot/richmenu', {
     method: 'POST',
     body: {
       size: { width: W, height: H }, selected: true, name: 'shiftlog-menu', chatBarText: 'シフトのメニュー',
-      areas: [area(0, 'shifts', 'シフトを見る'), area(1, 'requests', '希望を出す'), area(2, 'absent', '休みの連絡'), area(3, 'howto', '打刻のしかた')],
+      areas: [area(0, 'shifts', 'シフトを見る'), area(1, 'requests', '希望を出す'), area(2, 'absent', '休みの連絡'), punchArea],
     },
   });
   const id = created.data?.richMenuId;

@@ -22,7 +22,13 @@ export function generateQrToken(): string {
   return crypto.randomBytes(18).toString('base64url');
 }
 
-function findStoreByToken(token: string): any | null {
+/** 本人のLINEからだけ打刻させるお店なら、LIFF の URL を返す */
+export function lineOnlyInfo(companyId: number): string | null {
+  const s = db.prepare('SELECT punch_line_only, liff_id FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  return s?.punch_line_only && s?.liff_id ? `https://liff.line.me/${s.liff_id}` : null;
+}
+
+export function findStoreByToken(token: string): any | null {
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
   return db.prepare(`
     SELECT s.id, s.name, s.company_id, c.name AS company_name
@@ -31,13 +37,13 @@ function findStoreByToken(token: string): any | null {
   `).get(token) || null;
 }
 
-const INVALID_QR = 'このQRコードは使えません。会場に貼られている最新のQRを読み取ってください';
+export const INVALID_QR = 'このQRコードは使えません。会場に貼られている最新のQRを読み取ってください';
 
-const ACTIONS: Record<string, ClockAction> = {
+export const ACTIONS: Record<string, ClockAction> = {
   'clock-in': 'clock_in', 'clock-out': 'clock_out', 'break-start': 'break_start', 'break-end': 'break_end',
 };
 
-function todayStatus(companyId: number, userId: number) {
+export function todayStatus(companyId: number, userId: number) {
   const record = db.prepare(`
     SELECT tr.id, tr.date, tr.clock_in, tr.clock_out, tr.break_minutes, tr.status,
            s_in.name AS store_name, s_out.name AS clock_out_store_name
@@ -69,6 +75,12 @@ router.get('/:token', (req: Request, res: Response): void => {
   `).all(store.company_id);
   // 会場の色（管理・スタッフ画面と同じ並び＝id順で何番目か）
   const ids = (db.prepare('SELECT id FROM stores WHERE company_id = ? ORDER BY id').all(store.company_id) as { id: number }[]).map(r => r.id);
+  const lineOnly = lineOnlyInfo(store.company_id);
+  if (lineOnly) {
+    // 名前一覧は渡さない（LINE の「打刻する」へ案内するだけ）
+    res.json({ store: { id: store.id, name: store.name, color_index: ids.indexOf(store.id) }, company: { id: store.company_id, name: store.company_name }, staff: [], line_only: true, liff_url: lineOnly });
+    return;
+  }
   res.json({
     store: { id: store.id, name: store.name, color_index: ids.indexOf(store.id) },
     company: { id: store.company_id, name: store.company_name },
@@ -108,6 +120,12 @@ router.post('/:token/punch', (req: Request, res: Response): void => {
   const store = findStoreByToken(req.params.token);
   if (!store) {
     res.status(404).json({ error: INVALID_QR });
+    return;
+  }
+  // 「打刻は本人のLINEからだけ」のお店は、名前を選ぶ方式の打刻を受け付けない（代理打刻の防止）
+  const lineOnly = lineOnlyInfo(store.company_id);
+  if (lineOnly) {
+    res.status(403).json({ error: 'このお店は、LINEのメニュー「打刻する」から打刻してください', line_only: true, liff_url: lineOnly });
     return;
   }
   const { userId, action } = req.body || {};

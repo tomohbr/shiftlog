@@ -43,7 +43,7 @@ function writeRemembered(companyId: number, me: Me | null) {
 }
 
 // 現在地を1回だけ取る。拒否・非対応・時間切れは null（打刻は止めない）
-function readPosition(timeoutMs: number): Promise<Position | null> {
+export function readPosition(timeoutMs: number): Promise<Position | null> {
   return new Promise(resolve => {
     if (typeof navigator === 'undefined' || !('geolocation' in navigator)) { resolve(null); return }
     let settled = false
@@ -182,6 +182,22 @@ export default function QrClockPage({ token }: { token: string }) {
       </p>
     </header>
   )
+
+  // 「打刻は本人のLINEからだけ」のお店: 名前を選ぶ打刻はさせず、LINE の「打刻する」へ案内する
+  if (info?.line_only) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {header}
+        <main className="flex-1 w-full max-w-md mx-auto px-4 py-8 text-center space-y-4">
+          <p className="text-lg font-bold text-gray-900">打刻はLINEからお願いします</p>
+          <p className="text-sm text-gray-600">LINEの「{info.company.name}」のトーク画面で、下のメニューの<b>「打刻する」</b>を押してください。そこからこのQRを読むと打刻できます。</p>
+          {info.liff_url && (
+            <a href={info.liff_url} className="block w-full py-4 rounded-xl bg-[#06C755] text-white text-lg font-bold">LINEで打刻する</a>
+          )}
+        </main>
+      </div>
+    )
+  }
 
   if (phase === 'loading') {
     return (

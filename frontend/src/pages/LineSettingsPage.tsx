@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { MessageCircle, Save, Send, ExternalLink, Check, Copy } from 'lucide-react'
-import { lineApi } from '../api/client'
+import { lineApi, liffApi } from '../api/client'
 import LineLinkCard from '../components/LineLinkCard'
 import toast from 'react-hot-toast'
 
@@ -37,6 +37,11 @@ export default function LineSettingsPage() {
   const [phoneDays, setPhoneDays] = useState<string>('')
   const [absencePhone, setAbsencePhone] = useState('')
   const [savingRule, setSavingRule] = useState(false)
+  // LINE の中の本人専用の打刻（LIFF）
+  const [liffId, setLiffId] = useState('')
+  const [loginChannelId, setLoginChannelId] = useState('')
+  const [lineOnly, setLineOnly] = useState(false)
+  const [savingLiff, setSavingLiff] = useState(false)
 
   useEffect(() => { loadSettings() }, [])
 
@@ -58,6 +63,9 @@ export default function LineSettingsPage() {
         setBot({ name: s.bot_name || null, basicId: s.bot_basic_id || null })
         setPhoneDays(s.absence_phone_days == null ? '' : String(s.absence_phone_days))
         setAbsencePhone(s.absence_phone || '')
+        setLiffId(s.liff_id || '')
+        setLoginChannelId(s.login_channel_id || '')
+        setLineOnly(!!s.punch_line_only)
       }
     } catch {
       // Settings may not exist yet, that's OK
@@ -185,6 +193,42 @@ export default function LineSettingsPage() {
       </div>
 
       {/* Notification Toggles */}
+      <div className="card p-6 space-y-3">
+        <h3 className="text-base font-semibold text-gray-900">LINEで打刻（本人専用）</h3>
+        <p className="text-sm text-gray-600">
+          LINEのメニュー「打刻する」から、本人だけが打刻できる画面を開けます（タイミーのように、ブースのQRを読んで打刻）。
+          LINE Developers で「LINEログイン」チャネルを同じプロバイダーに作り、LIFFアプリ（サイズ Full・Scope openid/profile・Scan QR オン）を追加してください。
+          エンドポイントURLは <code className="text-xs bg-gray-100 px-1 rounded">{`${window.location.origin}/liff/punch/`}{'{会社ID}'}</code> です。
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="text-sm">
+            <span className="block text-gray-700 font-medium mb-1">LIFF ID</span>
+            <input value={liffId} onChange={e => setLiffId(e.target.value)} placeholder="1234567890-AbCdEfGh" autoComplete="off" className="input-field" />
+          </label>
+          <label className="text-sm">
+            <span className="block text-gray-700 font-medium mb-1">LINEログインのチャネルID</span>
+            <input value={loginChannelId} onChange={e => setLoginChannelId(e.target.value)} placeholder="2012345678" inputMode="numeric" autoComplete="off" className="input-field" />
+          </label>
+        </div>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={lineOnly} onChange={e => setLineOnly(e.target.checked)} />
+          <span><b>打刻は本人のLINEからだけにする</b><br /><span className="text-gray-500">ブースのQRをカメラで読んで名前を選ぶ打刻はできなくなります（ほかの人の打刻を防ぐ）</span></span>
+        </label>
+        <button
+          onClick={async () => {
+            setSavingLiff(true)
+            try {
+              const r = await liffApi.saveSettings({ liff_id: liffId, login_channel_id: loginChannelId, punch_line_only: lineOnly })
+              toast.success(r.data.message)
+            } catch (e: any) { toast.error(e.response?.data?.error || '保存できませんでした') } finally { setSavingLiff(false) }
+          }}
+          disabled={savingLiff}
+          className="btn-primary flex items-center gap-1.5"
+        >
+          <Save className="w-4 h-4" />保存
+        </button>
+      </div>
+
       <div className="card p-6 space-y-3">
         <h3 className="text-base font-semibold text-gray-900">休みの連絡のルール</h3>
         <p className="text-sm text-gray-600">スタッフはLINEのメニュー「休みの連絡」から休みを伝えられます。直前の休みは電話でしか受けない場合は、ここで決めておくと、LINEでは受け付けずに電話をかけるボタンを出します。</p>

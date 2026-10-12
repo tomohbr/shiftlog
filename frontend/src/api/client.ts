@@ -215,6 +215,8 @@ export const storesApi = {
 // 会場QRの打刻（/q/<token>。ログイン不要）
 export type QrClockAction = 'clock-in' | 'clock-out' | 'break-start' | 'break-end'
 export interface QrClockInfo {
+  line_only?: boolean
+  liff_url?: string
   store: { id: number; name: string; color_index?: number }
   company: { id: number; name: string }
   staff: { id: number; name: string; color?: string }[]
@@ -233,6 +235,19 @@ export interface QrClockStatus {
   breaks: TimeBreak[]
   on_break: boolean
 }
+// LINE の中の打刻画面（LIFF）
+type LiffShift = { start_time: string; end_time: string; store_id: number | null; store_name: string | null }
+export const liffApi = {
+  config: (companyId: number) => api.get<{ liff_id: string; company_name: string }>(`/liff/config/${companyId}`),
+  session: (companyId: number, idToken: string) =>
+    api.post<{ linked: false } | (QrClockStatus & { linked: true; key: string; user: { id: number; name: string }; today_shifts: LiffShift[] })>('/liff/session', { companyId, idToken }),
+  venue: (key: string, qr: string) => api.post<{ store: { id: number; name: string } }>('/liff/venue', { key, qr }),
+  punch: (key: string, qr: string, action: QrClockAction, pos?: { lat: number; lng: number; accuracy: number } | null) =>
+    api.post<QrClockStatus & { ok: true; time: string; store_name: string }>('/liff/punch', { key, qr, action, ...(pos || {}) }),
+  saveSettings: (data: { liff_id: string; login_channel_id: string; punch_line_only: boolean }) =>
+    api.post<{ message: string; endpoint_url: string }>('/liff/settings', data),
+}
+
 export const qrClockApi = {
   info: (token: string) => api.get<QrClockInfo>(`/qr/${encodeURIComponent(token)}`),
   status: (token: string, userId: number) =>

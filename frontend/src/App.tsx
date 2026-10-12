@@ -38,6 +38,7 @@ import LineLinkPage from './pages/LineLinkPage'
 import QrClockPage from './pages/QrClockPage'
 import StoreQrPosterPage from './pages/StoreQrPosterPage'
 import LineInvitePage from './pages/LineInvitePage'
+import LiffPunchPage from './pages/LiffPunchPage'
 import LineInvitePrintPage from './pages/LineInvitePrintPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
@@ -67,6 +68,12 @@ function AppRoutes() {
   // LINE の希望提出リンク。ログイン中かどうかに関係なく、リンクの本人で入り直す
   if (location.pathname.startsWith('/l/')) {
     return <LineLinkPage token={location.pathname.slice(3)} />
+  }
+
+  // LINE の中の本人専用の打刻画面（LIFF）。本人確認は LINE が行う
+  const liffMatch = location.pathname.match(/^\/liff\/punch\/(\d+)/)
+  if (liffMatch) {
+    return <LiffPunchPage companyId={Number(liffMatch[1])} />
   }
 
   // LINE 招待（スタッフ本人専用のQR/リンク）。ログイン不要

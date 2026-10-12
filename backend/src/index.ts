@@ -28,6 +28,7 @@ import seedRoutes from './routes/seed';
 import pushRoutes from './routes/push';
 import telemetryRoutes from './routes/telemetry';
 import qrClockRoutes from './routes/qr-clock';
+import liffRoutes from './routes/liff';
 import { reportServerError } from './utils/ops-alerts';
 import { startDailyDigest } from './utils/daily-digest';
 import { startTrialNotifier } from './utils/trial-notify';
@@ -94,6 +95,7 @@ app.use('/api/push', pushRoutes);
 app.use('/api/telemetry', telemetryRoutes);
 // 会場QRの打刻（ログイン不要。QRトークンで会場を特定する）
 app.use('/api/qr', qrClockRoutes);
+app.use('/api/liff', liffRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

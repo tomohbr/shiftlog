@@ -480,7 +480,9 @@ try {
   // channel_secret は Webhook の署名検証、bot_basic_id は友だち追加リンク（@xxxx）に使う
   // absence_phone_days: 何日前からは休みを電話でしか受けないか（NULL=制限なし、0=当日、1=前日・当日）
   if (!lineCols.includes('absence_phone_days')) db.exec('ALTER TABLE line_settings ADD COLUMN absence_phone_days INTEGER');
-  for (const column of ['channel_secret', 'bot_basic_id', 'bot_name', 'rich_menu_id', 'absence_phone']) {
+  // LIFF（LINE の中の打刻画面）: liff_id・login_channel_id、punch_line_only=1 なら打刻は本人の LINE からだけ
+  if (!lineCols.includes('punch_line_only')) db.exec('ALTER TABLE line_settings ADD COLUMN punch_line_only INTEGER DEFAULT 0');
+  for (const column of ['channel_secret', 'bot_basic_id', 'bot_name', 'rich_menu_id', 'absence_phone', 'liff_id', 'login_channel_id']) {
     if (!lineCols.includes(column)) db.exec(`ALTER TABLE line_settings ADD COLUMN ${column} TEXT`);
   }
   db.exec(`
