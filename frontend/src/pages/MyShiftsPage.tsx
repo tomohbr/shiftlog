@@ -256,7 +256,7 @@ export default function MyShiftsPage() {
     <span
       key={key}
       title={opts.title}
-      className={`block mx-0.5 mt-0.5 rounded-[4px] px-0.5 text-[11px] leading-[18px] font-bold text-center truncate ${opts.mine ? 'ring-2 ring-gray-900 ring-inset' : ''}`}
+      className={`block mx-[2px] mt-[3px] rounded-[5px] px-0.5 text-[12.5px] leading-[22px] font-bold text-center truncate ${opts.mine ? 'ring-[2.5px] ring-gray-900 ring-inset' : ''}`}
       style={{ backgroundColor: bg, color: opts.fg || '#fff' }}
     >
       {text}
@@ -271,11 +271,11 @@ export default function MyShiftsPage() {
         ))}
       </div>
       {weeks.map((week, wi) => (
-        <div key={wi} className="grid grid-cols-7 border-b border-gray-100 last:border-b-0">
+        <div key={wi} className="grid grid-cols-7 border-b border-gray-200 last:border-b-0"
+          style={{ minHeight: `max(88px, calc((100dvh - 250px) / ${weeks.length}))` }}>
           {week.map(({ date, inMonth }, di) => {
             const p = parts(date)
             const isToday = date === todayStr
-            const past = date < todayStr
             const numColor = !inMonth ? 'text-gray-300' : di === 5 ? 'text-blue-500' : di === 6 ? 'text-red-500' : 'text-gray-800'
             const items = inMonth ? (who === 'me' ? myVisible : allVisible).filter(x => x.date === date) : []
             // みんな: 会場順→時間順に並べる
@@ -285,16 +285,18 @@ export default function MyShiftsPage() {
                 key={date}
                 disabled={!inMonth}
                 onClick={() => setPickedDate(date)}
-                className={`min-h-[84px] pb-1 flex flex-col justify-start items-stretch text-left border-r border-gray-100 last:border-r-0 ${pickedDate === date ? 'bg-blue-50' : ''} ${past && inMonth ? 'opacity-60' : ''}`}
+                className={`pb-1 flex flex-col justify-start items-stretch text-left border-r border-gray-100 last:border-r-0 ${pickedDate === date ? 'bg-blue-50' : ''}`}
               >
                 <div className="flex justify-center pt-1 pb-0.5">
                   <span className={`text-[13px] font-semibold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-red-500 text-white' : numColor}`}>{p.d}</span>
                 </div>
                 {who === 'me'
                   ? items.map(s => (
-                      <span key={s.id}>
-                        {chip(`v${s.id}`, s.store_name || '勤務', barColor(s).solid, { title: s.store_name || undefined })}
-                        {chip(`t${s.id}`, `${compact(s.start_time)}-${compact(s.end_time)}`, '#F1F3F5', { fg: '#495057' })}
+                      // 1つの濃いラベルに会場名と時間を2行で
+                      <span key={s.id} className="block mx-[2px] mt-[3px] rounded-[5px] px-0.5 py-1 text-center text-white font-bold leading-tight"
+                        style={{ backgroundColor: barColor(s).solid }} title={s.store_name || undefined}>
+                        <span className="block text-[12.5px] truncate">{s.store_name || '勤務'}</span>
+                        <span className="block text-[12px] tabular-nums">{compact(s.start_time)}-{compact(s.end_time)}</span>
                       </span>
                     ))
                   : <>
@@ -370,58 +372,64 @@ export default function MyShiftsPage() {
   })()
 
   return (
-    <div className="space-y-4 max-w-xl mx-auto">
-      {/* 月の切り替え */}
-      <div className="flex items-center justify-between">
-        <button onClick={goPrev} aria-label="前の月" className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+    <div className="space-y-2.5 max-w-xl mx-auto">
+      {/* 上の操作は2段に詰める（カレンダーを画面いっぱいに見せるため） */}
+      <div className="flex items-center gap-1">
+        <button onClick={goPrev} aria-label="前の月" className="p-1.5 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg">
           <ChevronLeft className="w-6 h-6" />
         </button>
-        <div className="flex items-center gap-2">
-          <h2 className="text-xl font-bold text-gray-900">{year}年{month}月</h2>
-          {!isThisMonth && (
-            <button onClick={goToday} className="text-xs font-semibold text-blue-600 px-2 py-1 rounded-md bg-blue-50">今月へ</button>
-          )}
-        </div>
-        <button onClick={goNext} aria-label="次の月" className="p-2 -mr-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+        <h2 className="text-xl font-bold text-gray-900 tabular-nums">{year}年{month}月</h2>
+        <button onClick={goNext} aria-label="次の月" className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg">
           <ChevronRight className="w-6 h-6" />
         </button>
-      </div>
-
-      {/* 自分／みんな */}
-      <div className="grid grid-cols-2 p-1 bg-gray-100 rounded-xl">
-        {(['me', 'all'] as const).map(w => (
-          <button
-            key={w}
-            onClick={() => { setWho(w); setPickedDate(null) }}
-            className={`py-2.5 rounded-lg text-base font-bold transition-colors ${who === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-          >
-            {w === 'me' ? '自分の予定' : 'みんなの予定'}
-          </button>
-        ))}
-      </div>
-
-      {/* 会場の絞り込み（色は管理画面と共通） */}
-      {multiStore && (
-        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-          {[{ id: null as number | null, name: '全会場' }, ...sortedStores].map(st => {
-            const active = storeFilter === st.id
-            const c = st.id ? colorOf(st.id) : null
-            return (
-              <button
-                key={st.id ?? 'all'}
-                onClick={() => setStoreFilter(st.id)}
-                className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-bold border-2 transition-colors ${
-                  active ? 'text-white' : 'bg-white text-gray-700 border-gray-200'
-                }`}
-                style={active ? { backgroundColor: c?.solid || '#212529', borderColor: c?.solid || '#212529' } : undefined}
-              >
-                {c && <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: active ? '#fff' : c.solid }} />}
-                {st.name}
-              </button>
-            )
-          })}
+        {!isThisMonth && (
+          <button onClick={goToday} className="text-xs font-semibold text-blue-600 px-2 py-1 rounded-md bg-blue-50">今月</button>
+        )}
+        <div className="ml-auto grid grid-cols-2 p-0.5 bg-gray-100 rounded-lg shrink-0">
+          {(['me', 'all'] as const).map(w => (
+            <button
+              key={w}
+              onClick={() => { setWho(w); setPickedDate(null) }}
+              className={`px-3 py-1.5 rounded-md text-sm font-bold ${who === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+            >
+              {w === 'me' ? '自分' : 'みんな'}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        {multiStore && (
+          <select
+            value={storeFilter ?? ''}
+            onChange={e => setStoreFilter(e.target.value ? Number(e.target.value) : null)}
+            className="text-sm font-bold border border-gray-200 rounded-lg pl-2 pr-7 py-1.5 bg-white"
+            style={storeFilter ? { color: colorOf(storeFilter).text, borderColor: colorOf(storeFilter).solid } : undefined}
+          >
+            <option value="">全会場</option>
+            {sortedStores.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+          </select>
+        )}
+        {isPublished && who === 'me' && (
+          <p className="text-sm text-gray-600 whitespace-nowrap truncate">
+            <span className="font-bold text-gray-900">{workDays}日</span>・
+            <span className="font-bold text-gray-900">{totalHours % 1 === 0 ? totalHours : totalHours.toFixed(1)}時間</span>
+          </p>
+        )}
+        <div className="ml-auto inline-flex rounded-lg border border-gray-200 overflow-hidden shrink-0">
+          {([['calendar', CalendarDays, 'カレンダー'], ['list', List, 'リスト']] as const).map(([v, Icon, label]) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              aria-label={label}
+              title={label}
+              className={`px-2.5 py-1.5 flex items-center ${view === v ? 'bg-gray-900 text-white' : 'bg-white text-gray-600'}`}
+            >
+              <Icon className="w-5 h-5" />
+            </button>
+          ))}
+        </div>
+      </div>
 
       {!isPublished ? (
         <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 flex items-start gap-3">
@@ -432,35 +440,10 @@ export default function MyShiftsPage() {
         </div>
       ) : (
         <>
-          {/* 月のまとめ ＋ 表示切替 */}
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-gray-600 whitespace-nowrap">
-              {who === 'me' ? (
-                <>{month}月の勤務{storeName ? `（${storeName}）` : ''} <span className="font-bold text-gray-900">{workDays}日</span>・
-                  <span className="font-bold text-gray-900">{totalHours % 1 === 0 ? totalHours : totalHours.toFixed(1)}時間</span></>
-              ) : (
-                <>日付を押すと、その日の顔ぶれ</>
-              )}
-            </p>
-            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden shrink-0">
-              {([['calendar', CalendarDays, 'カレンダー'], ['list', List, 'リスト']] as const).map(([v, Icon, label]) => (
-                <button
-                  key={v}
-                  onClick={() => setView(v)}
-                  aria-label={label}
-                  title={label}
-                  className={`px-3 py-2 flex items-center ${view === v ? 'bg-gray-900 text-white' : 'bg-white text-gray-600'}`}
-                >
-                  <Icon className="w-5 h-5" />
-                </button>
-              ))}
-            </div>
-          </div>
-
           {view === 'calendar' ? (
             <>
-              {nextBar}
               {calendar}
+              {nextBar}
               {daySheet}
             </>
           ) : who === 'me' ? (
