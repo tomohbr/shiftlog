@@ -169,7 +169,8 @@ export default function MyShiftsPage() {
 
   const daysInMonth = new Date(year, month, 0).getDate()
   const firstDow = new Date(year, month - 1, 1).getDay()
-  const upcomingMine = myVisible.filter(s => s.date >= todayStr)
+  // 「次の勤務」で大きく出した分は一覧から外す（同じものが2回並ばないように）
+  const upcomingMine = myVisible.filter(s => s.date >= todayStr && s.id !== nextShift?.id)
   const pastMine = myVisible.filter(s => s.date < todayStr)
 
   // みんなの予定: 日 → 会場 → 人
@@ -211,7 +212,7 @@ export default function MyShiftsPage() {
 
       {/* 会場の絞り込み（色は管理画面と共通） */}
       {multiStore && (
-        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
+        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
           {[{ id: null as number | null, name: '全会場' }, ...sortedStores].map(st => {
             const active = storeFilter === st.id
             const c = st.id ? colorOf(st.id) : null
@@ -275,7 +276,7 @@ export default function MyShiftsPage() {
           {/* 月のまとめ ＋ 表示切替 */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-600">
-              {storeName ? `${storeName}で` : ''}<span className="font-bold text-gray-900">{workDays}日</span>・
+              {month}月の勤務{storeName ? `（${storeName}）` : ''} <span className="font-bold text-gray-900">{workDays}日</span>・
               <span className="font-bold text-gray-900">{totalHours % 1 === 0 ? totalHours : totalHours.toFixed(1)}時間</span>
             </p>
             <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
@@ -293,8 +294,9 @@ export default function MyShiftsPage() {
 
           {view === 'list' ? (
             <div className="space-y-2">
+              {upcomingMine.length > 0 && nextShift && <p className="text-sm font-bold text-gray-500 pt-1">そのあとの勤務</p>}
               {upcomingMine.map(s => <ShiftCard key={s.id} s={s} />)}
-              {upcomingMine.length === 0 && (
+              {upcomingMine.length === 0 && !nextShift && (
                 <div className="text-center py-10 text-gray-400 text-sm bg-white rounded-xl border border-gray-200">
                   {month}月のこれからの勤務は{storeName ? `${storeName}に` : ''}ありません
                 </div>
