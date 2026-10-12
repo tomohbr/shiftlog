@@ -539,8 +539,8 @@ export const shiftRequestsApi = {
     api.get<{ requests: ShiftRequest[] }>('/shift-requests', { params }),
   submit: (data: Partial<ShiftRequest>) =>
     api.post('/shift-requests', data),
-  submitBulk: (requests: Partial<ShiftRequest>[]) =>
-    api.post('/shift-requests/bulk', { requests }),
+  submitBulk: (requests: Partial<ShiftRequest>[], clear?: string[]) =>
+    api.post('/shift-requests/bulk', { requests, clear }),
   getSummary: (year: number, month: number) =>
     api.get('/shift-requests/summary', { params: { year, month } }),
   getPeriod: (year: number, month: number) =>

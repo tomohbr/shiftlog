@@ -63,6 +63,8 @@ router.post('/bulk', authenticateToken, requireCompany, (req: AuthRequest, res: 
   const companyId = req.companyId!;
   const userId = req.user!.id;
   const { requests } = req.body;
+  // clear: 入力を消した日（提出済みの希望を取り消す）
+  const clear: string[] = Array.isArray(req.body.clear) ? req.body.clear.map(String) : [];
 
   if (!Array.isArray(requests)) {
     res.status(400).json({ error: 'requests配列が必要です' });
@@ -85,6 +87,10 @@ router.post('/bulk', authenticateToken, requireCompany, (req: AuthRequest, res: 
     }
   });
   insert(requests);
+  if (clear.length) {
+    const del = db.prepare('DELETE FROM shift_requests WHERE company_id = ? AND user_id = ? AND date = ?');
+    db.transaction((dates: string[]) => { for (const d of dates) del.run(companyId, userId, d); })(clear);
+  }
 
   res.json({ message: `${requests.length}件の希望を提出しました` });
 });
