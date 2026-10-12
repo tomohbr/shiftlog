@@ -354,6 +354,77 @@ router.post('/link-code', authenticateToken, requireCompany, (req: AuthRequest, 
   });
 });
 
+// ---- 招待リンク（ログインなしで LINE 連携まで済ませる）----
+// 管理者がスタッフごとの招待QR/リンクを出す → スタッフが開く → 「○○さんですか？」→ 友だち追加 → コードを送る
+const INVITE_SECRET = `${JWT_SECRET}:line-invite`;
+const INVITE_DAYS = 60;
+
+const inviteUrl = (userId: number, companyId: number) =>
+  `${APP_URL}/i/${jwt.sign({ iu: userId, ic: companyId }, INVITE_SECRET, { expiresIn: `${INVITE_DAYS}d` })}`;
+
+function verifyInvite(token: string): { uid: number; cid: number } | null {
+  try {
+    const d = jwt.verify(token, INVITE_SECRET) as any;
+    if (!d?.iu || !d?.ic) return null;
+    // 退職などで会社から外れた人の招待は使えない
+    const ok = db.prepare(`
+      SELECT 1 FROM user_companies uc JOIN users u ON u.id = uc.user_id AND u.is_active = 1
+      WHERE uc.user_id = ? AND uc.company_id = ?
+    `).get(d.iu, d.ic);
+    return ok ? { uid: Number(d.iu), cid: Number(d.ic) } : null;
+  } catch { return null; }
+}
+
+function issueLinkCode(userId: number, companyId: number): string {
+  db.prepare("DELETE FROM line_link_codes WHERE expires_at < datetime('now') OR (user_id = ? AND company_id = ?)").run(userId, companyId);
+  let code = '';
+  for (let i = 0; i < 5; i++) {
+    code = String(crypto.randomInt(100000, 1000000));
+    if (!db.prepare('SELECT 1 FROM line_link_codes WHERE code = ?').get(code)) break;
+  }
+  db.prepare(`INSERT INTO line_link_codes (code, user_id, company_id, expires_at) VALUES (?, ?, ?, datetime('now', '+${LINK_CODE_MINUTES} minutes'))`)
+    .run(code, userId, companyId);
+  return code;
+}
+
+// POST /api/line/invite-links { user_ids? } - スタッフごとの招待リンク（管理者）。省略時は全員分
+router.post('/invite-links', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  const only: number[] | null = Array.isArray(req.body?.user_ids) ? req.body.user_ids.map(Number) : null;
+  const members = membersWithLink(req.companyId!).filter(m => !only || only.includes(m.id));
+  const company = db.prepare('SELECT name FROM companies WHERE id = ?').get(req.companyId!) as any;
+  res.json({
+    company_name: company?.name || '',
+    links: members.map(m => ({ user_id: m.id, name: m.name, role: m.role, linked: !!m.linked, url: inviteUrl(m.id, req.companyId!) })),
+  });
+});
+
+// GET /api/line/invite/:token - 招待を開いた人に見せる情報（ログイン不要）
+router.get('/invite/:token', (req: Request, res: Response): void => {
+  const inv = verifyInvite(req.params.token);
+  if (!inv) { res.status(404).json({ error: 'この招待は期限切れか無効です。お店の人に新しい招待をもらってください' }); return; }
+  const u = db.prepare('SELECT name FROM users WHERE id = ?').get(inv.uid) as any;
+  const c = db.prepare('SELECT name FROM companies WHERE id = ?').get(inv.cid) as any;
+  const s = db.prepare('SELECT bot_basic_id, bot_name, channel_secret FROM line_settings WHERE company_id = ? AND channel_access_token IS NOT NULL').get(inv.cid) as any;
+  const linked = !!db.prepare('SELECT 1 FROM user_line_ids WHERE user_id = ?').get(inv.uid);
+  res.json({
+    name: u?.name || '', company_name: c?.name || '',
+    configured: !!(s?.bot_basic_id && s?.channel_secret), bot_name: s?.bot_name || null,
+    add_friend_url: s?.bot_basic_id ? addFriendUrl(s.bot_basic_id) : null,
+    linked,
+  });
+});
+
+// POST /api/line/invite/:token/code - 連携コードを発行して、コード入りのトークを開くリンクを返す（ログイン不要）
+router.post('/invite/:token/code', (req: Request, res: Response): void => {
+  const inv = verifyInvite(req.params.token);
+  if (!inv) { res.status(404).json({ error: 'この招待は期限切れか無効です' }); return; }
+  const s = db.prepare('SELECT bot_basic_id FROM line_settings WHERE company_id = ? AND channel_access_token IS NOT NULL').get(inv.cid) as any;
+  if (!s?.bot_basic_id) { res.status(409).json({ error: 'このお店はまだ LINE の設定をしていません' }); return; }
+  const code = issueLinkCode(inv.uid, inv.cid);
+  res.json({ code, minutes: LINK_CODE_MINUTES, send_code_url: sendCodeUrl(s.bot_basic_id, code) });
+});
+
 // GET /api/line/me - 自分が連携済みか、お店が LINE を設定済みか
 router.get('/me', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const s = db.prepare('SELECT channel_secret, bot_basic_id, bot_name FROM line_settings WHERE company_id = ? AND channel_access_token IS NOT NULL').get(req.companyId!) as any;
@@ -438,7 +509,8 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
           ON CONFLICT(user_id) DO UPDATE SET line_user_id = excluded.line_user_id
         `).run(row.user_id, lineUserId);
         db.prepare('DELETE FROM line_link_codes WHERE code = ?').run(m[0]);
-        await replyLine(s.channel_access_token, event.replyToken, `${row.name}さん、連携できました。\nシフトが公開されたら、このLINEでお知らせします。`);
+        await replyLine(s.channel_access_token, event.replyToken,
+          `${row.name}さん、連携できました🎉\n\nこれからはこのLINEで\n・シフトの公開\n・希望の受付\nをお知らせします。\n\nトーク画面の下のメニューから、いつでも「シフトを見る」「希望を出す」ができます。`);
       }
     } catch (err) {
       console.error('[line] webhook 処理失敗:', (err as Error).message);

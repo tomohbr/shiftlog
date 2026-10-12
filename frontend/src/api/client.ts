@@ -650,6 +650,16 @@ export const lineApi = {
   linkCode: () => api.post<{ code: string; minutes: number; bot_name: string | null; basic_id: string; add_friend_url: string; send_code_url: string }>('/line/link-code'),
   me: () => api.get<{ configured: boolean; bot_name: string | null; linked: boolean }>('/line/me'),
   unlink: () => api.delete('/line/me'),
+  inviteLinks: (user_ids?: number[]) =>
+    api.post<{ company_name: string; links: { user_id: number; name: string; role: string; linked: boolean; url: string }[] }>('/line/invite-links', { user_ids }),
+}
+
+// LINE 招待（ログイン不要。/i/:token の画面から使う）
+export const lineInviteApi = {
+  info: (token: string) =>
+    api.get<{ name: string; company_name: string; configured: boolean; bot_name: string | null; add_friend_url: string | null; linked: boolean }>(`/line/invite/${encodeURIComponent(token)}`),
+  code: (token: string) =>
+    api.post<{ code: string; minutes: number; send_code_url: string }>(`/line/invite/${encodeURIComponent(token)}/code`),
 }
 
 // プッシュ通知（iOSアプリ）

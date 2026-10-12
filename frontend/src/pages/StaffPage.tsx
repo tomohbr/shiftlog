@@ -1,7 +1,8 @@
 import { startProUpgrade } from '../lib/proUpgrade'
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy, Crown, Share2, QrCode, Printer } from 'lucide-react'
-import { usersApi, billingApi, BillingPlan, User } from '../api/client'
+import { usersApi, billingApi, lineApi, BillingPlan, User } from '../api/client'
+import LineInviteModal from '../components/LineInviteModal'
 import { useAuth } from '../contexts/AuthContext'
 import BulkImportModal from '../components/BulkImportModal'
 import StaffLoginQR, { staffLoginUrl } from '../components/StaffLoginQR'
@@ -230,6 +231,10 @@ export default function StaffPage() {
   const [billingPlan, setBillingPlan] = useState<BillingPlan | null>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
+  // LINE 連携（お店が LINE を設定しているときだけ）。user_id → 連携済みか
+  const [lineReady, setLineReady] = useState(false)
+  const [lineLinked, setLineLinked] = useState<Record<number, boolean>>({})
+  const [lineInviteUser, setLineInviteUser] = useState<User | null>(null)
   const companyPin = (selectedCompany as any)?.company_pin || ''
 
   // 共通の購入処理で端末に合った決済を開始する。
@@ -251,7 +256,23 @@ export default function StaffPage() {
     }
   }
 
-  useEffect(() => { loadUsers() }, [])
+  const loadLine = () => lineApi.getSettings().then(r => {
+    const st = r.data.settings
+    setLineReady(!!(st?.channel_access_token && st?.channel_secret))
+    const map: Record<number, boolean> = {}
+    for (const m of r.data.members || []) map[m.id] = !!m.linked
+    setLineLinked(map)
+  }).catch(() => {})
+
+  useEffect(() => { loadUsers(); loadLine() }, [])
+
+  // スタッフの「案内」ボタン: LINE が使えるお店は LINE 招待、そうでなければ従来のログイン案内
+  const openInvite = (u: User) => (lineReady ? setLineInviteUser(u) : setInviteUser(u))
+  const lineBadge = (u: User) => lineReady && (
+    lineLinked[u.id]
+      ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#06C755] text-white">LINE</span>
+      : <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">LINE未</span>
+  )
 
   const handleDelete = async (user: User) => {
     if (!confirm(`${user.name} を削除してもよいですか？`)) return
@@ -287,6 +308,15 @@ export default function StaffPage() {
           <p className="text-sm text-gray-500 mt-0.5">{users.length}名登録中</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {lineReady && (
+            <button
+              onClick={() => window.open('/line-invites/print', '_blank')}
+              className="flex items-center justify-center whitespace-nowrap min-h-[44px] sm:min-h-0 gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-white bg-[#06C755] rounded-lg hover:opacity-90"
+            >
+              <Printer className="w-4 h-4" />
+              <span>LINE招待カードを印刷</span>
+            </button>
+          )}
           {companyPin && (
             <button
               onClick={() => setQrOpen(true)}
@@ -392,6 +422,7 @@ export default function StaffPage() {
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: u.color }} />
                   <p className="min-w-0 flex-1 text-sm font-medium text-gray-900 break-words">{u.name}</p>
+                  {lineBadge(u)}
                   <span className={`shrink-0 whitespace-nowrap text-xs px-2 py-0.5 rounded-full ${(u as any).employment_type === 'full_time' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                     {(u as any).employment_type === 'full_time' ? '社員' : 'パート'}
                   </span>
@@ -403,7 +434,7 @@ export default function StaffPage() {
                 </div>
                 <div className="flex items-center gap-1">
                   {u.role === 'staff' && (
-                    <button onClick={() => setInviteUser(u)} className="min-h-[44px] px-2 text-xs whitespace-nowrap text-green-700 border border-green-200 rounded-lg hover:bg-green-50">ログイン案内</button>
+                    <button onClick={() => openInvite(u)} className="min-h-[44px] px-2 text-xs whitespace-nowrap text-green-700 border border-green-200 rounded-lg hover:bg-green-50">{lineReady ? 'LINE招待' : 'ログイン案内'}</button>
                   )}
                   <button onClick={() => setResetPasswordUser(u)} className="min-h-[44px] px-2 text-xs whitespace-nowrap text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-100">PW変更</button>
                   <button onClick={() => { setEditingUser(u); setModalOpen(true) }} className="min-h-[44px] px-2 text-xs whitespace-nowrap text-gray-500 border border-gray-200 rounded-lg hover:bg-blue-50">編集</button>
@@ -437,6 +468,7 @@ export default function StaffPage() {
                       <div>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                          {lineBadge(u)}
                           {isNeverLoggedIn(u) && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
                               <AlertCircle className="w-2.5 h-2.5" />未ログイン
@@ -469,12 +501,12 @@ export default function StaffPage() {
                     <div className="flex items-center gap-2 justify-end">
                       {u.role === 'staff' && (
                         <button
-                          onClick={() => setInviteUser(u)}
+                          onClick={() => openInvite(u)}
                           className="text-xs text-green-700 hover:text-green-900 px-2 py-1 rounded hover:bg-green-50 flex items-center gap-1 border border-green-200"
-                          title="ログイン案内を表示"
+                          title={lineReady ? 'LINE招待を表示' : 'ログイン案内を表示'}
                         >
                           <Send className="w-3 h-3" />
-                          ログイン案内
+                          {lineReady ? 'LINE招待' : 'ログイン案内'}
                         </button>
                       )}
                       <button
@@ -539,6 +571,15 @@ export default function StaffPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {lineInviteUser && (
+        <LineInviteModal
+          userId={lineInviteUser.id}
+          name={lineInviteUser.name}
+          onClose={() => { setLineInviteUser(null); loadLine() }}
+          onLoginGuide={() => { setInviteUser(lineInviteUser); setLineInviteUser(null) }}
+        />
       )}
 
       {inviteUser && (

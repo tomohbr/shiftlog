@@ -37,6 +37,8 @@ import QrPosterPage from './pages/QrPosterPage'
 import LineLinkPage from './pages/LineLinkPage'
 import QrClockPage from './pages/QrClockPage'
 import StoreQrPosterPage from './pages/StoreQrPosterPage'
+import LineInvitePage from './pages/LineInvitePage'
+import LineInvitePrintPage from './pages/LineInvitePrintPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -65,6 +67,11 @@ function AppRoutes() {
   // LINE の希望提出リンク。ログイン中かどうかに関係なく、リンクの本人で入り直す
   if (location.pathname.startsWith('/l/')) {
     return <LineLinkPage token={location.pathname.slice(3)} />
+  }
+
+  // LINE 招待（スタッフ本人専用のQR/リンク）。ログイン不要
+  if (location.pathname.startsWith('/i/')) {
+    return <LineInvitePage token={decodeURIComponent(location.pathname.slice(3).split('/')[0])} />
   }
 
   // 会場QRの打刻画面。ログイン不要（ログイン中でその会社の人ならそのまま本人として扱う）
@@ -120,6 +127,10 @@ function AppRoutes() {
   // 印刷用QRポスターはレイアウト（サイドバー等）なしの独立ページとして表示する
   if (isAdminRole && location.pathname === '/qr-poster') {
     return <QrPosterPage />
+  }
+  // LINE 招待カードの一括印刷
+  if (isAdminRole && location.pathname === '/line-invites/print') {
+    return <LineInvitePrintPage />
   }
   // 会場ごとの打刻用QRポスター（/qr-poster/store/:id）
   const storePosterMatch = location.pathname.match(/^\/qr-poster\/store\/(\d+)$/)
