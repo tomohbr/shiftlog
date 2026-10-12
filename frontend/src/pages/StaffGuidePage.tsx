@@ -34,7 +34,10 @@ export default function StaffGuidePage() {
     `【${company}】シフトの連絡はLINEで行います`,
     '',
     '■ はじめに（1回だけ）',
-    `お店からもらう「LINE招待」のQRを読んで、①友だち追加 ②コードを送る を押してください。（${bot}）`,
+    `① このリンクから「${bot}」を友だち追加`,
+    ...(addFriend ? [addFriend] : []),
+    '② トークに【自分のフルネーム】を送る（例：山田 花子）',
+    '③ 店長が確認すると「連携できました」と届きます',
     '',
     '■ いつもの使い方（LINEのトーク画面の下のメニュー）',
     '・シフトを見る … 自分とみんなの予定',
@@ -42,6 +45,7 @@ export default function StaffGuidePage() {
     `・休みの連絡 … 休むシフトを選んで店長に連絡${phoneWhen && phone ? `（${phoneWhen}は必ず電話 ${phone}）` : ''}`,
     hasLiff ? '・打刻する … ブースのQRを読んで 出勤／休憩／退勤' : '・打刻 … ブースのQRを読んで 出勤／休憩／退勤',
     '',
+    'わからないことは、そのトークに書いて送れば店長に届きます。',
     'ログインやアプリのインストールは要りません。',
   ].join('\n')
 
@@ -70,18 +74,18 @@ export default function StaffGuidePage() {
           <section className="mt-6 rounded-2xl border-2 border-[#06C755] p-5 flex gap-5 items-center">
             <div className="flex-1">
               <p className="text-sm font-bold text-[#06C755]">はじめに（1回だけ）</p>
-              <p className="text-xl font-bold mt-1">お店からもらう「LINE招待」のQRを読む</p>
+              <p className="text-xl font-bold mt-1">友だち追加して、名前を送る</p>
               <ol className="mt-2 space-y-1 text-base">
-                <li><b>①</b> スマホのカメラで、自分の名前が書いた招待QRを読む</li>
-                <li><b>②</b>「友だち追加」を押す（{bot}）</li>
-                <li><b>③</b>「コードを送る」を押して、そのまま送信</li>
+                <li><b>①</b> 右のQRを読んで「{bot}」を友だち追加</li>
+                <li><b>②</b> トークに<b>自分のフルネーム</b>を送る（例：山田 花子）</li>
+                <li><b>③</b> 店長が確認すると「連携できました」と届きます</li>
               </ol>
-              <p className="text-sm text-gray-500 mt-2">「連携できました」とLINEに届けば完了です。</p>
+              <p className="text-sm text-gray-500 mt-2">名前入りの「LINE招待」カードをもらった人は、そのQRを読むだけでもOKです。</p>
             </div>
             {addFriend && (
               <div className="text-center shrink-0">
                 <QRCodeSVG value={addFriend} size={104} />
-                <p className="text-[11px] text-gray-500 mt-1">先に友だち追加だけ<br />したい人はこちら</p>
+                <p className="text-[11px] text-gray-500 mt-1">友だち追加</p>
               </div>
             )}
           </section>
@@ -126,7 +130,7 @@ export default function StaffGuidePage() {
             </section>
           )}
 
-          <p className="mt-8 text-sm text-gray-500">わからないことがあれば、LINEのトークに「シフト」「希望」「休み」「打刻」と送っても案内が届きます。</p>
+          <p className="mt-8 text-sm text-gray-500">わからないことは、LINEのトークにそのまま書いて送ってください。店長に届きます。</p>
         </div>
       </div>
     </div>

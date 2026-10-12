@@ -539,16 +539,17 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
         if (data.startsWith('menu=')) await replyMenu(data.replace('menu=', ''), companyId, lineUserId, s.channel_access_token, event.replyToken);
         else await handleAbsencePostback(new URLSearchParams(data), companyId, lineUserId, s.channel_access_token, event.replyToken);
       } else if (event.type === 'follow' && event.replyToken) {
-        await replyLine(s.channel_access_token, event.replyToken,
-          '友だち追加ありがとうございます。\nシフトの通知を受け取るには、シフトログの「LINEで通知を受け取る」に表示される6桁の連携コードを、このトークに送ってください。');
+        const known = lineMember(companyId, lineUserId);
+        await replyLine(s.channel_access_token, event.replyToken, known
+          ? `${known.name}さん、おかえりなさい。トーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。`
+          : '友だち追加ありがとうございます。\n\nシフトの連絡を受け取るために、このトークに【あなたのフルネーム】を送ってください。\n例：山田 花子\n\n店長が確認したら「連携できました」とお知らせします。\n（お店からもらった招待QRがある人は、そちらを読んでもOKです）');
       } else if (event.type === 'unfollow') {
         db.prepare('DELETE FROM user_line_ids WHERE line_user_id = ?').run(lineUserId);
       } else if (event.type === 'message' && event.message?.type === 'text' && event.replyToken) {
         const text = String(event.message.text);
         const m = text.match(/\d{6}/);
         if (!m) {
-          const what = /希望/.test(text) ? 'requests' : /休み|欠勤|休む/.test(text) ? 'absent' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : '';
-          if (what) await replyMenu(what, companyId, lineUserId, s.channel_access_token, event.replyToken);
+          await handleText(text.trim(), companyId, lineUserId, s.channel_access_token, event.replyToken);
           continue;
         }
         const row = db.prepare(`
@@ -572,6 +573,78 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
     }
   }
 });
+
+// ---- 文字のメッセージ: 名前で登録（店長が承認）／キーワード／質問を店長へ ----
+// 社長がグループLINEに1通送るだけで始められるように、招待QRがなくても「フルネームを送る→店長が承認」で連携できる。
+// 連携済みの人の短いキーワードはメニューと同じ返事、それ以外は質問として店長の LINE に転送する
+// （店長は LINE 公式アカウントのアプリのチャットから返事する）。
+db.exec(`
+  CREATE TABLE IF NOT EXISTS line_registrations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    line_user_id TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    display_name TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+const norm = (t: string) => t.replace(/[\s　・.]/g, '').toLowerCase();
+
+async function lineDisplayName(token: string, lineUserId: string): Promise<string> {
+  try { const r = await lineApi(token, `/v2/bot/profile/${lineUserId}`); return r.data?.displayName || ''; } catch { return ''; }
+}
+
+async function handleText(text: string, companyId: number, lineUserId: string, token: string, replyToken: string) {
+  const me = lineMember(companyId, lineUserId);
+
+  // 連携済み: 短いキーワードはメニューと同じ、それ以外は質問として店長へ
+  if (me) {
+    const short = text.length <= 10;
+    const what = !short ? '' : /希望/.test(text) ? 'requests' : /休み|欠勤|休む/.test(text) ? 'absent' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : /使い方|ヘルプ|help/i.test(text) ? 'help' : '';
+    if (what === 'help') {
+      await replyLine(token, replyToken, '【使い方】トーク画面の下のメニューを押してください。\n・シフトを見る … 自分とみんなの予定\n・希望を出す … 出られる日を提出\n・休みの連絡 … 休むシフトを店長に連絡\n・打刻する … ブースのQRを読んで出勤・退勤\n\nそのほかの質問は、このトークにそのまま書いて送ってください。店長に届きます。');
+      return;
+    }
+    if (what) { await replyMenu(what, companyId, lineUserId, token, replyToken); return; }
+    if (isAdminMember(me)) return; // 店長自身の書き込みは転送しない
+    await replyLine(token, replyToken, '店長に届けました。返事はこのトークでお知らせします。\n（シフトを見る・希望を出す・休みの連絡は、下のメニューからいつでもできます）');
+    const card = buttonsCard(`${me.name}さんから質問`, `${me.name}さんから質問`, [text.slice(0, 300), '返事は LINE公式アカウントのアプリの「チャット」から送れます。'], [{ label: 'チャットを開く', uri: 'https://chat.line.biz/', primary: true, color: '#06C755' }]);
+    for (const id of adminLineIds(companyId)) if (id !== lineUserId) await sendLineMessage(token, id, card);
+    return;
+  }
+
+  // 未連携: 名前で登録を申し込む（スタッフ一覧にある、まだ LINE とつながっていない人と照合）
+  const cands = db.prepare(`
+    SELECT u.id, u.name FROM user_companies uc JOIN users u ON u.id = uc.user_id AND u.is_active = 1
+    LEFT JOIN user_line_ids uli ON uli.user_id = u.id
+    WHERE uc.company_id = ? AND uli.user_id IS NULL
+  `).all(companyId) as { id: number; name: string }[];
+  const hit = cands.filter(c => norm(c.name) === norm(text));
+  if (hit.length !== 1) {
+    await replyLine(token, replyToken, hit.length > 1
+      ? '同じ名前の方が複数います。お手数ですが、店長に直接連絡してください。'
+      : text.length > 12
+        ? 'メッセージを店長に届けました。\n\nシフトの連絡を受け取るには、このトークに【フルネームだけ】を送ってください。\n例：山田 花子'
+        : `「${text.slice(0, 20)}」さんは、まだ登録されていないようです。\nお店に登録されているフルネーム（例：山田 花子）で送ってください。\nわからない場合は店長に連絡してください。`);
+    // 名前以外の文章（質問など）なら店長にも知らせる
+    if (text.length > 12) {
+      const dn = await lineDisplayName(token, lineUserId);
+      for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, `【未登録の方からのメッセージ】LINE名「${dn || '不明'}」\n${text.slice(0, 300)}`);
+    }
+    return;
+  }
+  const target = hit[0];
+  const pending = db.prepare("SELECT id FROM line_registrations WHERE company_id = ? AND line_user_id = ? AND user_id = ? AND status = 'pending'").get(companyId, lineUserId, target.id) as any;
+  if (pending) { await replyLine(token, replyToken, `${target.name}さんとして店長に確認をお願いしています。もう少しお待ちください。`); return; }
+  const dn = await lineDisplayName(token, lineUserId);
+  const reg = db.prepare('INSERT INTO line_registrations (company_id, line_user_id, user_id, display_name) VALUES (?, ?, ?, ?)').run(companyId, lineUserId, target.id, dn);
+  await replyLine(token, replyToken, `${target.name}さんとして登録してよいか、店長に確認をお願いしました。\n承認されたら、このトークでお知らせします。`);
+  const card = buttonsCard('LINEの登録の確認', 'LINEの登録の確認', [`LINE名「${dn || '不明'}」さんが`, `「${target.name}」さんとして登録したいそうです。`, '本人で間違いなければ承認してください。'],
+    [{ label: '承認する', data: `a=reg_ok&r=${reg.lastInsertRowid}`, primary: true, color: '#06C755' }, { label: '違う人なので断る', data: `a=reg_ng&r=${reg.lastInsertRowid}` }]);
+  for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
+}
 
 // メニュー（またはキーワード）への返信
 async function replyMenu(what: string, companyId: number, lineUserId: string, token: string, replyToken: string) {
@@ -704,6 +777,28 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
   const a = q.get('a');
   const me = lineMember(companyId, lineUserId);
   if (!me) { await replyLine(token, replyToken, 'まだシフトログと連携されていません。'); return; }
+
+  // 店長: 名前での登録を承認／断る
+  if (a === 'reg_ok' || a === 'reg_ng') {
+    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は店長だけができます。'); return; }
+    const reg = db.prepare('SELECT r.*, u.name FROM line_registrations r JOIN users u ON u.id = r.user_id WHERE r.id = ? AND r.company_id = ?').get(Number(q.get('r')), companyId) as any;
+    if (!reg || reg.status !== 'pending') { await replyLine(token, replyToken, 'この確認はもう済んでいます。'); return; }
+    if (a === 'reg_ng') {
+      db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE id = ?").run(reg.id);
+      await replyLine(token, replyToken, `断りました（${reg.name}さんとしては登録していません）。`);
+      await sendLineMessage(token, reg.line_user_id, '店長が確認できなかったため、登録できませんでした。お手数ですが、お店に直接連絡してください。');
+      return;
+    }
+    const taken = db.prepare('SELECT 1 FROM user_line_ids WHERE user_id = ?').get(reg.user_id);
+    if (taken) { await replyLine(token, replyToken, `${reg.name}さんは、もう別のLINEとつながっています。`); return; }
+    db.prepare('INSERT INTO user_line_ids (user_id, line_user_id) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET line_user_id = excluded.line_user_id').run(reg.user_id, reg.line_user_id);
+    db.prepare("UPDATE line_registrations SET status = 'approved' WHERE id = ?").run(reg.id);
+    db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE company_id = ? AND user_id = ? AND status = 'pending'").run(companyId, reg.user_id);
+    await replyLine(token, replyToken, `${reg.name}さんを承認しました。`);
+    await sendLineMessage(token, reg.line_user_id,
+      `${reg.name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。\n\nわからないことは、このトークにそのまま書いて送ってください。店長に届きます。`);
+    return;
+  }
 
   // 電話でしか受けない日（番号が未設定のとき）
   if (a === 'phone') {
