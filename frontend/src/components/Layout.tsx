@@ -82,7 +82,7 @@ export default function Layout({ children }: LayoutProps) {
   const staffHomePath = `/${selectedCompany?.staff_home || 'timecards'}`
   const staffNavBase = [
     { path: '/timecards', label: 'タイムカード', icon: Clock },
-    { path: '/my-shifts', label: '自分のシフト', icon: Calendar },
+    { path: '/my-shifts', label: 'シフト', icon: Calendar },
     { path: '/shift-requests', label: 'シフト希望提出', icon: ClipboardList },
     { path: '/swaps', label: 'シフト交代', icon: Repeat },
     { path: '/absence', label: '欠勤連絡', icon: AlertCircle },

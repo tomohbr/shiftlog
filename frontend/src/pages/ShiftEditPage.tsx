@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { format, addMonths, subMonths, getDaysInMonth, startOfMonth, getDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
@@ -7,6 +7,7 @@ import ShiftModal from '../components/ShiftModal'
 import { shiftsApi, usersApi, shiftRequestsApi, storesApi, Shift, User, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
+import { storeColorMap } from '../lib/storeColors'
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -27,7 +28,10 @@ export default function ShiftEditPage() {
   // 希望シフト（提出済みマーク表示用）: `${user_id}-${date}` → 希望内容
   const [requestMap, setRequestMap] = useState<Record<string, { availability: string; preferred_start?: string | null; preferred_end?: string | null }>>({})
 
+  const reqId = useRef(0)
   const loadData = useCallback(async () => {
+    // 月を続けて送ったとき、古い月の応答が後から来て上書きしないようにする
+    const id = ++reqId.current
     setLoading(true)
     try {
       const year = currentDate.getFullYear()
@@ -38,6 +42,7 @@ export default function ShiftEditPage() {
         shiftRequestsApi.getAll({ year, month }).catch(() => null),
         storesApi.getAll().catch(() => null),
       ])
+      if (id !== reqId.current) return
       setShifts(shiftsRes.data.shifts)
       setStores(storesRes?.data.stores || [])
       setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
@@ -51,9 +56,9 @@ export default function ShiftEditPage() {
       }
       setRequestMap(reqMap)
     } catch {
-      toast.error('データの取得に失敗しました')
+      if (id === reqId.current) toast.error('データの取得に失敗しました')
     } finally {
-      setLoading(false)
+      if (id === reqId.current) setLoading(false)
     }
   }, [currentDate])
 
@@ -73,7 +78,8 @@ export default function ShiftEditPage() {
   })
 
   const multiStore = stores.length > 1
-  const storeShort = (name?: string | null) => (name || '').slice(0, 2)
+  const colorOf = storeColorMap(stores)
+  const sortedStores = [...stores].sort((a, b) => a.id - b.id)
   const filteredShifts = shifts
     .filter(s => !filterUserId || s.user_id === filterUserId)
     .filter(s => !filterStoreId || s.store_id === filterStoreId)
@@ -135,19 +141,23 @@ export default function ShiftEditPage() {
       {/* 会場の切り替え（会場が2つ以上あるお店だけ） */}
       {multiStore && (
         <div className="flex flex-wrap items-center gap-1.5">
-          {[{ id: null as number | null, name: '全会場' }, ...stores].map(st => (
-            <button
-              key={st.id ?? 'all'}
-              onClick={() => setFilterStoreId(st.id)}
-              className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
-                filterStoreId === st.id
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              {st.name}
-            </button>
-          ))}
+          {[{ id: null as number | null, name: '全会場' }, ...sortedStores].map(st => {
+            const active = filterStoreId === st.id
+            const c = st.id ? colorOf(st.id) : null
+            return (
+              <button
+                key={st.id ?? 'all'}
+                onClick={() => setFilterStoreId(st.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border-2 transition-colors ${
+                  active ? 'text-white' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+                style={active ? { backgroundColor: c?.solid || '#212529', borderColor: c?.solid || '#212529' } : undefined}
+              >
+                {c && <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: active ? '#fff' : c.solid }} />}
+                {st.name}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -239,15 +249,17 @@ export default function ShiftEditPage() {
                           }`}
                         >
                           {cellShifts.map(shift => (
+                            // 複数会場のお店は会場の色で塗る（スタッフ画面と同じ色）。会場名は title と凡例で補う
                             <div
                               key={shift.id}
                               className="text-white rounded text-xs py-0.5 px-1 mb-0.5 leading-tight"
-                              style={{ backgroundColor: u.color }}
+                              style={{ backgroundColor: multiStore && shift.store_id ? colorOf(shift.store_id).solid : u.color }}
+                              title={shift.store_name || undefined}
                             >
-                              <div className="font-medium">{shift.start_time.slice(0, 5)}</div>
-                              <div className="opacity-80">~{shift.end_time.slice(0, 5)}</div>
-                              {multiStore && !filterStoreId && shift.store_name && (
-                                <div className="text-[9px] font-bold bg-white/25 rounded mt-0.5" title={shift.store_name}>{storeShort(shift.store_name)}</div>
+                              <div className="font-bold">{shift.start_time.slice(0, 5)}</div>
+                              <div className="opacity-90">~{shift.end_time.slice(0, 5)}</div>
+                              {multiStore && shift.store_name && (
+                                <div className="text-[10px] font-bold mt-0.5 truncate">{shift.store_name.slice(0, 1)}</div>
                               )}
                             </div>
                           ))}

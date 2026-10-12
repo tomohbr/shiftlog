@@ -1,15 +1,31 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Calendar, Clock, ChevronLeft, ChevronRight, EyeOff, MapPin } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { ChevronLeft, ChevronRight, EyeOff, MapPin, Users, List, CalendarDays } from 'lucide-react'
 import { shiftsApi, storesApi, Shift, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import LineLinkCard from '../components/LineLinkCard'
+import { storeColorMap, StoreColor } from '../lib/storeColors'
 
-const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
+// スタッフの「シフト」画面。スマホで LINE から開かれる前提で、
+// 「次はいつ・どこで・誰と」が一目で分かることを最優先にしている。
+//   自分の予定 … 次の勤務を大きく → これからの勤務をカードで（一緒に入る人つき）
+//   みんなの予定 … 日ごと → 会場ごとに、誰が何時から入るか
+// 会場は色＋会場名で表す（lib/storeColors。管理画面と同じ色）
+
+const DOW = ['日', '月', '火', '水', '木', '金', '土']
 
 function fmtDate(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
+
+function parts(date: string) {
+  const [y, m, d] = date.split('-').map(Number)
+  const dow = new Date(y, m - 1, d).getDay()
+  return { y, m, d, dow, dowLabel: DOW[dow] }
+}
+
+const dowColor = (dow: number) => (dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-900')
+const hm = (t?: string) => (t || '').slice(0, 5)
 
 function shiftMinutes(s: Shift): number {
   if (!s.start_time || !s.end_time) return 0
@@ -20,20 +36,42 @@ function shiftMinutes(s: Shift): number {
   return mins
 }
 
+function VenuePill({ name, color, size = 'md' }: { name?: string | null; color: StoreColor; size?: 'md' | 'lg' }) {
+  if (!name) return null
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full font-bold ${size === 'lg' ? 'px-3 py-1 text-base' : 'px-2.5 py-0.5 text-sm'}`}
+      style={{ backgroundColor: color.soft, color: color.text }}
+    >
+      <MapPin className={size === 'lg' ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
+      {name}
+    </span>
+  )
+}
+
 export default function MyShiftsPage() {
   const { user } = useAuth()
   const now = new Date()
+  const todayStr = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate())
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  const tomorrowStr = fmtDate(tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate())
+
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [shifts, setShifts] = useState<Shift[]>([])
   const [isPublished, setIsPublished] = useState(true)
   const [loading, setLoading] = useState(true)
-  // 自分の分だけか、全員分か。会場は null = 全会場まとめて
-  const [who, setWho] = useState<'me' | 'all'>('me')
   const [stores, setStores] = useState<Store[]>([])
+  const [who, setWho] = useState<'me' | 'all'>('me')
   const [storeFilter, setStoreFilter] = useState<number | null>(null)
+  const [view, setView] = useState<'list' | 'calendar'>('list')
+  const [showPast, setShowPast] = useState(false)
+  const [pickedDate, setPickedDate] = useState<string | null>(null)
+  const reqId = useRef(0)
 
   const loadData = useCallback(async () => {
+    // 月を続けて送ったとき、古い月の応答が後から来て上書きしないようにする
+    const id = ++reqId.current
     setLoading(true)
     try {
       const [shiftsRes, pubRes, storesRes] = await Promise.all([
@@ -41,59 +79,85 @@ export default function MyShiftsPage() {
         shiftsApi.getPublication(year, month),
         storesApi.getAll().catch(() => null),
       ])
+      if (id !== reqId.current) return
       setShifts(shiftsRes.data.shifts || [])
       setIsPublished(pubRes.data.publication?.is_published === 1)
       setStores(storesRes?.data.stores || [])
     } catch {
-      toast.error('シフトの取得に失敗しました')
+      if (id === reqId.current) toast.error('シフトの取得に失敗しました')
     } finally {
-      setLoading(false)
+      if (id === reqId.current) setLoading(false)
     }
   }, [year, month])
 
   useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { setPickedDate(null); setShowPast(false) }, [year, month])
 
-  const goPrev = () => {
-    if (month === 1) { setYear(y => y - 1); setMonth(12) } else setMonth(m => m - 1)
-  }
-  const goNext = () => {
-    if (month === 12) { setYear(y => y + 1); setMonth(1) } else setMonth(m => m + 1)
-  }
-  const goToday = () => {
-    const t = new Date()
-    setYear(t.getFullYear())
-    setMonth(t.getMonth() + 1)
-  }
+  const goPrev = () => { if (month === 1) { setYear(y => y - 1); setMonth(12) } else setMonth(m => m - 1) }
+  const goNext = () => { if (month === 12) { setYear(y => y + 1); setMonth(1) } else setMonth(m => m + 1) }
+  const goToday = () => { setYear(now.getFullYear()); setMonth(now.getMonth() + 1) }
+  const isThisMonth = year === now.getFullYear() && month === now.getMonth() + 1
 
-  const todayStr = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate())
-
-  // 公開済みの月だけシフトを見せる（下書きを見せると混乱するため）
   const multiStore = stores.length > 1
-  const storeShort = (name?: string | null) => (name || '').slice(0, 2)
+  const colorOf = storeColorMap(stores)
+  const sortedStores = [...stores].sort((a, b) => a.id - b.id)
   const inStore = (s: Shift) => !storeFilter || s.store_id === storeFilter
-  const publishedShifts = isPublished ? shifts : []
-  const myShifts = publishedShifts.filter(s => s.user_id === user?.id)
-  // 自分: 全会場の自分の分（会場で絞ることもできる）／全員: 会場で絞った全員分
-  const visibleShifts = (who === 'me' ? myShifts : publishedShifts).filter(inStore)
-  const byDate: Record<string, Shift[]> = {}
-  for (const s of visibleShifts) {
-    if (!byDate[s.date]) byDate[s.date] = []
-    byDate[s.date].push(s)
-  }
+  const byTime = (a: Shift, b: Shift) => a.date.localeCompare(b.date) || hm(a.start_time).localeCompare(hm(b.start_time))
 
-  // 次のシフト（今日以降で最も近い自分の分。会場の絞り込みに関係なく出す）
-  const upcoming = myShifts
-    .filter(s => s.date >= todayStr)
-    .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || '').localeCompare(b.start_time || ''))
-  const nextShift = upcoming[0] || null
+  // 公開済みの月だけ見せる（下書きを見せると混乱するため）
+  const published = isPublished ? shifts : []
+  const mine = published.filter(s => s.user_id === user?.id).sort(byTime)
+  const myVisible = mine.filter(inStore)
+  const nextShift = mine.find(s => s.date >= todayStr) || null
 
-  const myVisible = myShifts.filter(inStore)
+  // 同じ日・同じ会場に入る自分以外の人
+  const coworkers = (s: Shift) =>
+    published
+      .filter(o => o.date === s.date && o.user_id !== s.user_id && (o.store_id ?? null) === (s.store_id ?? null))
+      .sort(byTime)
+
   const workDays = new Set(myVisible.map(s => s.date)).size
   const totalHours = myVisible.reduce((sum, s) => sum + shiftMinutes(s), 0) / 60
-  const storeLabel = storeFilter ? stores.find(st => st.id === storeFilter)?.name : null
+  const storeName = storeFilter ? stores.find(st => st.id === storeFilter)?.name : null
 
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
+  // ---------- 部品 ----------
+
+  const dayLabelBadge = (date: string) =>
+    date === todayStr ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">今日</span>
+      : date === tomorrowStr ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-800 text-white">明日</span>
+      : null
+
+  const ShiftCard = ({ s }: { s: Shift }) => {
+    const p = parts(s.date)
+    const c = colorOf(s.store_id)
+    const mates = coworkers(s)
+    const past = s.date < todayStr
+    return (
+      <div className={`flex bg-white rounded-xl border border-gray-200 overflow-hidden ${past ? 'opacity-50' : ''}`}>
+        <div className="w-1.5 shrink-0" style={{ backgroundColor: multiStore || s.store_name ? c.solid : '#2563EB' }} />
+        <div className="w-16 shrink-0 flex flex-col items-center justify-center py-3 border-r border-gray-100">
+          <span className="text-xs text-gray-500">{p.m}月</span>
+          <span className={`text-2xl font-bold leading-none ${dowColor(p.dow)}`}>{p.d}</span>
+          <span className={`text-xs font-semibold mt-0.5 ${dowColor(p.dow)}`}>{p.dowLabel}</span>
+        </div>
+        <div className="flex-1 min-w-0 px-3 py-3 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xl font-bold text-gray-900 tabular-nums">{hm(s.start_time)}<span className="text-gray-400 mx-1">–</span>{hm(s.end_time)}</span>
+            {dayLabelBadge(s.date)}
+          </div>
+          <VenuePill name={s.store_name} color={c} />
+          {mates.length > 0 && (
+            <p className="text-sm text-gray-600 flex items-start gap-1">
+              <Users className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" />
+              <span>{mates.map(o => `${o.user_name}（${hm(o.start_time)}〜）`).join('、')}</span>
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ---------- 画面 ----------
 
   if (loading) {
     return (
@@ -103,210 +167,260 @@ export default function MyShiftsPage() {
     )
   }
 
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const firstDow = new Date(year, month - 1, 1).getDay()
+  const upcomingMine = myVisible.filter(s => s.date >= todayStr)
+  const pastMine = myVisible.filter(s => s.date < todayStr)
+
+  // みんなの予定: 日 → 会場 → 人
+  const allVisible = published.filter(inStore).sort(byTime)
+  const allDates = [...new Set(allVisible.map(s => s.date))].sort()
+  const pastDates = allDates.filter(d => d < todayStr)
+  const shownDates = showPast ? allDates : allDates.filter(d => d >= todayStr)
+
   return (
-    <div className="space-y-4">
-      <LineLinkCard />
-      {/* Month navigator */}
-      <div className="flex flex-wrap items-center gap-3 justify-between">
+    <div className="space-y-4 max-w-xl mx-auto">
+      {/* 月の切り替え */}
+      <div className="flex items-center justify-between">
+        <button onClick={goPrev} aria-label="前の月" className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+          <ChevronLeft className="w-6 h-6" />
+        </button>
         <div className="flex items-center gap-2">
-          <button onClick={goToday} className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-            今月
-          </button>
-          <button onClick={goPrev} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg">
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <button onClick={goNext} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg">
-            <ChevronRight className="w-5 h-5" />
-          </button>
-          <h2 className="text-xl font-bold text-gray-900 min-w-[8rem]">{year}年{month}月</h2>
+          <h2 className="text-xl font-bold text-gray-900">{year}年{month}月</h2>
+          {!isThisMonth && (
+            <button onClick={goToday} className="text-xs font-semibold text-blue-600 px-2 py-1 rounded-md bg-blue-50">今月へ</button>
+          )}
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Calendar className="w-4 h-4 text-gray-400" />
-          {who === 'me' ? '自分のシフト' : 'みんなのシフト'}
-        </div>
+        <button onClick={goNext} aria-label="次の月" className="p-2 -mr-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+          <ChevronRight className="w-6 h-6" />
+        </button>
       </div>
 
-      {/* 自分／全員 と 会場の切り替え */}
-      <div className="space-y-2">
-        <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
-          {(['me', 'all'] as const).map(w => (
-            <button
-              key={w}
-              onClick={() => setWho(w)}
-              className={`px-4 py-1.5 text-sm font-medium ${who === w ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-            >
-              {w === 'me' ? '自分' : '全員'}
-            </button>
-          ))}
-        </div>
-        {multiStore && (
-          <div className="flex flex-wrap gap-1.5">
-            {[{ id: null as number | null, name: `${stores.length}会場まとめて` }, ...stores].map(st => (
+      {/* 自分／みんな */}
+      <div className="grid grid-cols-2 p-1 bg-gray-100 rounded-xl">
+        {(['me', 'all'] as const).map(w => (
+          <button
+            key={w}
+            onClick={() => setWho(w)}
+            className={`py-2.5 rounded-lg text-base font-bold transition-colors ${who === w ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+          >
+            {w === 'me' ? '自分の予定' : 'みんなの予定'}
+          </button>
+        ))}
+      </div>
+
+      {/* 会場の絞り込み（色は管理画面と共通） */}
+      {multiStore && (
+        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
+          {[{ id: null as number | null, name: '全会場' }, ...sortedStores].map(st => {
+            const active = storeFilter === st.id
+            const c = st.id ? colorOf(st.id) : null
+            return (
               <button
                 key={st.id ?? 'all'}
                 onClick={() => setStoreFilter(st.id)}
-                className={`px-3 py-1 rounded-full text-sm font-medium border ${
-                  storeFilter === st.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-bold border-2 transition-colors ${
+                  active ? 'text-white' : 'bg-white text-gray-700 border-gray-200'
                 }`}
+                style={active ? { backgroundColor: c?.solid || '#212529', borderColor: c?.solid || '#212529' } : undefined}
               >
+                {c && <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: active ? '#fff' : c.solid }} />}
                 {st.name}
               </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Next shift */}
-      {nextShift && (
-        <div className="card bg-blue-50 border border-blue-200">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shrink-0">
-              <Clock className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-blue-700">次のシフト</p>
-              <p className="text-lg font-bold text-gray-900">
-                {(() => {
-                  const [y, m, d] = nextShift.date.split('-').map(Number)
-                  const dow = DAY_LABELS[new Date(y, m - 1, d).getDay()]
-                  const label = nextShift.date === todayStr ? '今日' : `${m}月${d}日（${dow}）`
-                  return `${label} ${nextShift.start_time?.slice(0, 5)}〜${nextShift.end_time?.slice(0, 5)}`
-                })()}
-              </p>
-              {nextShift.store_name && (
-                <p className="text-sm font-semibold text-blue-800 flex items-center gap-1 mt-0.5">
-                  <MapPin className="w-3.5 h-3.5" />{nextShift.store_name}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Not published notice */}
-      {!isPublished && (
-        <div className="card bg-gray-50 border border-gray-200">
-          <div className="flex items-center gap-3">
-            <EyeOff className="w-5 h-5 text-gray-400 shrink-0" />
-            <p className="text-sm text-gray-600">
-              {year}年{month}月のシフトはまだ公開されていません。店長が公開すると、ここに表示されます。
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Monthly stats */}
-      {isPublished && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="card text-center py-4">
-            <p className="text-2xl font-bold text-gray-900">{workDays}<span className="text-sm font-normal text-gray-400 ml-1">日</span></p>
-            <p className="text-xs text-gray-500 mt-1">自分の出勤日{storeLabel && `（${storeLabel}）`}</p>
-          </div>
-          <div className="card text-center py-4">
-            <p className="text-2xl font-bold text-gray-900">{totalHours.toFixed(1)}<span className="text-sm font-normal text-gray-400 ml-1">時間</span></p>
-            <p className="text-xs text-gray-500 mt-1">自分の予定勤務時間{storeLabel && `（${storeLabel}）`}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Calendar */}
-      <div className="card p-3 sm:p-4">
-        <div className="grid grid-cols-7 mb-2">
-          {DAY_LABELS.map((label, i) => (
-            <div key={label} className={`text-center text-xs font-semibold py-1 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500'}`}>
-              {label}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: firstDayOfWeek }, (_, i) => (
-            <div key={`empty-${i}`} />
-          ))}
-          {Array.from({ length: daysInMonth }, (_, i) => {
-            const day = i + 1
-            const date = fmtDate(year, month, day)
-            const dayShifts = byDate[date] || []
-            const hasShift = dayShifts.length > 0
-            const isToday = date === todayStr
-            const dow = (firstDayOfWeek + i) % 7
-            return (
-              <div
-                key={date}
-                className={`min-h-[3.5rem] rounded-lg p-1 text-center ${
-                  hasShift ? 'bg-blue-50 ring-1 ring-blue-200' : 'bg-gray-50'
-                } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
-              >
-                <p className={`text-xs font-medium ${isToday ? 'text-blue-600' : dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-600'}`}>
-                  {day}
-                </p>
-                {who === 'all' ? (
-                  hasShift && (
-                    <p className="text-[10px] leading-tight text-blue-700 font-semibold mt-0.5">
-                      {new Set(dayShifts.map(s => s.user_id)).size}人
-                      {dayShifts.some(s => s.user_id === user?.id) && <span className="block text-[9px] text-white bg-blue-600 rounded mt-0.5">自分</span>}
-                    </p>
-                  )
-                ) : dayShifts.map(s => (
-                  <p key={s.id} className="text-[10px] leading-tight text-blue-700 font-semibold mt-0.5">
-                    {s.start_time?.slice(0, 5)}
-                    <br />
-                    {s.end_time?.slice(0, 5)}
-                    {multiStore && s.store_name && <span className="block text-[9px] text-blue-900">{storeShort(s.store_name)}</span>}
-                  </p>
-                ))}
-              </div>
             )
           })}
         </div>
-      </div>
+      )}
 
-      {/* List（自分: 1行1シフト／全員: 日ごとに名前・時間・会場） */}
-      {isPublished && visibleShifts.length > 0 && (
-        <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100">
-            <h3 className="text-sm font-bold text-gray-800">
-              {who === 'me' ? 'この月の自分のシフト' : 'この月のみんなのシフト'}
-              {storeLabel && <span className="ml-1 text-gray-400 font-normal">（{storeLabel}）</span>}
-            </h3>
+      {!isPublished && (
+        <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 flex items-start gap-3">
+          <EyeOff className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
+          <p className="text-sm text-gray-600">
+            {month}月のシフトはまだ公開されていません。公開されたらLINEでお知らせします。
+          </p>
+        </div>
+      )}
+
+      {isPublished && who === 'me' && (
+        <>
+          {/* 次の勤務 */}
+          {nextShift && (() => {
+            const p = parts(nextShift.date)
+            const c = colorOf(nextShift.store_id)
+            const mates = coworkers(nextShift)
+            return (
+              <div className="rounded-2xl bg-white border-2 p-4 space-y-2" style={{ borderColor: nextShift.store_name ? c.solid : '#2563EB' }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-gray-500">次の勤務</span>
+                  {dayLabelBadge(nextShift.date)}
+                </div>
+                <p className={`text-2xl font-bold ${dowColor(p.dow)}`}>{p.m}月{p.d}日（{p.dowLabel}）</p>
+                <p className="text-3xl font-bold text-gray-900 tabular-nums">{hm(nextShift.start_time)}<span className="text-gray-400 mx-1.5">–</span>{hm(nextShift.end_time)}</p>
+                <VenuePill name={nextShift.store_name} color={c} size="lg" />
+                {mates.length > 0 && (
+                  <div className="pt-2 border-t border-gray-100">
+                    <p className="text-xs font-bold text-gray-500 mb-1">一緒に入る人</p>
+                    {mates.map(o => (
+                      <p key={o.id} className="text-base text-gray-800 flex justify-between">
+                        <span>{o.user_name}</span>
+                        <span className="tabular-nums text-gray-600">{hm(o.start_time)}–{hm(o.end_time)}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* 月のまとめ ＋ 表示切替 */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              {storeName ? `${storeName}で` : ''}<span className="font-bold text-gray-900">{workDays}日</span>・
+              <span className="font-bold text-gray-900">{totalHours % 1 === 0 ? totalHours : totalHours.toFixed(1)}時間</span>
+            </p>
+            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+              {([['list', List, 'リスト'], ['calendar', CalendarDays, 'カレンダー']] as const).map(([v, Icon, label]) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`px-3 py-1.5 text-sm font-semibold flex items-center gap-1 ${view === v ? 'bg-gray-900 text-white' : 'bg-white text-gray-600'}`}
+                >
+                  <Icon className="w-4 h-4" />{label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="divide-y divide-gray-100">
-            {Object.keys(byDate).sort().map(date => {
-              const [y, m, d] = date.split('-').map(Number)
-              const dow = DAY_LABELS[new Date(y, m - 1, d).getDay()]
-              const isPast = date < todayStr
-              const rows = [...byDate[date]].sort((a, b) =>
-                (a.store_name || '').localeCompare(b.store_name || '') || (a.start_time || '').localeCompare(b.start_time || ''))
-              return (
-                <div key={date} className={`px-5 py-2.5 ${isPast ? 'opacity-50' : ''}`}>
-                  <p className={`text-sm font-semibold mb-1 ${dow === '日' ? 'text-red-500' : dow === '土' ? 'text-blue-500' : 'text-gray-800'}`}>
-                    {m}/{d}（{dow}）{date === todayStr && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold">今日</span>}
-                  </p>
-                  {rows.map(s => {
-                    const mine = s.user_id === user?.id
+
+          {view === 'list' ? (
+            <div className="space-y-2">
+              {upcomingMine.map(s => <ShiftCard key={s.id} s={s} />)}
+              {upcomingMine.length === 0 && (
+                <div className="text-center py-10 text-gray-400 text-sm bg-white rounded-xl border border-gray-200">
+                  {month}月のこれからの勤務は{storeName ? `${storeName}に` : ''}ありません
+                </div>
+              )}
+              {pastMine.length > 0 && (
+                <>
+                  <button onClick={() => setShowPast(v => !v)} className="w-full py-2 text-sm font-semibold text-gray-500">
+                    {showPast ? '終わった勤務を隠す' : `終わった勤務を見る（${pastMine.length}件）`}
+                  </button>
+                  {showPast && pastMine.map(s => <ShiftCard key={s.id} s={s} />)}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 p-3">
+              <div className="grid grid-cols-7 mb-1">
+                {DOW.map((l, i) => (
+                  <div key={l} className={`text-center text-xs font-bold py-1 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500'}`}>{l}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: firstDow }, (_, i) => <div key={`e${i}`} />)}
+                {Array.from({ length: daysInMonth }, (_, i) => {
+                  const date = fmtDate(year, month, i + 1)
+                  const dayShifts = myVisible.filter(s => s.date === date)
+                  const s = dayShifts[0]
+                  const c = s ? colorOf(s.store_id) : null
+                  const dow = (firstDow + i) % 7
+                  const picked = pickedDate === date
+                  return (
+                    <button
+                      key={date}
+                      onClick={() => setPickedDate(picked ? null : date)}
+                      className={`h-14 rounded-lg flex flex-col items-center justify-start pt-1 relative overflow-hidden ${
+                        date === todayStr ? 'ring-2 ring-red-500' : picked ? 'ring-2 ring-gray-900' : ''
+                      }`}
+                      style={{ backgroundColor: c ? c.soft : '#F8F9FA' }}
+                    >
+                      <span className={`text-sm font-bold ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-700'}`}>{i + 1}</span>
+                      {s && <span className="text-[11px] font-bold tabular-nums" style={{ color: c!.text }}>{hm(s.start_time)}</span>}
+                      {s && <span className="absolute bottom-0 inset-x-0 h-1.5" style={{ backgroundColor: c!.solid }} />}
+                    </button>
+                  )
+                })}
+              </div>
+              {multiStore && (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-gray-600">
+                  {sortedStores.map(st => (
+                    <span key={st.id} className="inline-flex items-center gap-1">
+                      <span className="w-3 h-1.5 rounded" style={{ backgroundColor: colorOf(st.id).solid }} />{st.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {pickedDate && (
+                <div className="mt-3 space-y-2">
+                  {myVisible.filter(s => s.date === pickedDate).map(s => <ShiftCard key={s.id} s={s} />)}
+                  {myVisible.every(s => s.date !== pickedDate) && (
+                    <p className="text-center text-sm text-gray-400 py-3">{parts(pickedDate).m}/{parts(pickedDate).d} は勤務がありません</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {isPublished && who === 'all' && (
+        <div className="space-y-3">
+          {shownDates.map(date => {
+            const p = parts(date)
+            const day = allVisible.filter(s => s.date === date)
+            // 会場ごとにまとめる（会場なしは最後）
+            const groups = [...sortedStores.map(st => ({ id: st.id as number | null, name: st.name })), { id: null, name: '' }]
+              .map(g => ({ ...g, rows: day.filter(s => (s.store_id ?? null) === g.id) }))
+              .filter(g => g.rows.length > 0)
+            return (
+              <section key={date} className={`bg-white rounded-xl border border-gray-200 overflow-hidden ${date < todayStr ? 'opacity-50' : ''}`}>
+                <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+                  <span className={`text-lg font-bold ${dowColor(p.dow)}`}>{p.m}/{p.d}（{p.dowLabel}）</span>
+                  {dayLabelBadge(date)}
+                  <span className="ml-auto text-sm text-gray-500">{new Set(day.map(s => s.user_id)).size}人</span>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {groups.map(g => {
+                    const c = colorOf(g.id)
                     return (
-                      <div key={s.id} className={`flex items-center gap-2 text-sm py-0.5 ${who === 'all' && mine ? 'font-bold text-blue-700' : 'text-gray-700'}`}>
-                        {who === 'all' && <span className="w-24 truncate">{s.user_name}{mine && '（自分）'}</span>}
-                        <span className="font-mono text-gray-600">{s.start_time?.slice(0, 5)}〜{s.end_time?.slice(0, 5)}</span>
-                        {s.store_name && (
-                          <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 flex items-center gap-0.5">
-                            <MapPin className="w-3 h-3" />{s.store_name}
-                          </span>
-                        )}
+                      <div key={g.id ?? 'none'} className="flex">
+                        <div className="w-1.5 shrink-0" style={{ backgroundColor: c.solid }} />
+                        <div className="flex-1 px-3 py-2.5">
+                          {g.name && <p className="text-sm font-bold mb-1" style={{ color: c.text }}>{g.name}</p>}
+                          {g.rows.map(s => {
+                            const me = s.user_id === user?.id
+                            return (
+                              <div key={s.id} className={`flex items-center justify-between py-1 ${me ? 'font-bold' : ''}`}>
+                                <span className="text-base text-gray-900 flex items-center gap-1.5">
+                                  {s.user_name}
+                                  {me && <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-600 text-white">あなた</span>}
+                                </span>
+                                <span className="text-base tabular-nums text-gray-700">{hm(s.start_time)}–{hm(s.end_time)}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     )
                   })}
                 </div>
-              )
-            })}
-          </div>
+              </section>
+            )
+          })}
+          {shownDates.length === 0 && (
+            <div className="text-center py-10 text-gray-400 text-sm bg-white rounded-xl border border-gray-200">
+              {month}月のこれからのシフトは{storeName ? `${storeName}に` : ''}ありません
+            </div>
+          )}
+          {pastDates.length > 0 && (
+            <button onClick={() => setShowPast(v => !v)} className="w-full py-2 text-sm font-semibold text-gray-500">
+              {showPast ? '終わった日を隠す' : `終わった日も見る（${pastDates.length}日）`}
+            </button>
+          )}
         </div>
       )}
 
-      {isPublished && visibleShifts.length === 0 && (
-        <div className="card text-center py-10 text-gray-400 text-sm">
-          {who === 'me' ? `${user?.name}さんの` : ''}{month}月のシフトは{storeLabel ? `${storeLabel}に` : ''}まだありません
-        </div>
-      )}
+      {/* LINE連携の案内は下に（毎回見る情報ではないため） */}
+      <LineLinkCard />
     </div>
   )
 }
