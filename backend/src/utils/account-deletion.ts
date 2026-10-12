@@ -45,6 +45,9 @@ export function deleteCompanyData(companyId: number): void {
   db.prepare('DELETE FROM time_records WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shifts WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_changes WHERE company_id = ?').run(companyId);
+  // 会場の枠と下書き（下書きの枠・割当は ON DELETE CASCADE で一緒に消える）
+  db.prepare('DELETE FROM schedule_drafts WHERE company_id = ?').run(companyId);
+  db.prepare('DELETE FROM venue_slot_rules WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_publications WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_requests WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_request_periods WHERE company_id = ?').run(companyId);
@@ -82,6 +85,7 @@ function deleteUserPersonalData(userId: number): void {
   db.prepare('DELETE FROM time_records WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shifts WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shift_changes WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM schedule_draft_assignments WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shift_requests WHERE user_id = ?').run(userId);
 
   db.prepare('DELETE FROM user_skills WHERE user_id = ?').run(userId);

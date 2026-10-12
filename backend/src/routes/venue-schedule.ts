@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { recordShiftChange, snapOf } from '../utils/shiftChanges';
 import {
   SlotRule, Slot, RequestInfo, Interval, Availability,
   expandRules, plan, judge, toMinutes, toHHMM, datesBetween,
@@ -542,7 +543,9 @@ router.post('/drafts/:id/commit', authenticateToken, requireCompany, (req: AuthR
         skipped.push({ user_name: r.user_name, date: r.date, start_time: r.start_time, end_time: r.end_time, reason: '同じ時間に別のシフトあり' });
         continue;
       }
-      ins.run(companyId, r.user_id, r.date, r.start_time, r.end_time, r.break_minutes || 0, storeId);
+      const id = Number(ins.run(companyId, r.user_id, r.date, r.start_time, r.end_time, r.break_minutes || 0, storeId).lastInsertRowid);
+      // 公開済みの月に足した分は「まだ知らせていない変更」に載せる（シフト管理から本人に知らせる）
+      recordShiftChange(companyId, r.user_id, id, null, snapOf(id));
       if (!busy.has(k)) busy.set(k, []);
       busy.get(k)!.push(iv);
       created++;
