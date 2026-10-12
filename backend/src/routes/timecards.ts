@@ -10,6 +10,7 @@ import {
   recordPunchReceipt,
   resolvePunchTime,
 } from '../utils/punch';
+import { ClockError, applyPunch, listBreaks, locationChecks, parseLocation, userBelongsToCompany } from '../utils/clock';
 
 const router = Router();
 
@@ -88,13 +89,23 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   const { year, month, user_id } = req.query;
 
   let query = `
-    SELECT tr.*, u.name as user_name, uc.color as user_color
+    SELECT tr.*, u.name as user_name, uc.color as user_color,
+           s_in.name as store_name, s_out.name as clock_out_store_name
     FROM time_records tr
     JOIN users u ON tr.user_id = u.id
     LEFT JOIN user_companies uc ON tr.user_id = uc.user_id AND tr.company_id = uc.company_id
+    LEFT JOIN stores s_in ON s_in.id = tr.store_id
+    LEFT JOIN stores s_out ON s_out.id = tr.clock_out_store_id
     WHERE tr.company_id = ?
   `;
   const params: (string | number)[] = [companyId];
+
+  // 会場で絞り込む（出勤・退勤のどちらかがその会場なら含める）
+  if (req.query.store_id) {
+    query += ' AND (tr.store_id = ? OR tr.clock_out_store_id = ?)';
+    const storeId = parseInt(req.query.store_id as string);
+    params.push(storeId, storeId);
+  }
 
   if (year && month) {
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -114,164 +125,69 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
 
   query += ' ORDER BY tr.date DESC, tr.clock_in ASC';
 
-  const records = db.prepare(query).all(...params);
+  // 休憩の内訳と、位置付き打刻の会場からの距離を添える
+  const records = (db.prepare(query).all(...params) as any[]).map(rec => ({
+    ...rec,
+    breaks: listBreaks(rec.id),
+    locations: locationChecks(rec.id),
+  }));
   res.json({ records });
 });
 
+// 出勤・退勤・休憩の4つの打刻ルートの共通処理。
+// user_id が指定されていればそのスタッフの打刻（ログイン済み端末をキオスクとして使う場合）。
+// ただし他社のスタッフは指定できない。
+function punchHandler(action: PunchAction) {
+  return (req: AuthRequest, res: Response): void => {
+    const companyId = req.companyId!;
+    const userId = req.body.user_id ? Number(req.body.user_id) : req.user!.id;
+    if (req.body.user_id && !userBelongsToCompany(userId, companyId)) {
+      res.status(403).json({ error: 'このスタッフは会社に所属していません' });
+      return;
+    }
+
+    const resolved = preparePunch(req, res, userId, action);
+    if (!resolved) return;
+
+    let recordId: number;
+    try {
+      recordId = applyPunch(action, {
+        companyId, userId,
+        date: resolved.date, time: resolved.time,
+        source: resolved.source,
+        location: parseLocation(req.body),
+      });
+    } catch (e) {
+      if (e instanceof ClockError) {
+        res.status(e.status).json({ error: e.message });
+        return;
+      }
+      throw e;
+    }
+
+    markOfflinePunch(recordId, resolved);
+    recordPunchReceipt({
+      clientUuid: req.body?.client_uuid,
+      companyId, userId, action,
+      timeRecordId: recordId, resolved,
+    });
+
+    const record = db.prepare('SELECT * FROM time_records WHERE id = ?').get(recordId);
+    res.status(action === 'clock_in' ? 201 : 200).json({ record });
+  };
+}
+
 // POST /api/timecards/clock-in - 出勤打刻
-router.post('/clock-in', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  const companyId = req.companyId!;
-  // user_idが指定されていればそのユーザーの打刻（キオスクモード）
-  const userId = req.body.user_id || req.user!.id;
+router.post('/clock-in', authenticateToken, requireCompany, punchHandler('clock_in'));
 
-  const resolved = preparePunch(req, res, userId, 'clock_in');
-  if (!resolved) return;
+// POST /api/timecards/clock-out - 退勤打刻（休憩中なら退勤時刻で休憩も閉じる）
+router.post('/clock-out', authenticateToken, requireCompany, punchHandler('clock_out'));
 
-  // Check if already clocked in that day
-  const existing = db.prepare(
-    'SELECT id FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-  ).get(companyId, userId, resolved.date, 'open');
+// POST /api/timecards/break-start - 休憩開始（1日に何回でも可）
+router.post('/break-start', authenticateToken, requireCompany, punchHandler('break_start'));
 
-  if (existing) {
-    res.status(409).json({ error: '既に出勤打刻済みです' });
-    return;
-  }
-
-  const result = db.prepare(
-    'INSERT INTO time_records (company_id, user_id, date, clock_in, status, has_offline_punch) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(companyId, userId, resolved.date, resolved.time, 'open', resolved.source === 'offline' ? 1 : 0);
-
-  recordPunchReceipt({
-    clientUuid: req.body?.client_uuid,
-    companyId, userId, action: 'clock_in',
-    timeRecordId: result.lastInsertRowid, resolved,
-  });
-
-  const record = db.prepare('SELECT * FROM time_records WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json({ record });
-});
-
-// POST /api/timecards/clock-out - 退勤打刻
-router.post('/clock-out', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  const companyId = req.companyId!;
-  const userId = req.body.user_id || req.user!.id;
-
-  const resolved = preparePunch(req, res, userId, 'clock_out');
-  if (!resolved) return;
-
-  const existing = db.prepare(
-    'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-  ).get(companyId, userId, resolved.date, 'open') as any;
-
-  if (!existing) {
-    res.status(404).json({ error: '出勤打刻がありません' });
-    return;
-  }
-
-  // 出退勤の逆転を拒否する。
-  if (resolved.time < existing.clock_in) {
-    res.status(400).json({ error: '退勤時刻が出勤時刻より前です' });
-    return;
-  }
-
-  // Calculate break_minutes from break_start/break_end if set
-  let breakMins = Math.max(0, existing.break_minutes || 0);
-  if (existing.break_start && existing.break_end) {
-    const bs = existing.break_start.split(':').map(Number);
-    const be = existing.break_end.split(':').map(Number);
-    breakMins = Math.max(0, (be[0] * 60 + be[1]) - (bs[0] * 60 + bs[1]));
-  }
-
-  db.prepare(
-    'UPDATE time_records SET clock_out = ?, break_minutes = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).run(resolved.time, breakMins, 'closed', existing.id);
-
-  markOfflinePunch(existing.id, resolved);
-  recordPunchReceipt({
-    clientUuid: req.body?.client_uuid,
-    companyId, userId, action: 'clock_out',
-    timeRecordId: existing.id, resolved,
-  });
-
-  const record = db.prepare('SELECT * FROM time_records WHERE id = ?').get(existing.id);
-  res.json({ record });
-});
-
-// POST /api/timecards/break-start - 休憩開始
-router.post('/break-start', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  const companyId = req.companyId!;
-  const userId = req.body.user_id || req.user!.id;
-
-  const resolved = preparePunch(req, res, userId, 'break_start');
-  if (!resolved) return;
-
-  const existing = db.prepare(
-    'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-  ).get(companyId, userId, resolved.date, 'open') as any;
-
-  if (!existing) {
-    res.status(404).json({ error: '出勤打刻がありません' });
-    return;
-  }
-
-  db.prepare(
-    'UPDATE time_records SET break_start = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).run(resolved.time, existing.id);
-
-  markOfflinePunch(existing.id, resolved);
-  recordPunchReceipt({
-    clientUuid: req.body?.client_uuid,
-    companyId, userId, action: 'break_start',
-    timeRecordId: existing.id, resolved,
-  });
-
-  const record = db.prepare('SELECT * FROM time_records WHERE id = ?').get(existing.id);
-  res.json({ record });
-});
-
-// POST /api/timecards/break-end - 休憩終了
-router.post('/break-end', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
-  const companyId = req.companyId!;
-  const userId = req.body.user_id || req.user!.id;
-
-  const resolved = preparePunch(req, res, userId, 'break_end');
-  if (!resolved) return;
-
-  const existing = db.prepare(
-    'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-  ).get(companyId, userId, resolved.date, 'open') as any;
-
-  if (!existing) {
-    res.status(404).json({ error: '出勤打刻がありません' });
-    return;
-  }
-
-  // 休憩終了が開始より前なら記録しない。
-  if (existing.break_start && resolved.time < existing.break_start) {
-    res.status(400).json({ error: '休憩終了が休憩開始より前です' });
-    return;
-  }
-  let breakMins = 0;
-  if (existing.break_start) {
-    const bs = existing.break_start.split(':').map(Number);
-    const be = resolved.time.split(':').map(Number);
-    breakMins = Math.max(0, (be[0] * 60 + be[1]) - (bs[0] * 60 + bs[1]));
-  }
-
-  db.prepare(
-    'UPDATE time_records SET break_end = ?, break_minutes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).run(resolved.time, breakMins, existing.id);
-
-  markOfflinePunch(existing.id, resolved);
-  recordPunchReceipt({
-    clientUuid: req.body?.client_uuid,
-    companyId, userId, action: 'break_end',
-    timeRecordId: existing.id, resolved,
-  });
-
-  const record = db.prepare('SELECT * FROM time_records WHERE id = ?').get(existing.id);
-  res.json({ record });
-});
+// POST /api/timecards/break-end - 休憩終了（break_minutes は全休憩の合計）
+router.post('/break-end', authenticateToken, requireCompany, punchHandler('break_end'));
 
 // GET /api/timecards/today - 今日のステータス
 router.get('/today', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
@@ -281,9 +197,9 @@ router.get('/today', authenticateToken, requireCompany, (req: AuthRequest, res: 
 
   const record = db.prepare(
     'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? ORDER BY id DESC LIMIT 1'
-  ).get(companyId, userId, date);
+  ).get(companyId, userId, date) as any;
 
-  res.json({ record: record || null });
+  res.json({ record: record ? { ...record, breaks: listBreaks(record.id) } : null });
 });
 
 // PUT /api/timecards/:id - 管理者による手動編集
@@ -386,7 +302,7 @@ router.get('/:id/edits', authenticateToken, requireCompany, (req: AuthRequest, r
 // GET /api/timecards/summary - 月別集計
 router.get('/summary', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
-  const { year, month } = req.query;
+  const { year, month, store_id } = req.query;
 
   if (!year || !month) {
     res.status(400).json({ error: '年と月を指定してください' });
@@ -414,9 +330,15 @@ router.get('/summary', authenticateToken, requireCompany, (req: AuthRequest, res
     FROM users u
     JOIN user_companies uc ON u.id = uc.user_id AND uc.company_id = ?
     LEFT JOIN time_records tr ON u.id = tr.user_id AND tr.company_id = ? AND tr.date >= ? AND tr.date <= ?
+      ${store_id ? 'AND (tr.store_id = ? OR tr.clock_out_store_id = ?)' : ''}
     WHERE u.is_active = 1
   `;
   const params: (string | number)[] = [companyId, companyId, startDate, endDate];
+  // 会場で絞り込む（出勤・退勤のどちらかがその会場の日を数える）
+  if (store_id) {
+    const storeId = parseInt(store_id as string);
+    params.push(storeId, storeId);
+  }
 
   if (!['admin','super_admin'].includes(req.user!.role)) {
     query += ' AND u.id = ?';

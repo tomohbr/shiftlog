@@ -35,6 +35,8 @@ import SetupGuidePage from './pages/SetupGuidePage'
 import OrganizationPage from './pages/OrganizationPage'
 import QrPosterPage from './pages/QrPosterPage'
 import LineLinkPage from './pages/LineLinkPage'
+import QrClockPage from './pages/QrClockPage'
+import StoreQrPosterPage from './pages/StoreQrPosterPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -63,6 +65,11 @@ function AppRoutes() {
   // LINE の希望提出リンク。ログイン中かどうかに関係なく、リンクの本人で入り直す
   if (location.pathname.startsWith('/l/')) {
     return <LineLinkPage token={location.pathname.slice(3)} />
+  }
+
+  // 会場QRの打刻画面。ログイン不要（ログイン中でその会社の人ならそのまま本人として扱う）
+  if (location.pathname.startsWith('/q/')) {
+    return <QrClockPage token={decodeURIComponent(location.pathname.slice(3).split('/')[0])} />
   }
 
   if (loading) {
@@ -113,6 +120,11 @@ function AppRoutes() {
   // 印刷用QRポスターはレイアウト（サイドバー等）なしの独立ページとして表示する
   if (isAdminRole && location.pathname === '/qr-poster') {
     return <QrPosterPage />
+  }
+  // 会場ごとの打刻用QRポスター（/qr-poster/store/:id）
+  const storePosterMatch = location.pathname.match(/^\/qr-poster\/store\/(\d+)$/)
+  if (isAdminRole && storePosterMatch) {
+    return <StoreQrPosterPage storeId={Number(storePosterMatch[1])} />
   }
 
   // 登録直後は、サイドバー等のない全画面ウィザードで初期設定を案内する

@@ -39,6 +39,9 @@ export function deleteCompanyData(companyId: number): void {
   db.prepare('DELETE FROM punch_receipts WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM usage_events WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM client_errors WHERE company_id = ?').run(companyId);
+  // 休憩の内訳と打刻ログ（位置情報を含む）も会社ごと消す
+  db.prepare('DELETE FROM time_breaks WHERE time_record_id IN (SELECT id FROM time_records WHERE company_id = ?)').run(companyId);
+  db.prepare('DELETE FROM punch_events WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM time_records WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shifts WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_publications WHERE company_id = ?').run(companyId);
@@ -73,6 +76,8 @@ function deleteUserPersonalData(userId: number): void {
   db.prepare('UPDATE absence_reports SET shift_id = NULL WHERE shift_id IN (SELECT id FROM shifts WHERE user_id = ?)').run(userId);
 
   db.prepare('DELETE FROM punch_receipts WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM time_breaks WHERE time_record_id IN (SELECT id FROM time_records WHERE user_id = ?)').run(userId);
+  db.prepare('DELETE FROM punch_events WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM time_records WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shifts WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shift_requests WHERE user_id = ?').run(userId);

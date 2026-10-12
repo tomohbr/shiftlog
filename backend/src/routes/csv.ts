@@ -43,14 +43,21 @@ router.get('/timecards', authenticateToken, requireCompany, (req: AuthRequest, r
   const datePrefix = `${year}-${String(Number(month as string)).padStart(2, '0')}`;
 
   const records = db.prepare(`
-    SELECT tr.date, u.name as staff_name, tr.clock_in, tr.clock_out, tr.break_minutes, tr.status, tr.notes
+    SELECT tr.date, u.name as staff_name, tr.clock_in, tr.clock_out, tr.break_minutes, tr.status, tr.notes,
+           s_in.name as store_name, s_out.name as clock_out_store_name
     FROM time_records tr JOIN users u ON u.id = tr.user_id
+    LEFT JOIN stores s_in ON s_in.id = tr.store_id
+    LEFT JOIN stores s_out ON s_out.id = tr.clock_out_store_id
     WHERE tr.company_id = ? AND tr.date LIKE ? ORDER BY tr.date, tr.clock_in
   `).all(companyId, `${datePrefix}-%`) as any[];
 
+  // 会場は既存の列の後ろに足す（列の並びに依存する取り込みを壊さないため）。出勤と退勤の会場が違えば「A→B」
+  const venue = (r: any) => r.store_name && r.clock_out_store_name && r.store_name !== r.clock_out_store_name
+    ? `${r.store_name}→${r.clock_out_store_name}`
+    : (r.store_name || r.clock_out_store_name || '');
   const csv = toCsv(
-    ['日付', 'スタッフ名', '出勤', '退勤', '休憩(分)', 'ステータス', '備考'],
-    records.map(r => [r.date, r.staff_name, r.clock_in, r.clock_out, r.break_minutes, r.status, r.notes])
+    ['日付', 'スタッフ名', '出勤', '退勤', '休憩(分)', 'ステータス', '備考', '会場'],
+    records.map(r => [r.date, r.staff_name, r.clock_in, r.clock_out, r.break_minutes, r.status, r.notes, venue(r)])
   );
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');

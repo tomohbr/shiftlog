@@ -1,9 +1,9 @@
 import { startProUpgrade } from '../lib/proUpgrade'
 import { useState, useEffect, useCallback } from 'react'
-import { billingApi, timecardsApi, usersApi, TimeRecord, TimeRecordEdit, User } from '../api/client'
+import { billingApi, timecardsApi, usersApi, storesApi, TimeRecord, TimeRecordEdit, User, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import { useKiosk } from '../contexts/KioskContext'
-import { Clock, Play, Square, Coffee, Edit2, ChevronLeft, ChevronRight, Download, CloudOff, RefreshCw } from 'lucide-react'
+import { Clock, Play, Square, Coffee, Edit2, ChevronLeft, ChevronRight, Download, CloudOff, RefreshCw, MapPin, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { isNative } from '../native/platform'
 import {
@@ -25,6 +25,9 @@ export default function TimecardPage() {
   const [records, setRecords] = useState<TimeRecord[]>([])
   const [adminStaff, setAdminStaff] = useState<User[]>([])
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>(undefined)
+  // 会場（複数会場のお店だけ使う）。null = 全会場
+  const [stores, setStores] = useState<Store[]>([])
+  const [filterStoreId, setFilterStoreId] = useState<number | null>(null)
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth() + 1)
   const [loading, setLoading] = useState(true)
@@ -78,6 +81,7 @@ export default function TimecardPage() {
   useEffect(() => {
     if (isAdmin) {
       usersApi.getAll().then(res => setAdminStaff(res.data.users)).catch(() => {})
+      storesApi.getAll().then(res => setStores(res.data.stores)).catch(() => {})
     }
   }, [isAdmin])
 
@@ -99,14 +103,14 @@ export default function TimecardPage() {
     }
     try {
       const uid = isAdmin ? selectedUserId : selectedStaff?.id
-      const res = await timecardsApi.getAll({ year, month, user_id: uid })
+      const res = await timecardsApi.getAll({ year, month, user_id: uid, store_id: isAdmin && filterStoreId ? filterStoreId : undefined })
       setRecords(res.data.records)
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'データ取得エラー')
     } finally {
       setLoading(false)
     }
-  }, [year, month, selectedUserId, isAdmin, selectedStaff])
+  }, [year, month, selectedUserId, isAdmin, selectedStaff, filterStoreId])
 
   useEffect(() => {
     fetchToday()
@@ -131,7 +135,8 @@ export default function TimecardPage() {
       }
       if (!prev) return prev
       if (action === 'clock_out') return { ...prev, clock_out: hhmm, status: 'closed' }
-      if (action === 'break_start') return { ...prev, break_start: hhmm }
+      // 2回目以降の休憩でも「休憩中」と分かるよう break_end を空に戻す（サーバーと同じ扱い）
+      if (action === 'break_start') return { ...prev, break_start: prev.break_start || hhmm, break_end: undefined }
       return { ...prev, break_end: hhmm }
     })
   }
@@ -231,6 +236,39 @@ export default function TimecardPage() {
     return `${h}時間${m > 0 ? m + '分' : ''}`
   }
 
+  // 出勤・退勤の会場。違う会場で退勤した日は「A→B」
+  const venueLabel = (rec: TimeRecord) => {
+    if (rec.store_name && rec.clock_out_store_name && rec.store_name !== rec.clock_out_store_name) {
+      return `${rec.store_name}→${rec.clock_out_store_name}`
+    }
+    return rec.store_name || rec.clock_out_store_name || ''
+  }
+  const ACTION_NAMES: Record<string, string> = { clock_in: '出勤', clock_out: '退勤', break_start: '休憩開始', break_end: '休憩終了' }
+  const fmtDistance = (m: number) => m >= 1000 ? `約${(m / 1000).toFixed(1)}km` : `約${Math.round(m / 10) * 10}m`
+  // 会場から離れた場所での打刻（位置が取れて、会場の位置が設定されているときだけ判定される）
+  const farWarnings = (rec: TimeRecord) => (rec.locations || []).filter(l => l.far).map(l =>
+    `⚠ ${ACTION_NAMES[l.action] || ''}が${l.store_name ? `「${l.store_name}」` : '会場'}から${fmtDistance(l.distance_m)}`
+  )
+  const breakLabel = (rec: TimeRecord) => {
+    const count = rec.breaks?.length || 0
+    if (!rec.break_minutes && count === 0) return '-'
+    return `${rec.break_minutes || 0}分${count > 1 ? `（${count}回）` : ''}`
+  }
+  const multiStore = stores.length > 1
+  // 会場別の合計（全会場表示のとき）。出勤した会場で数える
+  const workMinutes = (rec: TimeRecord) => {
+    if (!rec.clock_in || !rec.clock_out) return 0
+    const [ih, im] = rec.clock_in.split(':').map(Number)
+    const [oh, om] = rec.clock_out.split(':').map(Number)
+    return Math.max(0, (oh * 60 + om) - (ih * 60 + im) - (rec.break_minutes || 0))
+  }
+  const venueTotals = multiStore && !filterStoreId
+    ? stores.map(st => {
+        const recs = records.filter(r => r.store_id === st.id)
+        return { id: st.id, name: st.name, count: recs.length, minutes: recs.reduce((sum, r) => sum + workMinutes(r), 0) }
+      }).filter(v => v.count > 0)
+    : []
+
   const exportCSV = async () => {
     try {
       const plan = await billingApi.getPlan()
@@ -245,7 +283,7 @@ export default function TimecardPage() {
       return
     }
 
-    const header = '日付,氏名,出勤,退勤,休憩(分),実労働時間\n'
+    const header = '日付,氏名,出勤,退勤,休憩(分),実労働時間,会場\n'
     const rows = records.map(r => {
       const hours = r.clock_in && r.clock_out
         ? (() => {
@@ -254,7 +292,7 @@ export default function TimecardPage() {
             return ((oh * 60 + om) - (ih * 60 + im) - (r.break_minutes || 0)) / 60
           })()
         : 0
-      return `${r.date},${r.user_name || ''},${r.clock_in || ''},${r.clock_out || ''},${r.break_minutes || 0},${hours.toFixed(1)}`
+      return `${r.date},${r.user_name || ''},${r.clock_in || ''},${r.clock_out || ''},${r.break_minutes || 0},${hours.toFixed(1)},${venueLabel(r)}`
     }).join('\n')
     const bom = '\uFEFF'
     const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' })
@@ -363,10 +401,14 @@ export default function TimecardPage() {
         </div>
 
         {todayRecord && (
-          <div className="flex gap-6 text-sm text-gray-600 mb-4">
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600 mb-4">
             {todayRecord.clock_in && <span>出勤: {todayRecord.clock_in}</span>}
-            {todayRecord.break_start && <span>休憩開始: {todayRecord.break_start}</span>}
-            {todayRecord.break_end && <span>休憩終了: {todayRecord.break_end}</span>}
+            {(todayRecord.breaks?.length || 0) > 1
+              ? todayRecord.breaks!.map((b, i) => <span key={i}>休憩{i + 1}: {b.start_time}〜{b.end_time || ''}</span>)
+              : <>
+                  {todayRecord.break_start && <span>休憩開始: {todayRecord.break_start}</span>}
+                  {todayRecord.break_end && <span>休憩終了: {todayRecord.break_end}</span>}
+                </>}
             {todayRecord.clock_out && <span>退勤: {todayRecord.clock_out}</span>}
           </div>
         )}
@@ -450,6 +492,32 @@ export default function TimecardPage() {
           </div>
         </div>
 
+        {/* 会場の切り替え（会場が2つ以上あるお店だけ。シフト作成画面と同じ見た目） */}
+        {isAdmin && multiStore && (
+          <div className="px-4 pt-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[{ id: null as number | null, name: '全会場' }, ...stores].map(st => (
+                <button
+                  key={st.id ?? 'all'}
+                  onClick={() => setFilterStoreId(st.id)}
+                  className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
+                    filterStoreId === st.id
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {st.name}
+                </button>
+              ))}
+            </div>
+            {venueTotals.length > 0 && (
+              <p className="text-xs text-gray-500">
+                会場別（出勤した会場）: {venueTotals.map(v => `${v.name} ${v.count}件・${Math.floor(v.minutes / 60)}時間${v.minutes % 60 ? `${v.minutes % 60}分` : ''}`).join(' ／ ')}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <div className="md:hidden divide-y divide-gray-100">
             {records.map(rec => {
@@ -464,9 +532,11 @@ export default function TimecardPage() {
                   </div>
                   {isAdmin && <div className="flex items-center gap-2 text-sm text-gray-900"><span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: rec.user_color || '#4A90E2' }} /><span className="break-words min-w-0">{rec.user_name}</span></div>}
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-gray-600">休憩{rec.break_minutes || 0}分 ・ 実労働{calcHours(rec)}</p>
+                    <p className="text-xs text-gray-600">休憩{breakLabel(rec) === '-' ? '0分' : breakLabel(rec)} ・ 実労働{calcHours(rec)}</p>
                     {isAdmin && <button onClick={() => openEdit(rec)} aria-label={`${rec.date} ${rec.user_name || ''}のタイムカードを編集`} className="min-w-[44px] min-h-[44px] shrink-0 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>}
                   </div>
+                  {venueLabel(rec) && <p className="text-xs text-gray-600 flex items-center gap-1"><MapPin className="w-3.5 h-3.5 shrink-0" /><span className="break-words min-w-0">{venueLabel(rec)}</span></p>}
+                  {isAdmin && farWarnings(rec).map((w, i) => <p key={i} className="text-xs text-amber-700 break-words">{w}</p>)}
                   {rec.notes && <p className="text-xs text-gray-500 break-words">{rec.notes}</p>}
                 </article>
               )
@@ -481,6 +551,7 @@ export default function TimecardPage() {
                 <th className="text-left px-4 py-3 font-medium">出勤</th>
                 <th className="text-left px-4 py-3 font-medium">退勤</th>
                 <th className="text-left px-4 py-3 font-medium">休憩</th>
+                <th className="text-left px-4 py-3 font-medium">会場</th>
                 <th className="text-left px-4 py-3 font-medium">実労働</th>
                 <th className="text-left px-4 py-3 font-medium">メモ</th>
                 {isAdmin && <th className="text-right px-4 py-3 font-medium"></th>}
@@ -505,7 +576,16 @@ export default function TimecardPage() {
                     )}
                     <td className="px-4 py-3 font-mono">{rec.clock_in || '-'}</td>
                     <td className="px-4 py-3 font-mono">{rec.clock_out || '-'}</td>
-                    <td className="px-4 py-3">{rec.break_minutes ? `${rec.break_minutes}分` : '-'}</td>
+                    <td className="px-4 py-3">{breakLabel(rec)}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                      <div className="whitespace-nowrap">{venueLabel(rec) || '-'}</div>
+                      {isAdmin && farWarnings(rec).length > 0 && (
+                        <div className="mt-0.5 flex items-start gap-1 text-xs text-amber-700" title={farWarnings(rec).join('\n')}>
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                          <span>{farWarnings(rec).map(w => w.replace(/^⚠ /, '')).join('、')}</span>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-medium">{calcHours(rec)}</td>
                     <td className="px-4 py-3 text-gray-500 max-w-[150px] truncate">{rec.notes || ''}</td>
                     {isAdmin && (
@@ -523,7 +603,7 @@ export default function TimecardPage() {
               })}
               {records.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 8 : 6} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 9 : 7} className="px-4 py-8 text-center text-gray-500">
                     この月のタイムカードデータはありません
                   </td>
                 </tr>

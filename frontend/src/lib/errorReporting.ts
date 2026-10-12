@@ -1,4 +1,5 @@
 import { apiBaseUrl, isNative } from '../native/platform'
+import { maskPath } from './analytics'
 
 // クライアント側の例外を運営者に届ける。
 //
@@ -38,7 +39,7 @@ export function reportError(error: unknown, context: Record<string, unknown> = {
       stack: (err.stack || '').slice(0, 4000),
       platform: isNative ? 'ios' : 'web',
       app_version: APP_VERSION,
-      path: window.location.pathname,
+      path: maskPath(window.location.pathname),
       context,
     })
     fetch(`${apiBaseUrl}/telemetry/error`, { method: 'POST', headers: authHeaders(), body, keepalive: true }).catch(() => {})

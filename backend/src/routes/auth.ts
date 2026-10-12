@@ -6,6 +6,7 @@ import { JWT_SECRET, authenticateToken, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { verifyRequestLink } from './line';
 import { getJSTDate, getJSTTime } from '../utils/jst';
+import { ClockAction, ClockError, applyPunch, parseLocation, userBelongsToCompany } from '../utils/clock';
 import { sendMail } from '../utils/mailer';
 import { findSoleAdminCompanies, cancelCompanySubscription, deleteAccount } from '../utils/account-deletion';
 
@@ -110,66 +111,36 @@ router.post('/kiosk-clock', (req: Request, res: Response): void => {
   }
 
   // Verify user belongs to this company
-  const uc = db.prepare(
-    'SELECT * FROM user_companies WHERE user_id = ? AND company_id = ?'
-  ).get(userId, company.id);
-  if (!uc) {
+  if (!userBelongsToCompany(userId, company.id)) {
     res.status(403).json({ error: 'このスタッフは会社に所属していません' });
     return;
   }
 
-  const today = getJSTDate();
-  const now = getJSTTime();
+  // 打刻の規則（複数回休憩・退勤時の休憩合計など）はスタッフ用・会場QRと共通
+  const KIOSK_ACTIONS: Record<string, ClockAction> = {
+    'clock-in': 'clock_in', 'clock-out': 'clock_out', 'break-start': 'break_start', 'break-end': 'break_end',
+  };
+  const clockAction = KIOSK_ACTIONS[action];
+  if (!clockAction) {
+    res.status(400).json({ error: '打刻の種類が正しくありません' });
+    return;
+  }
 
-  if (action === 'clock-in') {
-    // Check if already clocked in today
-    const existing = db.prepare(
-      'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-    ).get(company.id, userId, today, 'open') as any;
-    if (existing) {
-      res.status(400).json({ error: '既に出勤済みです' });
+  const today = getJSTDate();
+  try {
+    applyPunch(clockAction, {
+      companyId: company.id, userId: Number(userId),
+      date: today, time: getJSTTime(),
+      source: 'kiosk',
+      location: parseLocation(req.body),
+    });
+  } catch (e) {
+    if (e instanceof ClockError) {
+      // 従来どおりキオスクの打刻エラーは 400 で返す
+      res.status(400).json({ error: e.message });
       return;
     }
-    db.prepare(
-      'INSERT INTO time_records (company_id, user_id, date, clock_in, status) VALUES (?, ?, ?, ?, ?)'
-    ).run(company.id, userId, today, now, 'open');
-  } else if (action === 'clock-out') {
-    const record = db.prepare(
-      'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-    ).get(company.id, userId, today, 'open') as any;
-    if (!record) {
-      res.status(400).json({ error: '出勤記録がありません' });
-      return;
-    }
-    let breakMins = 0;
-    if (record.break_start && record.break_end) {
-      const bs = record.break_start.split(':').map(Number);
-      const be = record.break_end.split(':').map(Number);
-      breakMins = (be[0] * 60 + be[1]) - (bs[0] * 60 + bs[1]);
-    }
-    db.prepare(
-      'UPDATE time_records SET clock_out = ?, break_minutes = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).run(now, breakMins, 'closed', record.id);
-  } else if (action === 'break-start') {
-    const record = db.prepare(
-      'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-    ).get(company.id, userId, today, 'open') as any;
-    if (!record) {
-      res.status(400).json({ error: '出勤記録がありません' });
-      return;
-    }
-    db.prepare('UPDATE time_records SET break_start = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(now, record.id);
-  } else if (action === 'break-end') {
-    const record = db.prepare(
-      'SELECT * FROM time_records WHERE company_id = ? AND user_id = ? AND date = ? AND status = ?'
-    ).get(company.id, userId, today, 'open') as any;
-    if (!record) {
-      res.status(400).json({ error: '出勤記録がありません' });
-      return;
-    }
-    db.prepare('UPDATE time_records SET break_end = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(now, record.id);
+    throw e;
   }
 
   // Return updated records

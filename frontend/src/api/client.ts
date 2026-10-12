@@ -97,7 +97,29 @@ export interface Store {
   name: string
   address?: string
   phone?: string
+  /** 会場の位置（離れた場所からの打刻に印を付けるため）。未設定は null */
+  lat?: number | null
+  lng?: number | null
+  /** 会場とみなす半径（m）。未設定は300m扱い */
+  geofence_m?: number | null
   created_at: string
+}
+
+/** 休憩1回分（1日に何回でも記録できる） */
+export interface TimeBreak {
+  start_time: string
+  end_time: string | null
+}
+
+/** 位置付き打刻と会場の距離（管理画面の「会場から離れた打刻」の印に使う） */
+export interface PunchLocationCheck {
+  action: 'clock_in' | 'clock_out' | 'break_start' | 'break_end'
+  time: string | null
+  store_name: string | null
+  distance_m: number
+  accuracy_m: number | null
+  radius_m: number
+  far: boolean
 }
 
 export interface TimeRecord {
@@ -114,6 +136,13 @@ export interface TimeRecord {
   break_minutes: number
   notes?: string
   status: 'open' | 'closed'
+  /** 出勤した会場・退勤した会場（会場QRで打刻したときに入る） */
+  store_id?: number | null
+  store_name?: string | null
+  clock_out_store_id?: number | null
+  clock_out_store_name?: string | null
+  breaks?: TimeBreak[]
+  locations?: PunchLocationCheck[]
 }
 
 export interface TimeRecordEdit {
@@ -166,10 +195,45 @@ export const storesApi = {
   create: (data: Partial<Store>) => api.post<{ store: Store }>('/stores', data),
   update: (id: number, data: Partial<Store>) => api.put<{ store: Store }>(`/stores/${id}`, data),
   delete: (id: number) => api.delete(`/stores/${id}`),
+  /** 会場の打刻用QR（未発行ならサーバー側で発行される） */
+  getQr: (id: number) => api.get<{ token: string; store: { id: number; name: string }; company_name: string }>(`/stores/${id}/qr`),
+  /** 打刻用QRの再発行。古いポスターのQRは使えなくなる */
+  reissueQr: (id: number) => api.post<{ token: string }>(`/stores/${id}/qr/reissue`),
+}
+
+// 会場QRの打刻（/q/<token>。ログイン不要）
+export type QrClockAction = 'clock-in' | 'clock-out' | 'break-start' | 'break-end'
+export interface QrClockInfo {
+  store: { id: number; name: string }
+  company: { id: number; name: string }
+  staff: { id: number; name: string; color?: string }[]
+}
+export interface QrClockStatus {
+  record: {
+    id: number
+    date: string
+    clock_in?: string | null
+    clock_out?: string | null
+    break_minutes: number
+    status: 'open' | 'closed'
+    store_name?: string | null
+    clock_out_store_name?: string | null
+  } | null
+  breaks: TimeBreak[]
+  on_break: boolean
+}
+export const qrClockApi = {
+  info: (token: string) => api.get<QrClockInfo>(`/qr/${encodeURIComponent(token)}`),
+  status: (token: string, userId: number) =>
+    api.get<QrClockStatus & { user: { id: number; name: string } }>(`/qr/${encodeURIComponent(token)}/status`, { params: { userId } }),
+  punch: (token: string, payload: { userId: number; action: QrClockAction; lat?: number; lng?: number; accuracy?: number }) =>
+    api.post<QrClockStatus & { ok: true; action: QrClockAction; date: string; time: string; store_name: string; user: { id: number; name: string } }>(
+      `/qr/${encodeURIComponent(token)}/punch`, payload
+    ),
 }
 
 export const timecardsApi = {
-  getAll: (params?: { year?: number; month?: number; user_id?: number }) =>
+  getAll: (params?: { year?: number; month?: number; user_id?: number; store_id?: number }) =>
     api.get<{ records: TimeRecord[] }>('/timecards', { params }),
   getEdits: (id: number) => api.get<{ edits: TimeRecordEdit[] }>(`/timecards/${id}/edits`),
   clockIn: (user_id?: number) => api.post<{ record: TimeRecord }>('/timecards/clock-in', { user_id }),

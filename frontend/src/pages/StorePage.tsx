@@ -1,7 +1,7 @@
 import { isNative } from '../native/platform'
 import { startProUpgrade } from '../lib/proUpgrade'
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, X, Store, Crown, AlertTriangle } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Store, Crown, AlertTriangle, QrCode, MapPin, LocateFixed } from 'lucide-react'
 import { storesApi, billingApi, Store as StoreType, PlanInfo } from '../api/client'
 import toast from 'react-hot-toast'
 
@@ -15,17 +15,49 @@ function StoreModal({ store, onClose, onSave }: StoreModalProps) {
   const [name, setName] = useState(store?.name || '')
   const [address, setAddress] = useState(store?.address || '')
   const [phone, setPhone] = useState(store?.phone || '')
+  // 会場の位置（QR打刻で、離れた場所からの打刻に印を付けるため。打刻は止めない）
+  const [lat, setLat] = useState(store?.lat != null ? String(store.lat) : '')
+  const [lng, setLng] = useState(store?.lng != null ? String(store.lng) : '')
+  const [geofence, setGeofence] = useState(store?.geofence_m != null ? String(store.geofence_m) : '')
+  const [locating, setLocating] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // 「今いる場所を会場にする」: 会場で管理者がスマホから押す想定
+  const useCurrentLocation = () => {
+    if (!('geolocation' in navigator)) {
+      toast.error('この端末では位置情報が使えません')
+      return
+    }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      p => {
+        setLat(p.coords.latitude.toFixed(6))
+        setLng(p.coords.longitude.toFixed(6))
+        setLocating(false)
+        toast.success(`現在地を入れました（誤差 約${Math.round(p.coords.accuracy)}m）`)
+      },
+      () => {
+        setLocating(false)
+        toast.error('現在地を取得できませんでした。位置情報の許可を確認してください')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    const venue = {
+      lat: lat.trim() === '' ? null : Number(lat),
+      lng: lng.trim() === '' ? null : Number(lng),
+      geofence_m: geofence.trim() === '' ? null : Number(geofence),
+    }
     try {
       if (store) {
-        await storesApi.update(store.id, { name, address, phone })
+        await storesApi.update(store.id, { name, address, phone, ...venue })
         toast.success('店舗情報を更新しました')
       } else {
-        await storesApi.create({ name, address, phone })
+        await storesApi.create({ name, address, phone, ...venue })
         toast.success('店舗を追加しました')
       }
       onSave()
@@ -61,6 +93,35 @@ function StoreModal({ store, onClose, onSave }: StoreModalProps) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">電話番号</label>
             <input value={phone} onChange={e => setPhone(e.target.value)} className="input-field" placeholder="任意" />
+          </div>
+          <div className="pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                <MapPin className="w-4 h-4 text-gray-400" />
+                会場の位置（任意）
+              </label>
+              <button
+                type="button"
+                onClick={useCurrentLocation}
+                disabled={locating}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:underline disabled:opacity-50"
+              >
+                <LocateFixed className="w-3.5 h-3.5" />
+                {locating ? '取得中…' : '今いる場所を会場にする'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input value={lat} onChange={e => setLat(e.target.value)} className="input-field" placeholder="緯度 例: 32.7898" inputMode="decimal" />
+              <input value={lng} onChange={e => setLng(e.target.value)} className="input-field" placeholder="経度 例: 130.6886" inputMode="decimal" />
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-gray-500 shrink-0">会場とみなす範囲</span>
+              <input value={geofence} onChange={e => setGeofence(e.target.value)} className="input-field w-24" placeholder="300" inputMode="numeric" />
+              <span className="text-xs text-gray-500">m</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              QR打刻のとき、この範囲の外から打刻されるとタイムカードに印が付きます（打刻は止めません）
+            </p>
           </div>
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">キャンセル</button>
@@ -308,6 +369,19 @@ export default function StorePage() {
               {store.phone && (
                 <p className="text-sm text-gray-500">{store.phone}</p>
               )}
+              <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 shrink-0" />
+                {store.lat != null && store.lng != null
+                  ? `会場の位置: 設定済み（半径${store.geofence_m || 300}m）`
+                  : '会場の位置: 未設定（離れた打刻の印は出ません）'}
+              </p>
+              <button
+                onClick={() => window.open(`/qr-poster/store/${store.id}`, '_blank')}
+                className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+              >
+                <QrCode className="w-4 h-4" />
+                打刻用QRポスター
+              </button>
               <p className="text-xs text-gray-400 mt-3">
                 登録日: {new Date(store.created_at).toLocaleDateString('ja-JP')}
               </p>

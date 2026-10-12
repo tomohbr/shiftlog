@@ -84,8 +84,13 @@ export function flushEvents(): void {
   } catch { /* 無視 */ }
 }
 
+// 会場QRの打刻画面（/q/<token>）のトークンは合言葉なので、計測には残さない
+export function maskPath(path: string): string {
+  return path.replace(/^\/q\/[^/]+/, '/q/:token')
+}
+
 function enqueue(event: string, meta?: EventParams): void {
-  queue.push({ event, path: window.location.pathname, meta, session_id: getSessionId() })
+  queue.push({ event, path: maskPath(window.location.pathname), meta, session_id: getSessionId() })
   if (queue.length >= MAX_QUEUE) { flushEvents(); return }
   if (!timer) timer = setTimeout(flushEvents, FLUSH_INTERVAL_MS)
 }
@@ -120,7 +125,7 @@ export function trackPageView(path: string): void {
   if (path === lastPath) return
   lastPath = path
   try {
-    if (typeof window.gtag === 'function') window.gtag('event', 'page_view', { page_path: path })
+    if (typeof window.gtag === 'function') window.gtag('event', 'page_view', { page_path: maskPath(path) })
     installFlushHooks()
     enqueue('page_view')
   } catch { /* 無視 */ }

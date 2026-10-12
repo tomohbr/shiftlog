@@ -501,6 +501,60 @@ try {
   }
 } catch (e) { /* tables may not exist yet */ }
 
+// ---- 会場QR打刻（2026-10。クリスマスマーケットの複数ブース運用から） ----
+// 上の移行ブロックは途中で失敗すると以降が黙って飛ぶため、新しい列はここで独立して足す。
+//   stores.qr_token        会場ポスターのQR（/q/<token>）。推測できない乱数、再発行で旧QRは無効になる
+//   stores.lat/lng         会場の位置。離れた場所からの打刻に印を付けるため（打刻は止めない）
+//   stores.geofence_m      会場とみなす半径（m）。未設定は300m扱い
+//   time_records.store_id           出勤した会場
+//   time_records.clock_out_store_id 退勤した会場（出勤と違う会場で退勤した場合に分かるように）
+//   time_breaks            休憩を何回でも記録する。従来の break_start/break_end 列は互換のため残し、
+//                          「最初の休憩開始」と「最後の休憩終了」（休憩中は NULL）を書き続ける
+//   punch_events           打刻1回ごとのログ。どの経路(qr/app/kiosk)・どの会場・どこから打ったか
+try {
+  const storeCols = db.prepare("PRAGMA table_info(stores)").all().map((c: any) => c.name);
+  if (!storeCols.includes('qr_token')) db.exec("ALTER TABLE stores ADD COLUMN qr_token TEXT");
+  if (!storeCols.includes('lat')) db.exec("ALTER TABLE stores ADD COLUMN lat REAL");
+  if (!storeCols.includes('lng')) db.exec("ALTER TABLE stores ADD COLUMN lng REAL");
+  if (!storeCols.includes('geofence_m')) db.exec("ALTER TABLE stores ADD COLUMN geofence_m INTEGER");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_stores_qr_token ON stores(qr_token) WHERE qr_token IS NOT NULL");
+
+  const trCols = db.prepare("PRAGMA table_info(time_records)").all().map((c: any) => c.name);
+  if (!trCols.includes('store_id')) db.exec("ALTER TABLE time_records ADD COLUMN store_id INTEGER");
+  if (!trCols.includes('clock_out_store_id')) db.exec("ALTER TABLE time_records ADD COLUMN clock_out_store_id INTEGER");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS time_breaks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      time_record_id INTEGER NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT,
+      store_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (time_record_id) REFERENCES time_records(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_time_breaks_record ON time_breaks(time_record_id);
+
+    CREATE TABLE IF NOT EXISTS punch_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      time_record_id INTEGER,
+      action TEXT NOT NULL,
+      punched_date TEXT,
+      punched_time TEXT,
+      store_id INTEGER,
+      source TEXT NOT NULL DEFAULT 'app',
+      lat REAL,
+      lng REAL,
+      accuracy REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_punch_events_record ON punch_events(time_record_id);
+    CREATE INDEX IF NOT EXISTS idx_punch_events_company ON punch_events(company_id, created_at);
+  `);
+} catch (e) { console.error('[migration] QR打刻の列追加に失敗', e); }
+
 export const SUPER_ADMIN_EMAIL = 'shibahara.724@gmail.com';
 
 // 一度だけ実行するマイグレーション管理
@@ -540,6 +594,23 @@ try {
     console.log(`[migration] granted 30-day pro trial to ${result.changes} existing companies`);
   }
 } catch (e) { console.error('[migration] grant trial failed', e); }
+
+// 既存の休憩（従来の break_start/break_end の1組）を time_breaks に一度だけ写す。
+// 公開時点で休憩中の人（break_end が NULL）も、そのまま「進行中の休憩」として引き継がれる。
+try {
+  const MIG_KEY = 'backfill_time_breaks_2026_10_12';
+  const done = db.prepare('SELECT 1 FROM _migrations WHERE key = ?').get(MIG_KEY);
+  if (!done) {
+    const result = db.prepare(`
+      INSERT INTO time_breaks (time_record_id, start_time, end_time, store_id)
+      SELECT tr.id, tr.break_start, tr.break_end, tr.store_id FROM time_records tr
+      WHERE tr.break_start IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM time_breaks tb WHERE tb.time_record_id = tr.id)
+    `).run();
+    db.prepare('INSERT INTO _migrations (key) VALUES (?)').run(MIG_KEY);
+    console.log(`[migration] copied ${result.changes} breaks into time_breaks`);
+  }
+} catch (e) { console.error('[migration] backfill time_breaks failed', e); }
 
 // super_admin 自動昇格: 指定メールが登録済みなら role=super_admin に揃える（安全網）
 try {
