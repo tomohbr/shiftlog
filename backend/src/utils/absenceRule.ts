@@ -30,5 +30,6 @@ export function phoneOnly(companyId: number, date: string, storeId?: number | nu
 export function phoneOnlyMessage(companyId: number, storeId?: number | null): string {
   const { days, phone } = absenceRule(companyId, storeId);
   const when = days === 0 ? '当日' : days === 1 ? '前日・当日' : `${days}日前から当日まで`;
-  return `${when}のお休みは、LINEではなく必ずお店に電話してください。${phone ? `\n📞 ${phone}` : ''}`;
+  const contact = (db.prepare('SELECT contact_name FROM line_settings WHERE company_id = ?').get(companyId) as any)?.contact_name;
+  return `${when}のお休みは、LINEではなく必ず${contact ? `担当の${contact}` : 'お店'}に電話してください。${phone ? `\n📞 ${phone}` : ''}`;
 }

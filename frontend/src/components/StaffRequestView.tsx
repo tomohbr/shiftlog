@@ -299,7 +299,7 @@ export default function StaffRequestView({ year, month, userId }: { year: number
               <Send className="w-5 h-5" />
               {submitting ? '送信中…' : !dirty && submittedBefore ? '提出済みです' : submittedBefore ? '直した内容で提出し直す' : `提出する（${filled.length}/${target.length}日）`}
             </button>
-            {dirty && left > 0 && <p className="text-xs text-center text-gray-500 mt-1.5">未入力の日は「希望なし」として店長に届きます</p>}
+            {dirty && left > 0 && <p className="text-xs text-center text-gray-500 mt-1.5">未入力の日は「希望なし」として届きます</p>}
           </div>
         </>
       )}

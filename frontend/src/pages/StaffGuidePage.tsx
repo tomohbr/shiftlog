@@ -27,25 +27,27 @@ export default function StaffGuidePage() {
   const days = line?.absence_phone_days
   const phoneWhen = days === 0 ? '当日' : days === 1 ? '前日・当日' : days ? `${days}日前から当日まで` : ''
   const hasLiff = !!line?.liff_id
+  const contact = line?.contact_name || ''
+  const who = contact ? `担当の${contact}` : '店長'
   const sorted = [...stores].sort((a, b) => a.id - b.id)
   const colorOf = storeColorMap(stores)
 
   const message = [
-    `【${company}】シフトの連絡はLINEで行います`,
+    `【${company}】シフトの連絡はLINEで行います${contact ? `（担当：${contact}）` : ''}`,
     '',
     '■ はじめに（1回だけ）',
     `① このリンクから「${bot}」を友だち追加`,
     ...(addFriend ? [addFriend] : []),
     '② トークに【自分のフルネーム】を送る（例：山田 花子）',
-    '③ 店長が確認すると「連携できました」と届きます',
+    `③ ${who}が確認すると「連携できました」と届きます`,
     '',
     '■ いつもの使い方（LINEのトーク画面の下のメニュー）',
     '・シフトを見る … 自分とみんなの予定',
     '・希望を出す … 出られる日を ◎○× で提出',
-    `・休みの連絡 … 休むシフトを選んで店長に連絡${phoneWhen && phone ? `（${phoneWhen}は必ず電話 ${phone}）` : ''}`,
+    `・休みの連絡 … 休むシフトを選んで${who}に連絡${phoneWhen && phone ? `（${phoneWhen}は必ず${who}に電話 ${phone}）` : ''}`,
     hasLiff ? '・打刻する … ブースのQRを読んで 出勤／休憩／退勤' : '・打刻 … ブースのQRを読んで 出勤／休憩／退勤',
     '',
-    'わからないことは、そのトークに書いて送れば店長に届きます。',
+    `わからないことは、そのトークに書いて送れば${who}に届きます。`,
     'ログインやアプリのインストールは要りません。',
   ].join('\n')
 
@@ -66,7 +68,7 @@ export default function StaffGuidePage() {
 
       <div className="overflow-x-auto">
         <div className="sheet mx-auto my-6 bg-white shadow w-[210mm] min-h-[277mm] px-[14mm] py-[12mm] text-gray-900">
-          <p className="text-sm text-gray-500">{company}</p>
+          <p className="text-sm text-gray-500">{company}{contact && <span className="ml-2 font-bold text-gray-700">担当：{contact}</span>}</p>
           <h1 className="text-[28px] font-bold leading-tight">シフトの連絡は、ぜんぶLINEで</h1>
           <p className="text-base text-gray-600 mt-1">ログインもアプリのインストールも要りません。</p>
 
@@ -78,7 +80,7 @@ export default function StaffGuidePage() {
               <ol className="mt-2 space-y-1 text-base">
                 <li><b>①</b> 右のQRを読んで「{bot}」を友だち追加</li>
                 <li><b>②</b> トークに<b>自分のフルネーム</b>を送る（例：山田 花子）</li>
-                <li><b>③</b> 店長が確認すると「連携できました」と届きます</li>
+                <li><b>③</b> {who}が確認すると「連携できました」と届きます</li>
               </ol>
               <p className="text-sm text-gray-500 mt-2">名前入りの「LINE招待」カードをもらった人は、そのQRを読むだけでもOKです。</p>
             </div>
@@ -99,7 +101,7 @@ export default function StaffGuidePage() {
               {[
                 ['#1C7ED6', 'シフトを見る', '自分の予定と、みんなの予定（どの会場に誰がいるか）がカレンダーで見られます。'],
                 ['#2F9E44', '希望を出す', '受付中の月に、出られる日を ◎入りたい ○入れる ×入れない で出します。締切まで直せます。'],
-                ['#E03131', '休みの連絡', `休むシフトを選んで理由を押すと、店長に届きます。${phoneWhen ? `\n${phoneWhen}のお休みは、必ず電話してください。` : ''}`],
+                ['#E03131', '休みの連絡', `休むシフトを選んで理由を押すと、${who}に届きます。${phoneWhen ? `\n${phoneWhen}のお休みは、必ず電話してください。` : ''}`],
                 ['#E8590C', hasLiff ? '打刻する' : '打刻', '出勤・休憩・退勤のときに押して、ブースに貼ってあるQRを読みます。自分の分しか打刻できません。'],
               ].map(([color, title, body]) => (
                 <div key={title} className="rounded-xl border border-gray-200 p-4">
@@ -113,8 +115,8 @@ export default function StaffGuidePage() {
           {/* 3. 電話 */}
           {phoneWhen && phone && (
             <section className="mt-6 rounded-2xl bg-red-50 border-2 border-red-300 p-5">
-              <p className="text-lg font-bold text-red-700">{phoneWhen}のお休みは、必ず電話で</p>
-              <p className="text-[32px] font-bold tabular-nums mt-1">📞 {phone}</p>
+              <p className="text-lg font-bold text-red-700">{phoneWhen}のお休みは、必ず{who}に電話で</p>
+              <p className="text-[32px] font-bold tabular-nums mt-1">📞 {phone}{contact && <span className="text-xl ml-3">（{contact}）</span>}</p>
             </section>
           )}
 
@@ -130,7 +132,7 @@ export default function StaffGuidePage() {
             </section>
           )}
 
-          <p className="mt-8 text-sm text-gray-500">わからないことは、LINEのトークにそのまま書いて送ってください。店長に届きます。</p>
+          <p className="mt-8 text-sm text-gray-500">わからないことは、LINEのトークにそのまま書いて送ってください。{who}に届きます。</p>
         </div>
       </div>
     </div>

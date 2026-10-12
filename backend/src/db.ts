@@ -482,7 +482,7 @@ try {
   if (!lineCols.includes('absence_phone_days')) db.exec('ALTER TABLE line_settings ADD COLUMN absence_phone_days INTEGER');
   // LIFF（LINE の中の打刻画面）: liff_id・login_channel_id、punch_line_only=1 なら打刻は本人の LINE からだけ
   if (!lineCols.includes('punch_line_only')) db.exec('ALTER TABLE line_settings ADD COLUMN punch_line_only INTEGER DEFAULT 0');
-  for (const column of ['channel_secret', 'bot_basic_id', 'bot_name', 'rich_menu_id', 'absence_phone', 'liff_id', 'login_channel_id']) {
+  for (const column of ['channel_secret', 'bot_basic_id', 'bot_name', 'rich_menu_id', 'absence_phone', 'liff_id', 'login_channel_id', 'contact_name']) {
     if (!lineCols.includes(column)) db.exec(`ALTER TABLE line_settings ADD COLUMN ${column} TEXT`);
   }
   db.exec(`

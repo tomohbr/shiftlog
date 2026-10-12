@@ -36,6 +36,7 @@ export default function LineSettingsPage() {
   // 休みの連絡のルール（前日・当日は電話のみ など）
   const [phoneDays, setPhoneDays] = useState<string>('')
   const [absencePhone, setAbsencePhone] = useState('')
+  const [contactName, setContactName] = useState('')
   const [savingRule, setSavingRule] = useState(false)
   // LINE の中の本人専用の打刻（LIFF）
   const [liffId, setLiffId] = useState('')
@@ -63,6 +64,7 @@ export default function LineSettingsPage() {
         setBot({ name: s.bot_name || null, basicId: s.bot_basic_id || null })
         setPhoneDays(s.absence_phone_days == null ? '' : String(s.absence_phone_days))
         setAbsencePhone(s.absence_phone || '')
+        setContactName(s.contact_name || '')
         setLiffId(s.liff_id || '')
         setLoginChannelId(s.login_channel_id || '')
         setLineOnly(!!s.punch_line_only)
@@ -230,7 +232,7 @@ export default function LineSettingsPage() {
       </div>
 
       <div className="card p-6 space-y-3">
-        <h3 className="text-base font-semibold text-gray-900">休みの連絡のルール</h3>
+        <h3 className="text-base font-semibold text-gray-900">担当者と、休みの連絡のルール</h3>
         <p className="text-sm text-gray-600">スタッフはLINEのメニュー「休みの連絡」から休みを伝えられます。直前の休みは電話でしか受けない場合は、ここで決めておくと、LINEでは受け付けずに電話をかけるボタンを出します。</p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
@@ -242,6 +244,10 @@ export default function LineSettingsPage() {
               <option value="2">2日前から当日まで</option>
             </select>
           </label>
+          <label className="text-sm">
+            <span className="block text-gray-700 font-medium mb-1">担当者の名前</span>
+            <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="例: 芝原（空なら「店長」）" autoComplete="off" className="input-field" />
+          </label>
           <label className="text-sm flex-1 min-w-[180px]">
             <span className="block text-gray-700 font-medium mb-1">電話番号</span>
             <input value={absencePhone} onChange={e => setAbsencePhone(e.target.value)} placeholder="例: 096-000-0000" inputMode="tel" autoComplete="off" className="input-field" />
@@ -251,7 +257,7 @@ export default function LineSettingsPage() {
               if (phoneDays !== '' && !absencePhone.trim()) { toast.error('電話番号を入れてください（押すと電話がかかるボタンに使います）'); return }
               setSavingRule(true)
               try {
-                await lineApi.saveAbsenceRule(phoneDays === '' ? null : Number(phoneDays), absencePhone)
+                await lineApi.saveAbsenceRule(phoneDays === '' ? null : Number(phoneDays), absencePhone, contactName)
                 toast.success('保存しました')
               } catch (e: any) { toast.error(e.response?.data?.error || '保存できませんでした') } finally { setSavingRule(false) }
             }}

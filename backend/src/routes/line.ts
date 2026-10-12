@@ -382,6 +382,11 @@ router.post('/absence-rule', authenticateToken, requireCompany, (req: AuthReques
   const phone = String(req.body?.phone || '').trim() || null;
   db.prepare('INSERT INTO line_settings (company_id) VALUES (?) ON CONFLICT(company_id) DO NOTHING').run(req.companyId!);
   db.prepare('UPDATE line_settings SET absence_phone_days = ?, absence_phone = ? WHERE company_id = ?').run(days, phone, req.companyId!);
+  // 担当者の名前（スタッフへの文面で「担当の○○」と出す）。送られたときだけ変える
+  if ('contact_name' in (req.body || {})) {
+    const contact = String(req.body.contact_name || '').trim().slice(0, 20) || null;
+    db.prepare('UPDATE line_settings SET contact_name = ? WHERE company_id = ?').run(contact, req.companyId!);
+  }
   res.json({ message: '休みの連絡のルールを保存しました' });
 });
 
@@ -542,7 +547,7 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
         const known = lineMember(companyId, lineUserId);
         await replyLine(s.channel_access_token, event.replyToken, known
           ? `${known.name}さん、おかえりなさい。トーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。`
-          : '友だち追加ありがとうございます。\n\nシフトの連絡を受け取るために、このトークに【あなたのフルネーム】を送ってください。\n例：山田 花子\n\n店長が確認したら「連携できました」とお知らせします。\n（お店からもらった招待QRがある人は、そちらを読んでもOKです）');
+          : `友だち追加ありがとうございます。\n\nシフトの連絡を受け取るために、このトークに【あなたのフルネーム】を送ってください。\n例：山田 花子\n\n${W(companyId)}が確認したら「連携できました」とお知らせします。\n（お店からもらった招待QRがある人は、そちらを読んでもOKです）`);
       } else if (event.type === 'unfollow') {
         db.prepare('DELETE FROM user_line_ids WHERE line_user_id = ?').run(lineUserId);
       } else if (event.type === 'message' && event.message?.type === 'text' && event.replyToken) {
@@ -590,6 +595,12 @@ db.exec(`
   );
 `);
 
+// スタッフに見せる「誰に届くか」。LINE設定の担当者名があれば「担当の○○」、なければ「店長」
+function W(companyId: number): string {
+  const n = (db.prepare('SELECT contact_name FROM line_settings WHERE company_id = ?').get(companyId) as any)?.contact_name;
+  return n ? `担当の${n}` : '店長';
+}
+
 const norm = (t: string) => t.replace(/[\s　・.]/g, '').toLowerCase();
 
 async function lineDisplayName(token: string, lineUserId: string): Promise<string> {
@@ -604,12 +615,12 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
     const short = text.length <= 10;
     const what = !short ? '' : /希望/.test(text) ? 'requests' : /休み|欠勤|休む/.test(text) ? 'absent' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : /使い方|ヘルプ|help/i.test(text) ? 'help' : '';
     if (what === 'help') {
-      await replyLine(token, replyToken, '【使い方】トーク画面の下のメニューを押してください。\n・シフトを見る … 自分とみんなの予定\n・希望を出す … 出られる日を提出\n・休みの連絡 … 休むシフトを店長に連絡\n・打刻する … ブースのQRを読んで出勤・退勤\n\nそのほかの質問は、このトークにそのまま書いて送ってください。店長に届きます。');
+      await replyLine(token, replyToken, `【使い方】トーク画面の下のメニューを押してください。\n・シフトを見る … 自分とみんなの予定\n・希望を出す … 出られる日を提出\n・休みの連絡 … 休むシフトを${W(companyId)}に連絡\n・打刻する … ブースのQRを読んで出勤・退勤\n\nそのほかの質問は、このトークにそのまま書いて送ってください。${W(companyId)}に届きます。`);
       return;
     }
     if (what) { await replyMenu(what, companyId, lineUserId, token, replyToken); return; }
     if (isAdminMember(me)) return; // 店長自身の書き込みは転送しない
-    await replyLine(token, replyToken, '店長に届けました。返事はこのトークでお知らせします。\n（シフトを見る・希望を出す・休みの連絡は、下のメニューからいつでもできます）');
+    await replyLine(token, replyToken, `${W(companyId)}に届けました。返事はこのトークでお知らせします。\n（シフトを見る・希望を出す・休みの連絡は、下のメニューからいつでもできます）`);
     const card = buttonsCard(`${me.name}さんから質問`, `${me.name}さんから質問`, [text.slice(0, 300), '返事は LINE公式アカウントのアプリの「チャット」から送れます。'], [{ label: 'チャットを開く', uri: 'https://chat.line.biz/', primary: true, color: '#06C755' }]);
     for (const id of adminLineIds(companyId)) if (id !== lineUserId) await sendLineMessage(token, id, card);
     return;
@@ -624,10 +635,10 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
   const hit = cands.filter(c => norm(c.name) === norm(text));
   if (hit.length !== 1) {
     await replyLine(token, replyToken, hit.length > 1
-      ? '同じ名前の方が複数います。お手数ですが、店長に直接連絡してください。'
+      ? `同じ名前の方が複数います。お手数ですが、${W(companyId)}に直接連絡してください。`
       : text.length > 12
-        ? 'メッセージを店長に届けました。\n\nシフトの連絡を受け取るには、このトークに【フルネームだけ】を送ってください。\n例：山田 花子'
-        : `「${text.slice(0, 20)}」さんは、まだ登録されていないようです。\nお店に登録されているフルネーム（例：山田 花子）で送ってください。\nわからない場合は店長に連絡してください。`);
+        ? `メッセージを${W(companyId)}に届けました。\n\nシフトの連絡を受け取るには、このトークに【フルネームだけ】を送ってください。\n例：山田 花子`
+        : `「${text.slice(0, 20)}」さんは、まだ登録されていないようです。\nお店に登録されているフルネーム（例：山田 花子）で送ってください。\nわからない場合は${W(companyId)}に連絡してください。`);
     // 名前以外の文章（質問など）なら店長にも知らせる
     if (text.length > 12) {
       const dn = await lineDisplayName(token, lineUserId);
@@ -637,10 +648,10 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
   }
   const target = hit[0];
   const pending = db.prepare("SELECT id FROM line_registrations WHERE company_id = ? AND line_user_id = ? AND user_id = ? AND status = 'pending'").get(companyId, lineUserId, target.id) as any;
-  if (pending) { await replyLine(token, replyToken, `${target.name}さんとして店長に確認をお願いしています。もう少しお待ちください。`); return; }
+  if (pending) { await replyLine(token, replyToken, `${target.name}さんとして${W(companyId)}に確認をお願いしています。もう少しお待ちください。`); return; }
   const dn = await lineDisplayName(token, lineUserId);
   const reg = db.prepare('INSERT INTO line_registrations (company_id, line_user_id, user_id, display_name) VALUES (?, ?, ?, ?)').run(companyId, lineUserId, target.id, dn);
-  await replyLine(token, replyToken, `${target.name}さんとして登録してよいか、店長に確認をお願いしました。\n承認されたら、このトークでお知らせします。`);
+  await replyLine(token, replyToken, `${target.name}さんとして登録してよいか、${W(companyId)}に確認をお願いしました。\n承認されたら、このトークでお知らせします。`);
   const card = buttonsCard('LINEの登録の確認', 'LINEの登録の確認', [`LINE名「${dn || '不明'}」さんが`, `「${target.name}」さんとして登録したいそうです。`, '本人で間違いなければ承認してください。'],
     [{ label: '承認する', data: `a=reg_ok&r=${reg.lastInsertRowid}`, primary: true, color: '#06C755' }, { label: '違う人なので断る', data: `a=reg_ng&r=${reg.lastInsertRowid}` }]);
   for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
@@ -780,13 +791,13 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
 
   // 店長: 名前での登録を承認／断る
   if (a === 'reg_ok' || a === 'reg_ng') {
-    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は店長だけができます。'); return; }
+    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は担当者（管理者）だけができます。'); return; }
     const reg = db.prepare('SELECT r.*, u.name FROM line_registrations r JOIN users u ON u.id = r.user_id WHERE r.id = ? AND r.company_id = ?').get(Number(q.get('r')), companyId) as any;
     if (!reg || reg.status !== 'pending') { await replyLine(token, replyToken, 'この確認はもう済んでいます。'); return; }
     if (a === 'reg_ng') {
       db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE id = ?").run(reg.id);
       await replyLine(token, replyToken, `断りました（${reg.name}さんとしては登録していません）。`);
-      await sendLineMessage(token, reg.line_user_id, '店長が確認できなかったため、登録できませんでした。お手数ですが、お店に直接連絡してください。');
+      await sendLineMessage(token, reg.line_user_id, `${W(companyId)}が確認できなかったため、登録できませんでした。お手数ですが、お店に直接連絡してください。`);
       return;
     }
     const taken = db.prepare('SELECT 1 FROM user_line_ids WHERE user_id = ?').get(reg.user_id);
@@ -796,7 +807,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE company_id = ? AND user_id = ? AND status = 'pending'").run(companyId, reg.user_id);
     await replyLine(token, replyToken, `${reg.name}さんを承認しました。`);
     await sendLineMessage(token, reg.line_user_id,
-      `${reg.name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。\n\nわからないことは、このトークにそのまま書いて送ってください。店長に届きます。`);
+      `${reg.name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。\n\nわからないことは、このトークにそのまま書いて送ってください。${W(companyId)}に届きます。`);
     return;
   }
 
@@ -812,7 +823,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     const sh = shiftWithStore(Number(q.get('s')));
     if (!sh || sh.user_id !== me.id || sh.company_id !== companyId) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
     if (phoneOnly(companyId, sh.date, sh.store_id)) { await replyLine(token, replyToken, phoneOnlyMessage(companyId, sh.store_id)); return; }
-    await replyLine(token, replyToken, buttonsCard('休みの理由', `${shiftLabel(sh)} を休みます`, ['理由を選ぶと、店長に届きます。'],
+    await replyLine(token, replyToken, buttonsCard('休みの理由', `${shiftLabel(sh)} を休みます`, [`理由を選ぶと、${W(companyId)}に届きます。`],
       [...REASONS.map((r, i) => ({ label: r, data: `a=report&s=${sh.id}&r=${i}`, primary: i === 0, color: '#E03131' }))]));
     return;
   }
@@ -829,7 +840,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
       const r = db.prepare('INSERT INTO absence_reports (company_id, user_id, shift_id, date, reason) VALUES (?, ?, ?, ?, ?)').run(companyId, me.id, sh.id, sh.date, reason);
       ab = { id: Number(r.lastInsertRowid) };
     }
-    await replyLine(token, replyToken, `${shiftLabel(sh)} のお休みを店長に伝えました。\n代わりが決まったら、このLINEでお知らせします。お大事にしてください。`);
+    await replyLine(token, replyToken, `${shiftLabel(sh)} のお休みを${W(companyId)}に伝えました。\n代わりが決まったら、このLINEでお知らせします。お大事にしてください。`);
     const card = buttonsCard(`${me.name}さんから休みの連絡`, `${me.name}さんが休みます`, [shiftLabel(sh), `理由: ${reason}`],
       [{ label: '代わりを募集する', data: `a=recruit&ab=${ab.id}`, primary: true }, { label: 'シフト画面を開く', uri: `${APP_URL}/shifts` }]);
     for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
@@ -838,7 +849,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
 
   // 管理者: 代わりを募集 → その日空いている人に「入れます」
   if (a === 'recruit') {
-    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は店長だけができます。'); return; }
+    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は担当者（管理者）だけができます。'); return; }
     const ab = db.prepare('SELECT * FROM absence_reports WHERE id = ? AND company_id = ?').get(Number(q.get('ab')), companyId) as any;
     const sh = ab?.shift_id ? shiftWithStore(ab.shift_id) : null;
     if (!ab || !sh) { await replyLine(token, replyToken, 'このお休みの連絡は見つかりませんでした。'); return; }
@@ -856,7 +867,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     `).all(companyId, sh.user_id, sh.date, sh.start_time, sh.end_time, sh.date) as any[];
     if (cands.length === 0) { await replyLine(token, replyToken, `${shiftLabel(sh)} に入れそうな人（LINE連携済み・その日空いている人）がいません。電話などで探してください。`); return; }
     db.prepare("UPDATE absence_reports SET status = 'recruiting', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(ab.id);
-    const card = buttonsCard('代わりに入れる人を探しています', '代わりに入れる人を探しています', [shiftLabel(sh), '入れる場合はボタンを押してください。店長が決めたらお知らせします。'],
+    const card = buttonsCard('代わりに入れる人を探しています', '代わりに入れる人を探しています', [shiftLabel(sh), `入れる場合はボタンを押してください。${W(companyId)}が決めたらお知らせします。`],
       [{ label: '入れます', data: `a=offer&ab=${ab.id}`, primary: true, color: '#2F9E44' }]);
     let sent = 0;
     for (const c of cands) if (await sendLineMessage(token, c.line_user_id, card)) sent++;
@@ -870,7 +881,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     const sh = ab?.shift_id ? shiftWithStore(ab.shift_id) : null;
     if (!ab || !sh || ab.status === 'covered') { await replyLine(token, replyToken, 'ありがとうございます。この募集はもう締め切られました。'); return; }
     db.prepare('INSERT OR IGNORE INTO cover_offers (absence_id, user_id) VALUES (?, ?)').run(ab.id, me.id);
-    await replyLine(token, replyToken, `ありがとうございます！店長に伝えました。\n${shiftLabel(sh)} に入るかどうか、決まったらお知らせします。`);
+    await replyLine(token, replyToken, `ありがとうございます！${W(companyId)}に伝えました。\n${shiftLabel(sh)} に入るかどうか、決まったらお知らせします。`);
     const card = buttonsCard(`${me.name}さんが入れます`, `${me.name}さんが入れます`, [`${shiftLabel(sh)}（${sh.user_name}さんの代わり）`],
       [{ label: `${me.name}さんに決める`, data: `a=decide&ab=${ab.id}&u=${me.id}`, primary: true, color: '#2F9E44' }]);
     for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
@@ -879,7 +890,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
 
   // 管理者: この人に決める → シフトを差し替えて、本人たちに知らせる
   if (a === 'decide') {
-    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は店長だけができます。'); return; }
+    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は担当者（管理者）だけができます。'); return; }
     const ab = db.prepare('SELECT * FROM absence_reports WHERE id = ? AND company_id = ?').get(Number(q.get('ab')), companyId) as any;
     const sh = ab?.shift_id ? shiftWithStore(ab.shift_id) : null;
     const cover = db.prepare('SELECT u.id, u.name FROM users u JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ? WHERE u.id = ?').get(companyId, Number(q.get('u'))) as any;
