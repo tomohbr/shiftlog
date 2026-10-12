@@ -9,8 +9,9 @@ export default function LineLinkPage({ token }: { token: string }) {
 
   useEffect(() => {
     lineLinkLogin(token)
-      .then(({ year, month }) => {
-        window.location.replace(`/shift-requests?year=${year}&month=${month}`)
+      .then(({ year, month, page }) => {
+        const to = page === 'shifts' ? '/my-shifts' : '/shift-requests'
+        window.location.replace(`${to}?year=${year}&month=${month}`)
       })
       .catch((e: any) => setError(e.response?.data?.error || 'リンクを開けませんでした'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -26,7 +27,7 @@ export default function LineLinkPage({ token }: { token: string }) {
       ) : (
         <>
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600"></div>
-          <p className="mt-4 text-sm text-gray-600">希望提出ページを開いています…</p>
+          <p className="mt-4 text-sm text-gray-600">開いています…</p>
         </>
       )}
     </div>

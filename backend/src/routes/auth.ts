@@ -240,6 +240,7 @@ router.post('/line-link', (req: Request, res: Response): void => {
     selectedCompanyId: link.cid,
     year: link.y,
     month: link.m,
+    page: link.page,
   });
 });
 

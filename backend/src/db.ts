@@ -478,7 +478,7 @@ try {
   }
   // LINE公式アカウントとスタッフを「連携コード」で結びつけるための列と表
   // channel_secret は Webhook の署名検証、bot_basic_id は友だち追加リンク（@xxxx）に使う
-  for (const column of ['channel_secret', 'bot_basic_id', 'bot_name']) {
+  for (const column of ['channel_secret', 'bot_basic_id', 'bot_name', 'rich_menu_id']) {
     if (!lineCols.includes(column)) db.exec(`ALTER TABLE line_settings ADD COLUMN ${column} TEXT`);
   }
   db.exec(`

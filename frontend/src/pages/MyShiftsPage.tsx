@@ -66,8 +66,12 @@ export default function MyShiftsPage() {
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
   const tomorrowStr = fmtDate(tomorrow.getFullYear(), tomorrow.getMonth() + 1, tomorrow.getDate())
 
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth() + 1)
+  // LINE のカードから来たときは ?year=&month= の月を開く
+  const qs = new URLSearchParams(window.location.search)
+  const qYear = Number(qs.get('year')), qMonth = Number(qs.get('month'))
+  const fromLink = qYear >= 2000 && qMonth >= 1 && qMonth <= 12
+  const [year, setYear] = useState(fromLink ? qYear : now.getFullYear())
+  const [month, setMonth] = useState(fromLink ? qMonth : now.getMonth() + 1)
   const [shifts, setShifts] = useState<Shift[]>([])
   const [isPublished, setIsPublished] = useState(true)
   const [loading, setLoading] = useState(true)

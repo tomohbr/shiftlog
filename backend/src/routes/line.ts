@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import jwt from 'jsonwebtoken';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../middleware/auth';
@@ -13,8 +15,10 @@ import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../m
 //      （oaMessage リンクでコード入りのトーク画面が開くので、押して送信するだけ）
 //   3. Webhook がコードを受け取り、そのスタッフと LINE の userId を結びつける
 //   4. 以後、シフト公開・希望収集の開始などを LINE で送る
-//   5. 希望収集の案内・催促には本人専用のリンクを付ける。LINE から開くと名前選択なしで
-//      その月の希望提出画面に入れる（トークで「希望」と送っても同じリンクが返ってくる）
+//   5. 希望収集の案内・催促・シフト公開には本人専用のリンクを付ける。LINE から開くと名前選択なしで
+//      その月の希望提出画面／シフト画面に入れる
+//   6. トーク画面の下にメニュー（シフトを見る・希望を出す・打刻のしかた）を付ける。押すと本人専用の
+//      カードを返信する（返信なので無料プランの通数に数えない）。文字で「シフト」「希望」と送っても同じ
 
 const router = Router();
 const APP_URL = process.env.APP_URL || 'https://shiftlog-production.up.railway.app';
@@ -31,16 +35,18 @@ const sendCodeUrl = (basicId: string, code: string) => `https://line.me/R/oaMess
 const LINK_SECRET = `${JWT_SECRET}:line-request-link`;
 const REQUEST_LINK_DAYS = 21;
 
-export function requestLinkUrl(userId: number, companyId: number, year: number, month: number): string {
-  const t = jwt.sign({ uid: userId, cid: companyId, y: year, m: month }, LINK_SECRET, { expiresIn: `${REQUEST_LINK_DAYS}d` });
+export type LinkPage = 'requests' | 'shifts';
+
+export function requestLinkUrl(userId: number, companyId: number, year: number, month: number, page: LinkPage = 'requests'): string {
+  const t = jwt.sign({ uid: userId, cid: companyId, y: year, m: month, ...(page === 'shifts' ? { p: 's' } : {}) }, LINK_SECRET, { expiresIn: `${REQUEST_LINK_DAYS}d` });
   return `${APP_URL}/l/${t}`;
 }
 
-export function verifyRequestLink(token: string): { uid: number; cid: number; y: number; m: number } | null {
+export function verifyRequestLink(token: string): { uid: number; cid: number; y: number; m: number; page: LinkPage } | null {
   try {
     const d = jwt.verify(token, LINK_SECRET) as any;
     if (!d?.uid || !d?.cid || !d?.y || !d?.m) return null;
-    return { uid: Number(d.uid), cid: Number(d.cid), y: Number(d.y), m: Number(d.m) };
+    return { uid: Number(d.uid), cid: Number(d.cid), y: Number(d.y), m: Number(d.m), page: d.p === 's' ? 'shifts' : 'requests' };
   } catch { return null; }
 }
 
@@ -90,10 +96,70 @@ export async function notifyCompanyStaff(companyId: number, message: string): Pr
 
 /** シフト公開の LINE 通知（設定で ON のときだけ） */
 export function notifyShiftPublished(companyId: number, year: number, month: number): void {
-  const s = db.prepare('SELECT notify_shift_published FROM line_settings WHERE company_id = ?').get(companyId) as any;
-  if (!s || s.notify_shift_published === 0) return;
-  const msg = `【シフトログ】${year}年${month}月のシフトが公開されました。\n自分の勤務を確認してください。\n\n${APP_URL}/my-shifts`;
-  notifyCompanyStaff(companyId, msg).catch(() => {});
+  const s = db.prepare('SELECT notify_shift_published, channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  if (!s || s.notify_shift_published === 0 || !s.channel_access_token) return;
+  (async () => {
+    for (const r of linkedMembers(companyId)) {
+      const card = shiftsCard(companyId, r.user_id, r.name, `${month}月のシフトが公開されました`, [{ year, month }]);
+      await sendLineMessage(s.channel_access_token, r.line_user_id, card);
+    }
+  })().catch(() => {});
+}
+
+function linkedMembers(companyId: number) {
+  return db.prepare(`
+    SELECT uli.user_id, uli.line_user_id, u.name FROM user_line_ids uli
+    JOIN user_companies uc ON uc.user_id = uli.user_id AND uc.company_id = ?
+    JOIN users u ON u.id = uli.user_id AND u.is_active = 1
+  `).all(companyId) as { user_id: number; line_user_id: string; name: string }[];
+}
+
+const jstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+const md2 = (d: string) => {
+  const [y, m, dd] = d.split('-').map(Number);
+  return `${m}/${dd}（${'日月火水木金土'[new Date(y, m - 1, dd).getDay()]}）`;
+};
+
+// シフトを見るカード: 次の勤務を書いて、月ごとのボタンで自分のシフト画面を開く
+function shiftsCard(companyId: number, userId: number, name: string, heading: string, months: { year: number; month: number }[]) {
+  const next = db.prepare(`
+    SELECT s.date, s.start_time, s.end_time, st.name AS store_name FROM shifts s
+    LEFT JOIN stores st ON st.id = s.store_id
+    JOIN shift_publications p ON p.company_id = s.company_id AND p.is_published = 1
+      AND p.year = CAST(substr(s.date, 1, 4) AS INTEGER) AND p.month = CAST(substr(s.date, 6, 2) AS INTEGER)
+    WHERE s.company_id = ? AND s.user_id = ? AND s.date >= ?
+    ORDER BY s.date, s.start_time LIMIT 1
+  `).get(companyId, userId, jstToday()) as any;
+  const nextBox = next
+    ? [
+        { type: 'text', text: '次の勤務', size: 'xs', color: '#888888' },
+        { type: 'text', text: `${md2(next.date)} ${String(next.start_time).slice(0, 5)}–${String(next.end_time).slice(0, 5)}`, size: 'lg', weight: 'bold', wrap: true },
+        ...(next.store_name ? [{ type: 'text', text: `📍 ${next.store_name}`, size: 'md', weight: 'bold', color: '#E8590C', wrap: true }] : []),
+      ]
+    : [{ type: 'text', text: '公開済みのこれからの勤務はありません', size: 'sm', color: '#888888', wrap: true }];
+  return {
+    type: 'flex',
+    altText: `【シフトログ】${heading}`,
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'md',
+        contents: [
+          { type: 'text', text: heading, weight: 'bold', size: 'md', wrap: true },
+          { type: 'box', layout: 'vertical', spacing: 'xs', contents: nextBox },
+          { type: 'text', text: `${name}さん専用のボタンです。名前を選ばずに開けます。`, size: 'xs', color: '#888888', wrap: true },
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', spacing: 'sm',
+        contents: months.map((p, i) => ({
+          type: 'button', style: i === 0 ? 'primary' : 'secondary', color: i === 0 ? '#1C7ED6' : undefined,
+          action: { type: 'uri', label: `${p.month}月のシフトを見る`, uri: requestLinkUrl(userId, companyId, p.year, p.month, 'shifts') },
+        })),
+      },
+    },
+  };
 }
 
 // 希望提出の案内カード（長いURLを見せず、ボタン1つで提出ページを開く）
@@ -254,6 +320,14 @@ router.post('/settings', authenticateToken, requireCompany, async (req: AuthRequ
     } catch { /* 疎通テストの失敗は保存を止めない */ }
   }
 
+  // トーク画面のメニューも付けておく（失敗しても保存は成功扱い）
+  if (token && secret) {
+    try {
+      const rm = await installRichMenu(companyId);
+      (check as any).menu = rm.ok ? 'トーク画面のメニューを付けました' : rm.error;
+    } catch { /* メニューの失敗は保存を止めない */ }
+  }
+
   res.json({ message: 'LINE設定を保存しました', check });
 });
 
@@ -335,7 +409,10 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
     const lineUserId: string | undefined = event.source?.userId;
     if (!lineUserId) continue;
     try {
-      if (event.type === 'follow' && event.replyToken) {
+      if (event.type === 'postback' && event.replyToken) {
+        const what = String(event.postback?.data || '').replace('menu=', '');
+        await replyMenu(what, companyId, lineUserId, s.channel_access_token, event.replyToken);
+      } else if (event.type === 'follow' && event.replyToken) {
         await replyLine(s.channel_access_token, event.replyToken,
           '友だち追加ありがとうございます。\nシフトの通知を受け取るには、シフトログの「LINEで通知を受け取る」に表示される6桁の連携コードを、このトークに送ってください。');
       } else if (event.type === 'unfollow') {
@@ -344,7 +421,8 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
         const text = String(event.message.text);
         const m = text.match(/\d{6}/);
         if (!m) {
-          if (/希望|シフト/.test(text)) await replyRequestLink(companyId, lineUserId, s.channel_access_token, event.replyToken);
+          const what = /希望/.test(text) ? 'requests' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : '';
+          if (what) await replyMenu(what, companyId, lineUserId, s.channel_access_token, event.replyToken);
           continue;
         }
         const row = db.prepare(`
@@ -365,6 +443,78 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
     } catch (err) {
       console.error('[line] webhook 処理失敗:', (err as Error).message);
     }
+  }
+});
+
+// メニュー（またはキーワード）への返信
+async function replyMenu(what: string, companyId: number, lineUserId: string, token: string, replyToken: string) {
+  if (what === 'requests') return replyRequestLink(companyId, lineUserId, token, replyToken);
+  if (what === 'howto') {
+    return replyLine(token, replyToken,
+      '【打刻のしかた】\n① 会場のブースに貼ってある「打刻用QR」をスマホのカメラで読み取る\n② 初めてのときだけ自分の名前を選ぶ\n③「出勤」「休憩」「休憩終わり」「退勤」の大きなボタンを押す\n\n押した時刻と会場が記録されます。今日の予定と違う会場のQRだと注意が出ますが、ヘルプで入るときはそのまま押してOKです。');
+  }
+  if (what !== 'shifts') return;
+  const who = db.prepare(`
+    SELECT u.id, u.name FROM user_line_ids uli
+    JOIN users u ON u.id = uli.user_id AND u.is_active = 1
+    JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ?
+    WHERE uli.line_user_id = ?
+  `).get(companyId, lineUserId) as any;
+  if (!who) {
+    await replyLine(token, replyToken, 'まだシフトログと連携されていません。アプリの「LINEで通知を受け取る」に出る6桁のコードをこのトークに送ってください。');
+    return;
+  }
+  // 今月と、公開済みなら来月
+  const t = jstToday();
+  const y = Number(t.slice(0, 4)); const m = Number(t.slice(5, 7));
+  const ny = m === 12 ? y + 1 : y; const nm = m === 12 ? 1 : m + 1;
+  const months = [{ year: y, month: m }];
+  const nextPublished = db.prepare('SELECT 1 FROM shift_publications WHERE company_id = ? AND year = ? AND month = ? AND is_published = 1').get(companyId, ny, nm);
+  if (nextPublished) months.push({ year: ny, month: nm });
+  await replyLine(token, replyToken, shiftsCard(companyId, who.id, who.name, `${who.name}さんのシフト`, months));
+}
+
+// トーク画面の下のメニューを付ける（画像は backend/assets/richmenu.png、2500x843 の3分割）
+export async function installRichMenu(companyId: number): Promise<{ ok: boolean; error?: string }> {
+  const s = db.prepare('SELECT channel_access_token, rich_menu_id FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  if (!s?.channel_access_token) return { ok: false, error: 'LINE 通知の設定がまだです' };
+  const token = s.channel_access_token;
+  const W = 2500, H = 843, w = Math.floor(W / 3);
+  const area = (i: number, data: string, label: string) => ({
+    bounds: { x: i * w, y: 0, width: i === 2 ? W - 2 * w : w, height: H },
+    action: { type: 'postback', data: `menu=${data}`, displayText: label },
+  });
+  const created = await lineApi(token, '/v2/bot/richmenu', {
+    method: 'POST',
+    body: {
+      size: { width: W, height: H }, selected: true, name: 'shiftlog-menu', chatBarText: 'シフトのメニュー',
+      areas: [area(0, 'shifts', 'シフトを見る'), area(1, 'requests', '希望を出す'), area(2, 'howto', '打刻のしかた')],
+    },
+  });
+  const id = created.data?.richMenuId;
+  if (!created.ok || !id) return { ok: false, error: `メニューを作れませんでした（${created.status} ${JSON.stringify(created.data).slice(0, 120)}）` };
+  const image = fs.readFileSync(path.join(__dirname, '..', '..', 'assets', 'richmenu.png'));
+  const up = await fetch(`https://api-data.line.me/v2/bot/richmenu/${id}/content`, {
+    method: 'POST', headers: { 'Content-Type': 'image/png', Authorization: `Bearer ${token}` }, body: image,
+  });
+  if (!up.ok) return { ok: false, error: `メニュー画像を送れませんでした（${up.status}）` };
+  const def = await lineApi(token, `/v2/bot/user/all/richmenu/${id}`, { method: 'POST' });
+  if (!def.ok) return { ok: false, error: `メニューを既定にできませんでした（${def.status}）` };
+  // 前のメニューは消す（作り直しのたびに増えないように）
+  if (s.rich_menu_id && s.rich_menu_id !== id) await lineApi(token, `/v2/bot/richmenu/${s.rich_menu_id}`, { method: 'DELETE' }).catch(() => null);
+  db.prepare('UPDATE line_settings SET rich_menu_id = ? WHERE company_id = ?').run(id, companyId);
+  return { ok: true };
+}
+
+// POST /api/line/richmenu - メニューを付け直す（管理者）
+router.post('/richmenu', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  try {
+    const r = await installRichMenu(req.companyId!);
+    if (!r.ok) { res.status(400).json({ error: r.error }); return; }
+    res.json({ message: 'LINEのトーク画面にメニューを付けました' });
+  } catch (err: any) {
+    res.status(500).json({ error: `メニューを付けられませんでした: ${err?.message || err}` });
   }
 });
 

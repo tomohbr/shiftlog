@@ -20,7 +20,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, name: string, companyName: string) => Promise<void>
   pinLogin?: (companyPin: string, userId: number) => Promise<void>
-  lineLinkLogin: (linkToken: string) => Promise<{ year: number; month: number }>
+  lineLinkLogin: (linkToken: string) => Promise<{ year: number; month: number; page?: 'requests' | 'shifts' }>
   logout: () => void
   selectCompany: (company: Company) => void
   justRegistered: boolean
@@ -136,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // LINE で届いた希望提出リンク（/l/:token）からのログイン。返り値はリンクが指す月
   const lineLinkLogin = async (linkToken: string) => {
     const res = await api.post('/auth/line-link', { token: linkToken })
-    const { token, user: u, companies: comps, selectedCompanyId, year, month } = res.data
+    const { token, user: u, companies: comps, selectedCompanyId, year, month, page } = res.data
     localStorage.setItem('token', token)
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`
     setUser(u)
@@ -146,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSelectedCompany(found)
       localStorage.setItem('selectedCompanyId', found.id.toString())
     }
-    return { year, month }
+    return { year, month, page }
   }
 
   const logout = () => {
