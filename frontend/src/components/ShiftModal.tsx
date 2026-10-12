@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Trash2, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { Shift, User, shiftsApi, shiftRequestsApi } from '../api/client'
+import { Shift, User, Store, shiftsApi, shiftRequestsApi } from '../api/client'
 import toast from 'react-hot-toast'
 
 interface DayRequest {
@@ -29,6 +29,8 @@ interface ShiftModalProps {
   date?: Date | null
   shift?: Shift | null
   users: User[]
+  stores?: Store[]
+  defaultStoreId?: number | null
 }
 
 export default function ShiftModal({
@@ -38,8 +40,11 @@ export default function ShiftModal({
   date,
   shift,
   users,
+  stores = [],
+  defaultStoreId = null,
 }: ShiftModalProps) {
   const [userId, setUserId] = useState('')
+  const [storeId, setStoreId] = useState('')
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('17:00')
   const [breakMinutes, setBreakMinutes] = useState(60)
@@ -54,14 +59,16 @@ export default function ShiftModal({
       setEndTime(shift.end_time)
       setBreakMinutes(shift.break_minutes)
       setNotes(shift.notes || '')
+      setStoreId(shift.store_id ? String(shift.store_id) : '')
     } else {
+      setStoreId(defaultStoreId ? String(defaultStoreId) : stores.length === 1 ? String(stores[0].id) : '')
       setUserId(users[0]?.id ? String(users[0].id) : '')
       setStartTime('09:00')
       setEndTime('17:00')
       setBreakMinutes(60)
       setNotes('')
     }
-  }, [shift, users, isOpen])
+  }, [shift, users, isOpen, defaultStoreId, stores])
 
   // この日に提出されている希望シフトを取得（希望を見ながらシフトを確定できるように）
   useEffect(() => {
@@ -112,6 +119,7 @@ export default function ShiftModal({
           end_time: endTime,
           break_minutes: breakMinutes,
           notes,
+          ...(stores.length > 0 ? { store_id: storeId ? parseInt(storeId) : null } : {}),
         })
         toast.success('シフトを更新しました')
       } else {
@@ -122,6 +130,7 @@ export default function ShiftModal({
           end_time: endTime,
           break_minutes: breakMinutes,
           notes,
+          store_id: storeId ? parseInt(storeId) : null,
         })
         toast.success('シフトを作成しました')
       }
@@ -256,6 +265,23 @@ export default function ShiftModal({
               />
             </div>
           </div>
+
+          {/* Store（会場が登録されているお店だけ） */}
+          {stores.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">会場</label>
+              <select
+                value={storeId}
+                onChange={e => setStoreId(e.target.value)}
+                className="input-field"
+              >
+                <option value="">指定なし</option>
+                {stores.map(st => (
+                  <option key={st.id} value={st.id}>{st.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Break */}
           <div>

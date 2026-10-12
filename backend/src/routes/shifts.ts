@@ -8,16 +8,26 @@ import { notifyShiftPublished } from './line';
 
 const router = Router();
 
-// GET /api/shifts?year=2024&month=1
+// 会場がこの会社のものか（null/未指定は「会場なし」として通す）
+function resolveStoreId(companyId: number, storeId: unknown): number | null | false {
+  if (storeId === undefined || storeId === null || storeId === '') return null;
+  const id = Number(storeId);
+  if (!Number.isInteger(id)) return false;
+  return db.prepare('SELECT 1 FROM stores WHERE id = ? AND company_id = ?').get(id, companyId) ? id : false;
+}
+
+// GET /api/shifts?year=2024&month=1[&store_id=3][&scope=all]
+// スタッフは通常自分の分だけ。scope=all なら公開済みの月に限り全員分を返す（同じ会場の人を見る用）
 router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
-  const { year, month, user_id, start_date, end_date } = req.query;
+  const { year, month, user_id, start_date, end_date, store_id, scope } = req.query;
 
   let query = `
-    SELECT s.*, u.name as user_name, uc.color as user_color
+    SELECT s.*, u.name as user_name, uc.color as user_color, st.name as store_name
     FROM shifts s
     JOIN users u ON s.user_id = u.id
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
+    LEFT JOIN stores st ON st.id = s.store_id
     WHERE s.company_id = ?
   `;
   const params: (string | number)[] = [companyId];
@@ -32,9 +42,19 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
     params.push(start_date as string, end_date as string);
   }
 
+  if (store_id) {
+    query += ' AND s.store_id = ?';
+    params.push(parseInt(store_id as string));
+  }
+
   if (!['admin','super_admin'].includes(req.user!.role)) {
-    query += ' AND s.user_id = ?';
-    params.push(req.user!.id);
+    const published = year && month && db.prepare(
+      'SELECT 1 FROM shift_publications WHERE company_id = ? AND year = ? AND month = ? AND is_published = 1'
+    ).get(companyId, parseInt(year as string), parseInt(month as string));
+    if (scope !== 'all' || !published) {
+      query += ' AND s.user_id = ?';
+      params.push(req.user!.id);
+    }
   } else if (user_id) {
     query += ' AND s.user_id = ?';
     params.push(parseInt(user_id as string));
@@ -51,10 +71,11 @@ router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   const companyId = req.companyId!;
 
   const shift = db.prepare(`
-    SELECT s.*, u.name as user_name, uc.color as user_color
+    SELECT s.*, u.name as user_name, uc.color as user_color, st.name as store_name
     FROM shifts s
     JOIN users u ON s.user_id = u.id
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
+    LEFT JOIN stores st ON st.id = s.store_id
     WHERE s.id = ? AND s.company_id = ?
   `).get(req.params.id, companyId) as any;
 
@@ -81,6 +102,11 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   }
 
   const { user_id, date, start_time, end_time, break_minutes, notes } = req.body;
+  const storeId = resolveStoreId(companyId, req.body.store_id);
+  if (storeId === false) {
+    res.status(400).json({ error: '会場が見つかりません' });
+    return;
+  }
 
   if (!user_id || !date || !start_time || !end_time) {
     res.status(400).json({ error: 'スタッフ、日付、開始時間、終了時間を入力してください' });
@@ -108,14 +134,15 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   }
 
   const result = db.prepare(
-    'INSERT INTO shifts (company_id, user_id, date, start_time, end_time, break_minutes, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(companyId, user_id, date, start_time, end_time, break_minutes || 0, notes || null, 'confirmed');
+    'INSERT INTO shifts (company_id, user_id, date, start_time, end_time, break_minutes, notes, status, store_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(companyId, user_id, date, start_time, end_time, break_minutes || 0, notes || null, 'confirmed', storeId);
 
   const shift = db.prepare(`
-    SELECT s.*, u.name as user_name, uc.color as user_color
+    SELECT s.*, u.name as user_name, uc.color as user_color, st.name as store_name
     FROM shifts s
     JOIN users u ON s.user_id = u.id
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
+    LEFT JOIN stores st ON st.id = s.store_id
     WHERE s.id = ?
   `).get(result.lastInsertRowid) as any;
 
@@ -139,11 +166,21 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   }
 
   const { user_id, date, start_time, end_time, break_minutes, notes, status } = req.body;
+  // store_id は送られたときだけ変える（null で会場なしに戻す）
+  let storeId: number | null = shift.store_id ?? null;
+  if ('store_id' in req.body) {
+    const r = resolveStoreId(companyId, req.body.store_id);
+    if (r === false) {
+      res.status(400).json({ error: '会場が見つかりません' });
+      return;
+    }
+    storeId = r;
+  }
 
   db.prepare(`
     UPDATE shifts
     SET user_id = ?, date = ?, start_time = ?, end_time = ?,
-        break_minutes = ?, notes = ?, status = ?,
+        break_minutes = ?, notes = ?, status = ?, store_id = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND company_id = ?
   `).run(
@@ -154,14 +191,16 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     break_minutes !== undefined ? break_minutes : shift.break_minutes,
     notes !== undefined ? notes : shift.notes,
     status || shift.status,
+    storeId,
     req.params.id, companyId
   );
 
   const updated = db.prepare(`
-    SELECT s.*, u.name as user_name, uc.color as user_color
+    SELECT s.*, u.name as user_name, uc.color as user_color, st.name as store_name
     FROM shifts s
     JOIN users u ON s.user_id = u.id
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
+    LEFT JOIN stores st ON st.id = s.store_id
     WHERE s.id = ?
   `).get(req.params.id);
 

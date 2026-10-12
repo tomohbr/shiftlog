@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Calendar, Clock, ChevronLeft, ChevronRight, EyeOff } from 'lucide-react'
-import { shiftsApi, Shift } from '../api/client'
+import { Calendar, Clock, ChevronLeft, ChevronRight, EyeOff, MapPin } from 'lucide-react'
+import { shiftsApi, storesApi, Shift, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import LineLinkCard from '../components/LineLinkCard'
@@ -28,16 +28,22 @@ export default function MyShiftsPage() {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [isPublished, setIsPublished] = useState(true)
   const [loading, setLoading] = useState(true)
+  // 自分の分だけか、全員分か。会場は null = 全会場まとめて
+  const [who, setWho] = useState<'me' | 'all'>('me')
+  const [stores, setStores] = useState<Store[]>([])
+  const [storeFilter, setStoreFilter] = useState<number | null>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [shiftsRes, pubRes] = await Promise.all([
-        shiftsApi.getAll({ year, month }),
+      const [shiftsRes, pubRes, storesRes] = await Promise.all([
+        shiftsApi.getAll({ year, month, scope: 'all' }),
         shiftsApi.getPublication(year, month),
+        storesApi.getAll().catch(() => null),
       ])
       setShifts(shiftsRes.data.shifts || [])
       setIsPublished(pubRes.data.publication?.is_published === 1)
+      setStores(storesRes?.data.stores || [])
     } catch {
       toast.error('シフトの取得に失敗しました')
     } finally {
@@ -62,21 +68,29 @@ export default function MyShiftsPage() {
   const todayStr = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate())
 
   // 公開済みの月だけシフトを見せる（下書きを見せると混乱するため）
-  const visibleShifts = isPublished ? shifts : []
+  const multiStore = stores.length > 1
+  const storeShort = (name?: string | null) => (name || '').slice(0, 2)
+  const inStore = (s: Shift) => !storeFilter || s.store_id === storeFilter
+  const publishedShifts = isPublished ? shifts : []
+  const myShifts = publishedShifts.filter(s => s.user_id === user?.id)
+  // 自分: 全会場の自分の分（会場で絞ることもできる）／全員: 会場で絞った全員分
+  const visibleShifts = (who === 'me' ? myShifts : publishedShifts).filter(inStore)
   const byDate: Record<string, Shift[]> = {}
   for (const s of visibleShifts) {
     if (!byDate[s.date]) byDate[s.date] = []
     byDate[s.date].push(s)
   }
 
-  // 次のシフト（今日以降で最も近いもの）
-  const upcoming = visibleShifts
+  // 次のシフト（今日以降で最も近い自分の分。会場の絞り込みに関係なく出す）
+  const upcoming = myShifts
     .filter(s => s.date >= todayStr)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || '').localeCompare(b.start_time || ''))
   const nextShift = upcoming[0] || null
 
-  const workDays = Object.keys(byDate).length
-  const totalHours = visibleShifts.reduce((sum, s) => sum + shiftMinutes(s), 0) / 60
+  const myVisible = myShifts.filter(inStore)
+  const workDays = new Set(myVisible.map(s => s.date)).size
+  const totalHours = myVisible.reduce((sum, s) => sum + shiftMinutes(s), 0) / 60
+  const storeLabel = storeFilter ? stores.find(st => st.id === storeFilter)?.name : null
 
   const daysInMonth = new Date(year, month, 0).getDate()
   const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
@@ -108,8 +122,38 @@ export default function MyShiftsPage() {
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <Calendar className="w-4 h-4 text-gray-400" />
-          自分のシフト
+          {who === 'me' ? '自分のシフト' : 'みんなのシフト'}
         </div>
+      </div>
+
+      {/* 自分／全員 と 会場の切り替え */}
+      <div className="space-y-2">
+        <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+          {(['me', 'all'] as const).map(w => (
+            <button
+              key={w}
+              onClick={() => setWho(w)}
+              className={`px-4 py-1.5 text-sm font-medium ${who === w ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+            >
+              {w === 'me' ? '自分' : '全員'}
+            </button>
+          ))}
+        </div>
+        {multiStore && (
+          <div className="flex flex-wrap gap-1.5">
+            {[{ id: null as number | null, name: `${stores.length}会場まとめて` }, ...stores].map(st => (
+              <button
+                key={st.id ?? 'all'}
+                onClick={() => setStoreFilter(st.id)}
+                className={`px-3 py-1 rounded-full text-sm font-medium border ${
+                  storeFilter === st.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {st.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Next shift */}
@@ -129,6 +173,11 @@ export default function MyShiftsPage() {
                   return `${label} ${nextShift.start_time?.slice(0, 5)}〜${nextShift.end_time?.slice(0, 5)}`
                 })()}
               </p>
+              {nextShift.store_name && (
+                <p className="text-sm font-semibold text-blue-800 flex items-center gap-1 mt-0.5">
+                  <MapPin className="w-3.5 h-3.5" />{nextShift.store_name}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -151,11 +200,11 @@ export default function MyShiftsPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="card text-center py-4">
             <p className="text-2xl font-bold text-gray-900">{workDays}<span className="text-sm font-normal text-gray-400 ml-1">日</span></p>
-            <p className="text-xs text-gray-500 mt-1">この月の出勤日</p>
+            <p className="text-xs text-gray-500 mt-1">自分の出勤日{storeLabel && `（${storeLabel}）`}</p>
           </div>
           <div className="card text-center py-4">
             <p className="text-2xl font-bold text-gray-900">{totalHours.toFixed(1)}<span className="text-sm font-normal text-gray-400 ml-1">時間</span></p>
-            <p className="text-xs text-gray-500 mt-1">予定勤務時間</p>
+            <p className="text-xs text-gray-500 mt-1">自分の予定勤務時間{storeLabel && `（${storeLabel}）`}</p>
           </div>
         </div>
       )}
@@ -190,11 +239,19 @@ export default function MyShiftsPage() {
                 <p className={`text-xs font-medium ${isToday ? 'text-blue-600' : dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-600'}`}>
                   {day}
                 </p>
-                {dayShifts.map(s => (
+                {who === 'all' ? (
+                  hasShift && (
+                    <p className="text-[10px] leading-tight text-blue-700 font-semibold mt-0.5">
+                      {new Set(dayShifts.map(s => s.user_id)).size}人
+                      {dayShifts.some(s => s.user_id === user?.id) && <span className="block text-[9px] text-white bg-blue-600 rounded mt-0.5">自分</span>}
+                    </p>
+                  )
+                ) : dayShifts.map(s => (
                   <p key={s.id} className="text-[10px] leading-tight text-blue-700 font-semibold mt-0.5">
                     {s.start_time?.slice(0, 5)}
                     <br />
                     {s.end_time?.slice(0, 5)}
+                    {multiStore && s.store_name && <span className="block text-[9px] text-blue-900">{storeShort(s.store_name)}</span>}
                   </p>
                 ))}
               </div>
@@ -203,37 +260,51 @@ export default function MyShiftsPage() {
         </div>
       </div>
 
-      {/* List */}
+      {/* List（自分: 1行1シフト／全員: 日ごとに名前・時間・会場） */}
       {isPublished && visibleShifts.length > 0 && (
         <div className="card p-0 overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-100">
-            <h3 className="text-sm font-bold text-gray-800">この月のシフト一覧</h3>
+            <h3 className="text-sm font-bold text-gray-800">
+              {who === 'me' ? 'この月の自分のシフト' : 'この月のみんなのシフト'}
+              {storeLabel && <span className="ml-1 text-gray-400 font-normal">（{storeLabel}）</span>}
+            </h3>
           </div>
-          <div className="divide-y divide-gray-50">
-            {[...visibleShifts]
-              .sort((a, b) => a.date.localeCompare(b.date))
-              .map(s => {
-                const [y, m, d] = s.date.split('-').map(Number)
-                const dow = DAY_LABELS[new Date(y, m - 1, d).getDay()]
-                const isPast = s.date < todayStr
-                return (
-                  <div key={s.id} className={`px-5 py-2.5 flex items-center justify-between ${isPast ? 'opacity-50' : ''}`}>
-                    <span className={`text-sm font-medium ${dow === '日' ? 'text-red-500' : dow === '土' ? 'text-blue-500' : 'text-gray-800'}`}>
-                      {m}/{d}（{dow}）{s.date === todayStr && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold">今日</span>}
-                    </span>
-                    <span className="text-sm text-gray-600 font-mono">
-                      {s.start_time?.slice(0, 5)} 〜 {s.end_time?.slice(0, 5)}
-                    </span>
-                  </div>
-                )
-              })}
+          <div className="divide-y divide-gray-100">
+            {Object.keys(byDate).sort().map(date => {
+              const [y, m, d] = date.split('-').map(Number)
+              const dow = DAY_LABELS[new Date(y, m - 1, d).getDay()]
+              const isPast = date < todayStr
+              const rows = [...byDate[date]].sort((a, b) =>
+                (a.store_name || '').localeCompare(b.store_name || '') || (a.start_time || '').localeCompare(b.start_time || ''))
+              return (
+                <div key={date} className={`px-5 py-2.5 ${isPast ? 'opacity-50' : ''}`}>
+                  <p className={`text-sm font-semibold mb-1 ${dow === '日' ? 'text-red-500' : dow === '土' ? 'text-blue-500' : 'text-gray-800'}`}>
+                    {m}/{d}（{dow}）{date === todayStr && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold">今日</span>}
+                  </p>
+                  {rows.map(s => {
+                    const mine = s.user_id === user?.id
+                    return (
+                      <div key={s.id} className={`flex items-center gap-2 text-sm py-0.5 ${who === 'all' && mine ? 'font-bold text-blue-700' : 'text-gray-700'}`}>
+                        {who === 'all' && <span className="w-24 truncate">{s.user_name}{mine && '（自分）'}</span>}
+                        <span className="font-mono text-gray-600">{s.start_time?.slice(0, 5)}〜{s.end_time?.slice(0, 5)}</span>
+                        {s.store_name && (
+                          <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 flex items-center gap-0.5">
+                            <MapPin className="w-3 h-3" />{s.store_name}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
 
       {isPublished && visibleShifts.length === 0 && (
         <div className="card text-center py-10 text-gray-400 text-sm">
-          {user?.name}さんの{month}月のシフトはまだありません
+          {who === 'me' ? `${user?.name}さんの` : ''}{month}月のシフトは{storeLabel ? `${storeLabel}に` : ''}まだありません
         </div>
       )}
     </div>

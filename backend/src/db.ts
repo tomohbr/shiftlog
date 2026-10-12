@@ -459,6 +459,11 @@ try {
     db.exec("ALTER TABLE time_records ADD COLUMN has_offline_punch INTEGER NOT NULL DEFAULT 0");
   }
   // 希望シフト収集の任意期間指定（null = 従来どおり月全体）
+  // シフトの勤務会場（複数会場で回すお店用。未設定=会場なし）
+  const shiftCols = db.prepare("PRAGMA table_info(shifts)").all().map((c: any) => c.name);
+  if (!shiftCols.includes('store_id')) {
+    db.exec("ALTER TABLE shifts ADD COLUMN store_id INTEGER");
+  }
   const periodCols = db.prepare("PRAGMA table_info(shift_request_periods)").all().map((c: any) => c.name);
   if (!periodCols.includes('start_date')) {
     db.exec("ALTER TABLE shift_request_periods ADD COLUMN start_date TEXT");

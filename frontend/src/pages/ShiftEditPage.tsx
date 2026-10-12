@@ -4,7 +4,7 @@ import { ja } from 'date-fns/locale'
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import MonthNavigator from '../components/MonthNavigator'
 import ShiftModal from '../components/ShiftModal'
-import { shiftsApi, usersApi, shiftRequestsApi, Shift, User } from '../api/client'
+import { shiftsApi, usersApi, shiftRequestsApi, storesApi, Shift, User, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -21,6 +21,9 @@ export default function ShiftEditPage() {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null)
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table')
   const [filterUserId, setFilterUserId] = useState<number | null>(null)
+  // 会場（複数会場のお店だけ使う）。null = 全会場
+  const [stores, setStores] = useState<Store[]>([])
+  const [filterStoreId, setFilterStoreId] = useState<number | null>(null)
   // 希望シフト（提出済みマーク表示用）: `${user_id}-${date}` → 希望内容
   const [requestMap, setRequestMap] = useState<Record<string, { availability: string; preferred_start?: string | null; preferred_end?: string | null }>>({})
 
@@ -29,12 +32,14 @@ export default function ShiftEditPage() {
     try {
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth() + 1
-      const [shiftsRes, usersRes, requestsRes] = await Promise.all([
+      const [shiftsRes, usersRes, requestsRes, storesRes] = await Promise.all([
         shiftsApi.getAll({ year, month }),
         usersApi.getAll(),
         shiftRequestsApi.getAll({ year, month }).catch(() => null),
+        storesApi.getAll().catch(() => null),
       ])
       setShifts(shiftsRes.data.shifts)
+      setStores(storesRes?.data.stores || [])
       setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
       const reqMap: Record<string, { availability: string; preferred_start?: string | null; preferred_end?: string | null }> = {}
       for (const r of requestsRes?.data.requests || []) {
@@ -67,9 +72,11 @@ export default function ShiftEditPage() {
     }
   })
 
-  const filteredShifts = filterUserId
-    ? shifts.filter(s => s.user_id === filterUserId)
-    : shifts
+  const multiStore = stores.length > 1
+  const storeShort = (name?: string | null) => (name || '').slice(0, 2)
+  const filteredShifts = shifts
+    .filter(s => !filterUserId || s.user_id === filterUserId)
+    .filter(s => !filterStoreId || s.store_id === filterStoreId)
 
   const shiftByUserDate: Record<string, Shift[]> = {}
   for (const shift of filteredShifts) {
@@ -124,6 +131,25 @@ export default function ShiftEditPage() {
           </button>
         </div>
       </div>
+
+      {/* 会場の切り替え（会場が2つ以上あるお店だけ） */}
+      {multiStore && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {[{ id: null as number | null, name: '全会場' }, ...stores].map(st => (
+            <button
+              key={st.id ?? 'all'}
+              onClick={() => setFilterStoreId(st.id)}
+              className={`px-3 py-1 rounded-full text-sm font-medium border transition-colors ${
+                filterStoreId === st.id
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {st.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 希望シフトマークの凡例（提出がある月だけ表示） */}
       {!loading && Object.keys(requestMap).length > 0 && (
@@ -220,6 +246,9 @@ export default function ShiftEditPage() {
                             >
                               <div className="font-medium">{shift.start_time.slice(0, 5)}</div>
                               <div className="opacity-80">~{shift.end_time.slice(0, 5)}</div>
+                              {multiStore && !filterStoreId && shift.store_name && (
+                                <div className="text-[9px] font-bold bg-white/25 rounded mt-0.5" title={shift.store_name}>{storeShort(shift.store_name)}</div>
+                              )}
                             </div>
                           ))}
                           {cellShifts.length === 0 && (() => {
@@ -269,10 +298,12 @@ export default function ShiftEditPage() {
 
       {/* Monthly summary */}
       <div className="card">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">今月の集計</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">
+          今月の集計{filterStoreId && <span className="ml-1 text-gray-400 font-normal">（{stores.find(st => st.id === filterStoreId)?.name}）</span>}
+        </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {users.map(u => {
-            const userShifts = shifts.filter(s => s.user_id === u.id)
+            const userShifts = filteredShifts.filter(s => s.user_id === u.id)
             const totalMins = userShifts.reduce((sum, s) => {
               const [sh, sm] = s.start_time.split(':').map(Number)
               const [eh, em] = s.end_time.split(':').map(Number)
@@ -300,6 +331,8 @@ export default function ShiftEditPage() {
         date={selectedDate}
         shift={selectedShift}
         users={users}
+        stores={stores}
+        defaultStoreId={filterStoreId}
       />
     </div>
   )

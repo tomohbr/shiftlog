@@ -70,6 +70,8 @@ export interface Shift {
   break_minutes: number
   notes?: string
   status: string
+  store_id?: number | null
+  store_name?: string | null
 }
 
 export interface User {
@@ -136,7 +138,7 @@ export const companiesApi = {
 }
 
 export const shiftsApi = {
-  getAll: (params?: { year?: number; month?: number; user_id?: number }) =>
+  getAll: (params?: { year?: number; month?: number; user_id?: number; store_id?: number; scope?: 'all' }) =>
     api.get<{ shifts: Shift[] }>('/shifts', { params }),
   create: (data: Partial<Shift>) => api.post<{ shift: Shift }>('/shifts', data),
   update: (id: number, data: Partial<Shift>) => api.put<{ shift: Shift }>(`/shifts/${id}`, data),
