@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { format, addMonths, subMonths } from 'date-fns'
 import { Users, Calendar, Clock, CheckCircle, AlertTriangle, DollarSign, Repeat, Store as StoreIcon, ArrowRight, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import ShiftCalendar from '../components/ShiftCalendar'
+import TeamCalendar from '../components/TeamCalendar'
+import TodayByVenue from '../components/TodayByVenue'
+import { storeColorMap } from '../lib/storeColors'
 import ShiftModal from '../components/ShiftModal'
 import MonthNavigator from '../components/MonthNavigator'
 import StaffLoginQR from '../components/StaffLoginQR'
-import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, storesApi, timecardsApi, Shift, User } from '../api/client'
+import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, storesApi, timecardsApi, Shift, User, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -20,6 +22,8 @@ export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null)
   const [isPublished, setIsPublished] = useState(false)
+  const [stores, setStores] = useState<Store[]>([])
+  const [dayOpen, setDayOpen] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     if (!selectedCompany) return
@@ -40,6 +44,7 @@ export default function DashboardPage() {
       setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
       setIsPublished(pubRes.data.publication?.is_published === 1)
       setStoreCount((storesRes.data as any)?.stores?.length || 0)
+      setStores((storesRes.data as any)?.stores || [])
       setHasAnyTimecard(((timecardsRes.data as any)?.records?.length || 0) > 0)
     } catch {
       toast.error('データの読み込みに失敗しました')
@@ -342,6 +347,9 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      {/* 今日の会場ごとの状況（いちばん上に） */}
+      {stores.length > 0 && <TodayByVenue stores={stores} />}
+
       <div className="card p-0 overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <MonthNavigator
@@ -365,33 +373,67 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {users.length > 0 && (
-          <div className="px-6 py-3 border-b border-gray-100 flex flex-wrap gap-3">
-            {users.map(u => (
-              <div key={u.id} className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: u.color }} />
-                <span className="text-xs text-gray-600">{u.name}</span>
-              </div>
-            ))}
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
+        ) : (
+          <TeamCalendar
+            year={currentDate.getFullYear()}
+            month={currentDate.getMonth() + 1}
+            shifts={shifts}
+            stores={stores}
+            today={new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
+            onPick={setDayOpen}
+          />
         )}
-
-        <div className="p-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          ) : (
-            <ShiftCalendar
-              currentDate={currentDate}
-              shifts={shifts}
-              onDayClick={handleDayClick}
-              onShiftClick={handleShiftClick}
-              isAdmin={true}
-            />
-          )}
-        </div>
       </div>
+
+      {/* 日付を押したとき: その日の会場ごとの顔ぶれ。押すと編集、＋で追加 */}
+      {dayOpen && (() => {
+        const colorOf = storeColorMap(stores)
+        const sorted = [...stores].sort((a, b) => a.id - b.id)
+        const day = shifts.filter(x => x.date === dayOpen)
+        const groups = [...sorted.map(st => ({ id: st.id as number | null, name: st.name })), { id: null, name: '会場なし' }]
+          .map(g => ({ ...g, rows: day.filter(x => (x.store_id ?? null) === g.id).sort((a, b) => a.start_time.localeCompare(b.start_time)) }))
+          .filter(g => g.rows.length > 0)
+        const [y, m, d] = dayOpen.split('-').map(Number)
+        return (
+          <div className="fixed inset-0 z-40 flex items-center justify-center p-4" onClick={() => setDayOpen(null)}>
+            <div className="absolute inset-0 bg-black/40" />
+            <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-200 sticky top-0 bg-white">
+                <h3 className="text-lg font-bold">{m}月{d}日（{'日月火水木金土'[new Date(y, m - 1, d).getDay()]}）</h3>
+                <span className="text-sm text-gray-500">{new Set(day.map(x => x.user_id)).size}人</span>
+                <button onClick={() => setDayOpen(null)} className="ml-auto text-sm text-gray-500">閉じる</button>
+              </div>
+              <div className="p-4 space-y-3">
+                {groups.length === 0 && <p className="text-center text-sm text-gray-400 py-4">この日のシフトはありません</p>}
+                {groups.map(g => {
+                  const c = g.id ? colorOf(g.id) : { solid: '#868E96', soft: '#F1F3F5', text: '#495057' }
+                  return (
+                    <div key={g.id ?? 'none'} className="rounded-xl border border-gray-200 overflow-hidden">
+                      <div className="px-3 py-1.5 text-sm font-bold text-white" style={{ backgroundColor: c.solid }}>{g.name}　{g.rows.length}人</div>
+                      {g.rows.map(x => (
+                        <button key={x.id} onClick={() => { handleShiftClick(x); setDayOpen(null) }} className="w-full flex items-center justify-between px-3 py-2 border-t border-gray-100 hover:bg-gray-50 text-left">
+                          <span className="font-semibold text-gray-900">{x.user_name}</span>
+                          <span className="tabular-nums text-gray-600">{x.start_time.slice(0, 5)}–{x.end_time.slice(0, 5)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })}
+                <button
+                  onClick={() => { const [yy, mm, dd] = dayOpen.split('-').map(Number); handleDayClick(new Date(yy, mm - 1, dd)); setDayOpen(null) }}
+                  className="w-full py-2.5 rounded-xl border-2 border-dashed border-gray-300 text-sm font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  ＋ この日にシフトを追加
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       <ShiftModal
         isOpen={modalOpen}
@@ -400,6 +442,7 @@ export default function DashboardPage() {
         date={selectedDate}
         shift={selectedShift}
         users={users}
+        stores={stores}
       />
     </div>
   )
