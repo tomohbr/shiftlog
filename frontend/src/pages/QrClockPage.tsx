@@ -133,8 +133,11 @@ export default function QrClockPage({ token }: { token: string }) {
     readPosition(8000).then(pos => { if (pos) lastPosition.current = { pos, at: Date.now() } })
   }, [me, loadStatus])
 
+  // 名前は最初の1回だけ選ぶ。以後この端末はその人として打刻する（「別の人で打刻」は代理打刻につながるので置かない）。
+  // 選び間違えると直せないので、ここで一度だけ確かめる
   const selectMe = (staff: Me) => {
     if (!info) return
+    if (!window.confirm(`${staff.name}さんで間違いないですか？\nこのスマホは、これから${staff.name}さんとして打刻します。`)) return
     writeRemembered(info.company.id, staff)
     setChoosing(false)
     setQuery('')
@@ -142,13 +145,6 @@ export default function QrClockPage({ token }: { token: string }) {
     setMe(staff)
   }
 
-  const switchUser = () => {
-    if (info) writeRemembered(info.company.id, null)
-    setMe(null)
-    setStatus(null)
-    setDone(null)
-    setChoosing(true)
-  }
 
   const doPunch = async (action: QrClockAction) => {
     if (!me || busy) return
@@ -311,9 +307,6 @@ export default function QrClockPage({ token }: { token: string }) {
             <UserRound className="w-5 h-5 text-gray-400 shrink-0" />
             <span className="text-lg font-bold text-gray-900 break-words min-w-0">{me?.name}さん</span>
           </div>
-          <button onClick={switchUser} className="shrink-0 min-h-[44px] px-3 text-sm text-blue-600 underline">
-            別の人で打刻
-          </button>
         </div>
 
         {/* 今日の予定。違う会場のQRなら注意を出す（打刻はそのままできる） */}
