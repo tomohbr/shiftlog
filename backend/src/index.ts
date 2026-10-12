@@ -22,6 +22,7 @@ import skillsRoutes from './routes/skills';
 import swapsRoutes from './routes/swaps';
 import icalRoutes from './routes/ical';
 import autoScheduleRoutes from './routes/auto-schedule';
+import venueScheduleRoutes from './routes/venue-schedule';
 import payrollRoutes from './routes/payroll';
 import seedRoutes from './routes/seed';
 import pushRoutes from './routes/push';
@@ -85,6 +86,8 @@ app.use('/api/skills', skillsRoutes);
 app.use('/api/swaps', swapsRoutes);
 app.use('/api/ical', icalRoutes);
 app.use('/api/auto-schedule', autoScheduleRoutes);
+// 会場ごとの必要人数と、希望からのシフト下書き
+app.use('/api/venue-schedule', venueScheduleRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/seed', seedRoutes);
 app.use('/api/push', pushRoutes);

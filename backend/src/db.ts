@@ -555,6 +555,77 @@ try {
   `);
 } catch (e) { console.error('[migration] QR打刻の列追加に失敗', e); }
 
+// ---- 会場ごとの必要人数と、希望からの自動下書き（2026-10。クリスマスマーケット3会場の運用から） ----
+//   venue_slot_rules            会場ごとの「枠」。曜日ルール（weekdays）か日付指定（date）のどちらか。
+//                               ある会場・ある日に日付指定が1件でもあれば、その日はその会場の曜日ルールを使わない
+//                               （needed=0 の日付指定 = その日は会場休み）。valid_from/valid_to は曜日ルールの適用期間
+//   schedule_drafts             自動作成した下書き。確定（committed）するまで shifts には入らず、スタッフにも見えない
+//   schedule_draft_slots        下書きを作った時点の枠（ルールを後で変えても、作った下書きは崩れない）
+//   schedule_draft_assignments  枠に入れた人。source = auto（自動）/ manual（管理者が手で入れた）
+//   既存の確定シフトは下書きに写さず、表示・判定のたびに shifts から読む（下書き中に手で入れた分も反映される）
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS venue_slot_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      store_id INTEGER,
+      weekdays TEXT,
+      date TEXT,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      needed INTEGER NOT NULL DEFAULT 1,
+      break_minutes INTEGER NOT NULL DEFAULT 0,
+      valid_from TEXT,
+      valid_to TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (company_id) REFERENCES companies(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_slot_rules_company ON venue_slot_rules(company_id, store_id);
+
+    CREATE TABLE IF NOT EXISTS schedule_drafts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      include_unsubmitted INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      committed_at DATETIME,
+      committed_count INTEGER,
+      FOREIGN KEY (company_id) REFERENCES companies(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_schedule_drafts_company ON schedule_drafts(company_id, status);
+
+    CREATE TABLE IF NOT EXISTS schedule_draft_slots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      draft_id INTEGER NOT NULL,
+      store_id INTEGER,
+      date TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      needed INTEGER NOT NULL,
+      break_minutes INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (draft_id) REFERENCES schedule_drafts(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_schedule_draft_slots_draft ON schedule_draft_slots(draft_id, date);
+
+    CREATE TABLE IF NOT EXISTS schedule_draft_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      draft_id INTEGER NOT NULL,
+      slot_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      source TEXT NOT NULL DEFAULT 'auto',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (draft_id) REFERENCES schedule_drafts(id) ON DELETE CASCADE,
+      FOREIGN KEY (slot_id) REFERENCES schedule_draft_slots(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_schedule_draft_assignments_draft ON schedule_draft_assignments(draft_id);
+  `);
+} catch (e) { console.error('[migration] 会場の枠・下書きテーブルの作成に失敗', e); }
+
 export const SUPER_ADMIN_EMAIL = 'shibahara.724@gmail.com';
 
 // 一度だけ実行するマイグレーション管理

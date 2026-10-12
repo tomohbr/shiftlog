@@ -61,7 +61,7 @@ export default function Layout({ children }: LayoutProps) {
 
   // 使い込むほど使う詳細機能（デフォルトは折りたたみ）
   const adminNavMore = [
-    { path: '/auto-schedule', label: 'シフト自動生成', icon: Sparkles },
+    { path: '/auto-schedule', label: '希望から自動作成', icon: Sparkles },
     { path: '/shift-requests', label: '希望シフト収集', icon: ClipboardList },
     { path: '/templates', label: 'テンプレート', icon: Copy },
     { path: '/labor', label: '人件費・売上', icon: DollarSign },
