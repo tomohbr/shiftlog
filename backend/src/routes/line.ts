@@ -5,6 +5,7 @@ import path from 'path';
 import jwt from 'jsonwebtoken';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../middleware/auth';
+import { absenceRule, phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
 
 // LINE 連携（お店ごとの LINE 公式アカウント → スタッフへの通知）
 //
@@ -372,6 +373,18 @@ router.post('/settings', authenticateToken, requireCompany, async (req: AuthRequ
   res.json({ message: 'LINE設定を保存しました', check });
 });
 
+// POST /api/line/absence-rule { days, phone } - 休みを電話でしか受けない日と、その電話番号（管理者）
+router.post('/absence-rule', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  const raw = req.body?.days;
+  const days = raw === null || raw === '' || raw === undefined ? null : Number(raw);
+  if (days !== null && (!Number.isInteger(days) || days < 0 || days > 7)) { res.status(400).json({ error: '日数が正しくありません' }); return; }
+  const phone = String(req.body?.phone || '').trim() || null;
+  db.prepare('INSERT INTO line_settings (company_id) VALUES (?) ON CONFLICT(company_id) DO NOTHING').run(req.companyId!);
+  db.prepare('UPDATE line_settings SET absence_phone_days = ?, absence_phone = ? WHERE company_id = ?').run(days, phone, req.companyId!);
+  res.json({ message: '休みの連絡のルールを保存しました' });
+});
+
 // POST /api/line/link-code - 自分用の連携コードを発行（スタッフ・管理者どちらも）
 router.post('/link-code', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const s = db.prepare('SELECT channel_access_token, channel_secret, bot_basic_id, bot_name FROM line_settings WHERE company_id = ?').get(req.companyId!) as any;
@@ -663,7 +676,7 @@ async function replyAbsentPicker(companyId: number, lineUserId: string, token: s
   const today = jstToday();
   const limit = new Date(Date.now() + 9 * 3600 * 1000 + 30 * 86400 * 1000).toISOString().slice(0, 10);
   const shifts = db.prepare(`
-    SELECT s.id, s.date, s.start_time, s.end_time, st.name AS store_name FROM shifts s
+    SELECT s.id, s.date, s.start_time, s.end_time, s.store_id, st.name AS store_name FROM shifts s
     LEFT JOIN stores st ON st.id = s.store_id
     JOIN shift_publications p ON p.company_id = s.company_id AND p.is_published = 1
       AND p.year = CAST(substr(s.date, 1, 4) AS INTEGER) AND p.month = CAST(substr(s.date, 6, 2) AS INTEGER)
@@ -671,8 +684,18 @@ async function replyAbsentPicker(companyId: number, lineUserId: string, token: s
     ORDER BY s.date, s.start_time LIMIT 8
   `).all(companyId, me.id, today, limit) as any[];
   if (shifts.length === 0) { await replyLine(token, replyToken, 'この先30日に、公開済みのシフトはありません。'); return; }
-  await replyLine(token, replyToken, buttonsCard('休みの連絡', 'どのシフトを休みますか？', ['押すと、理由を選ぶ画面になります。'],
-    shifts.map(x => ({ label: shiftLabel(x), data: `a=pick&s=${x.id}` }))));
+  // 前日・当日など電話でしか受けない日は、押すと電話がかかるボタンにする
+  const rule = absenceRule(companyId);
+  const anyPhone = shifts.some(x => phoneOnly(companyId, x.date, x.store_id));
+  await replyLine(token, replyToken, buttonsCard('休みの連絡', 'どのシフトを休みますか？',
+    ['押すと、理由を選ぶ画面になります。', ...(anyPhone ? [phoneOnlyMessage(companyId).split('\n')[0]] : [])],
+    shifts.map(x => {
+      if (!phoneOnly(companyId, x.date, x.store_id)) return { label: shiftLabel(x), data: `a=pick&s=${x.id}` };
+      const tel = absenceRule(companyId, x.store_id).phone || rule.phone;
+      return tel
+        ? { label: `📞 ${shiftLabel(x)}`, uri: `tel:${tel.replace(/[^0-9+]/g, '')}` }
+        : { label: `📞 ${shiftLabel(x)}`, data: `a=phone&s=${x.id}` };
+    })));
 }
 
 async function handleAbsencePostback(q: URLSearchParams, companyId: number, lineUserId: string, token: string, replyToken: string) {
@@ -680,10 +703,18 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
   const me = lineMember(companyId, lineUserId);
   if (!me) { await replyLine(token, replyToken, 'まだシフトログと連携されていません。'); return; }
 
+  // 電話でしか受けない日（番号が未設定のとき）
+  if (a === 'phone') {
+    const sh = shiftWithStore(Number(q.get('s')));
+    await replyLine(token, replyToken, phoneOnlyMessage(companyId, sh?.store_id));
+    return;
+  }
+
   // スタッフ: 休むシフトを選んだ → 理由を選ぶ
   if (a === 'pick') {
     const sh = shiftWithStore(Number(q.get('s')));
     if (!sh || sh.user_id !== me.id || sh.company_id !== companyId) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
+    if (phoneOnly(companyId, sh.date, sh.store_id)) { await replyLine(token, replyToken, phoneOnlyMessage(companyId, sh.store_id)); return; }
     await replyLine(token, replyToken, buttonsCard('休みの理由', `${shiftLabel(sh)} を休みます`, ['理由を選ぶと、店長に届きます。'],
       [...REASONS.map((r, i) => ({ label: r, data: `a=report&s=${sh.id}&r=${i}`, primary: i === 0, color: '#E03131' }))]));
     return;
@@ -693,6 +724,8 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
   if (a === 'report') {
     const sh = shiftWithStore(Number(q.get('s')));
     if (!sh || sh.user_id !== me.id || sh.company_id !== companyId) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
+    // 古いカードを後から押した場合も、前日・当日になっていたら電話へ
+    if (phoneOnly(companyId, sh.date, sh.store_id)) { await replyLine(token, replyToken, phoneOnlyMessage(companyId, sh.store_id)); return; }
     const reason = REASONS[Number(q.get('r'))] || 'その他';
     let ab = db.prepare("SELECT * FROM absence_reports WHERE shift_id = ? AND status IN ('pending','recruiting')").get(sh.id) as any;
     if (!ab) {

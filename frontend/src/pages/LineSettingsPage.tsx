@@ -33,6 +33,10 @@ export default function LineSettingsPage() {
   const [testing, setTesting] = useState(false)
   const [showToken, setShowToken] = useState(false)
   const [cardKey, setCardKey] = useState(0)
+  // 休みの連絡のルール（前日・当日は電話のみ など）
+  const [phoneDays, setPhoneDays] = useState<string>('')
+  const [absencePhone, setAbsencePhone] = useState('')
+  const [savingRule, setSavingRule] = useState(false)
 
   useEffect(() => { loadSettings() }, [])
 
@@ -52,6 +56,8 @@ export default function LineSettingsPage() {
           notify_request_open: s.notify_request_open == null ? true : !!s.notify_request_open,
         })
         setBot({ name: s.bot_name || null, basicId: s.bot_basic_id || null })
+        setPhoneDays(s.absence_phone_days == null ? '' : String(s.absence_phone_days))
+        setAbsencePhone(s.absence_phone || '')
       }
     } catch {
       // Settings may not exist yet, that's OK
@@ -179,6 +185,40 @@ export default function LineSettingsPage() {
       </div>
 
       {/* Notification Toggles */}
+      <div className="card p-6 space-y-3">
+        <h3 className="text-base font-semibold text-gray-900">休みの連絡のルール</h3>
+        <p className="text-sm text-gray-600">スタッフはLINEのメニュー「休みの連絡」から休みを伝えられます。直前の休みは電話でしか受けない場合は、ここで決めておくと、LINEでは受け付けずに電話をかけるボタンを出します。</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <span className="block text-gray-700 font-medium mb-1">電話でしか受けない日</span>
+            <select value={phoneDays} onChange={e => setPhoneDays(e.target.value)} className="input-field">
+              <option value="">決めない（いつでもLINEで受ける）</option>
+              <option value="0">当日</option>
+              <option value="1">前日・当日</option>
+              <option value="2">2日前から当日まで</option>
+            </select>
+          </label>
+          <label className="text-sm flex-1 min-w-[180px]">
+            <span className="block text-gray-700 font-medium mb-1">電話番号</span>
+            <input value={absencePhone} onChange={e => setAbsencePhone(e.target.value)} placeholder="例: 096-000-0000" inputMode="tel" autoComplete="off" className="input-field" />
+          </label>
+          <button
+            onClick={async () => {
+              if (phoneDays !== '' && !absencePhone.trim()) { toast.error('電話番号を入れてください（押すと電話がかかるボタンに使います）'); return }
+              setSavingRule(true)
+              try {
+                await lineApi.saveAbsenceRule(phoneDays === '' ? null : Number(phoneDays), absencePhone)
+                toast.success('保存しました')
+              } catch (e: any) { toast.error(e.response?.data?.error || '保存できませんでした') } finally { setSavingRule(false) }
+            }}
+            disabled={savingRule}
+            className="btn-primary flex items-center gap-1.5"
+          >
+            <Save className="w-4 h-4" />保存
+          </button>
+        </div>
+      </div>
+
       <div className="card p-6">
         <h3 className="text-base font-semibold text-gray-900 mb-4">お知らせする内容</h3>
         <div className="space-y-4">

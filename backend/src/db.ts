@@ -478,7 +478,9 @@ try {
   }
   // LINE公式アカウントとスタッフを「連携コード」で結びつけるための列と表
   // channel_secret は Webhook の署名検証、bot_basic_id は友だち追加リンク（@xxxx）に使う
-  for (const column of ['channel_secret', 'bot_basic_id', 'bot_name', 'rich_menu_id']) {
+  // absence_phone_days: 何日前からは休みを電話でしか受けないか（NULL=制限なし、0=当日、1=前日・当日）
+  if (!lineCols.includes('absence_phone_days')) db.exec('ALTER TABLE line_settings ADD COLUMN absence_phone_days INTEGER');
+  for (const column of ['channel_secret', 'bot_basic_id', 'bot_name', 'rich_menu_id', 'absence_phone']) {
     if (!lineCols.includes(column)) db.exec(`ALTER TABLE line_settings ADD COLUMN ${column} TEXT`);
   }
   db.exec(`

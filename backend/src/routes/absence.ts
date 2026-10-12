@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { pushToCompanyAsync, pushToUsersAsync } from '../utils/apns';
+import { phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
 
 const router = Router();
 
@@ -38,6 +39,12 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   const { shift_id, date, reason } = req.body;
 
   if (!date) { res.status(400).json({ error: '日付は必須です' }); return; }
+  // 前日・当日など、お店が電話でしか受けない日（管理者が記録する場合は通す）
+  const storeId = shift_id ? (db.prepare('SELECT store_id FROM shifts WHERE id = ?').get(shift_id) as any)?.store_id : null;
+  if (!['admin', 'super_admin'].includes(req.user!.role) && phoneOnly(companyId, date, storeId)) {
+    res.status(400).json({ error: phoneOnlyMessage(companyId, storeId), phone_only: true });
+    return;
+  }
 
   const result = db.prepare(
     'INSERT INTO absence_reports (company_id, user_id, shift_id, date, reason) VALUES (?, ?, ?, ?, ?)'

@@ -743,6 +743,7 @@ export const lineApi = {
   linkCode: () => api.post<{ code: string; minutes: number; bot_name: string | null; basic_id: string; add_friend_url: string; send_code_url: string }>('/line/link-code'),
   me: () => api.get<{ configured: boolean; bot_name: string | null; linked: boolean }>('/line/me'),
   unlink: () => api.delete('/line/me'),
+  saveAbsenceRule: (days: number | null, phone: string) => api.post('/line/absence-rule', { days, phone }),
   inviteLinks: (user_ids?: number[]) =>
     api.post<{ company_name: string; links: { user_id: number; name: string; role: string; linked: boolean; url: string }[] }>('/line/invite-links', { user_ids }),
 }
