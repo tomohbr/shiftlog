@@ -17,7 +17,7 @@ import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../m
 //   4. 以後、シフト公開・希望収集の開始などを LINE で送る
 //   5. 希望収集の案内・催促・シフト公開には本人専用のリンクを付ける。LINE から開くと名前選択なしで
 //      その月の希望提出画面／シフト画面に入れる
-//   6. トーク画面の下にメニュー（シフトを見る・希望を出す・打刻のしかた）を付ける。押すと本人専用の
+//   6. トーク画面の下にメニュー（シフトを見る・希望を出す・休みの連絡・打刻のしかた）を付ける。押すと本人専用の
 //      カードを返信する（返信なので無料プランの通数に数えない）。文字で「シフト」「希望」と送っても同じ
 
 const router = Router();
@@ -522,8 +522,9 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
     if (!lineUserId) continue;
     try {
       if (event.type === 'postback' && event.replyToken) {
-        const what = String(event.postback?.data || '').replace('menu=', '');
-        await replyMenu(what, companyId, lineUserId, s.channel_access_token, event.replyToken);
+        const data = String(event.postback?.data || '');
+        if (data.startsWith('menu=')) await replyMenu(data.replace('menu=', ''), companyId, lineUserId, s.channel_access_token, event.replyToken);
+        else await handleAbsencePostback(new URLSearchParams(data), companyId, lineUserId, s.channel_access_token, event.replyToken);
       } else if (event.type === 'follow' && event.replyToken) {
         await replyLine(s.channel_access_token, event.replyToken,
           '友だち追加ありがとうございます。\nシフトの通知を受け取るには、シフトログの「LINEで通知を受け取る」に表示される6桁の連携コードを、このトークに送ってください。');
@@ -533,7 +534,7 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
         const text = String(event.message.text);
         const m = text.match(/\d{6}/);
         if (!m) {
-          const what = /希望/.test(text) ? 'requests' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : '';
+          const what = /希望/.test(text) ? 'requests' : /休み|欠勤|休む/.test(text) ? 'absent' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : '';
           if (what) await replyMenu(what, companyId, lineUserId, s.channel_access_token, event.replyToken);
           continue;
         }
@@ -562,6 +563,7 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
 // メニュー（またはキーワード）への返信
 async function replyMenu(what: string, companyId: number, lineUserId: string, token: string, replyToken: string) {
   if (what === 'requests') return replyRequestLink(companyId, lineUserId, token, replyToken);
+  if (what === 'absent') return replyAbsentPicker(companyId, lineUserId, token, replyToken);
   if (what === 'howto') {
     return replyLine(token, replyToken,
       '【打刻のしかた】\n① 会場のブースに貼ってある「打刻用QR」をスマホのカメラで読み取る\n② 初めてのときだけ自分の名前を選ぶ\n③「出勤」「休憩」「休憩終わり」「退勤」の大きなボタンを押す\n\n押した時刻と会場が記録されます。今日の予定と違う会場のQRだと注意が出ますが、ヘルプで入るときはそのまま押してOKです。');
@@ -587,21 +589,202 @@ async function replyMenu(what: string, companyId: number, lineUserId: string, to
   await replyLine(token, replyToken, shiftsCard(companyId, who.id, who.name, `${who.name}さんのシフト`, months));
 }
 
-// トーク画面の下のメニューを付ける（画像は backend/assets/richmenu.png、2500x843 の3分割）
+// ---- 休みの連絡と代わりの募集（すべて LINE の中で完結）----
+// スタッフ: メニュー「休みの連絡」→ 休むシフトを選ぶ → 理由を選ぶ → 管理者に届く
+// 管理者: 「代わりを募集」→ その日空いている人に「入れます」ボタン付きで届く → 手を挙げた人から選ぶ → シフトが差し替わり、本人たちに届く
+const REASONS = ['体調不良', '急用', 'その他'];
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cover_offers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    absence_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(absence_id, user_id)
+  );
+`);
+
+function lineMember(companyId: number, lineUserId: string) {
+  return db.prepare(`
+    SELECT u.id, u.name, u.role, uc.role AS company_role FROM user_line_ids uli
+    JOIN users u ON u.id = uli.user_id AND u.is_active = 1
+    JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ?
+    WHERE uli.line_user_id = ?
+  `).get(companyId, lineUserId) as { id: number; name: string; role: string; company_role: string } | undefined;
+}
+const isAdminMember = (m?: { role: string; company_role: string }) =>
+  !!m && (['admin', 'super_admin'].includes(m.role) || m.company_role === 'admin');
+
+function shiftWithStore(shiftId: number) {
+  return db.prepare(`
+    SELECT s.*, st.name AS store_name, u.name AS user_name FROM shifts s
+    LEFT JOIN stores st ON st.id = s.store_id JOIN users u ON u.id = s.user_id WHERE s.id = ?
+  `).get(shiftId) as any;
+}
+const shiftLabel = (s: any) => `${md2(s.date)} ${s.store_name ? s.store_name + ' ' : ''}${String(s.start_time).slice(0, 5)}–${String(s.end_time).slice(0, 5)}`;
+
+function buttonsCard(altText: string, title: string, lines: string[], buttons: { label: string; data?: string; uri?: string; primary?: boolean; color?: string }[]) {
+  return {
+    type: 'flex', altText,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm',
+        contents: [
+          { type: 'text', text: title, weight: 'bold', size: 'md', wrap: true },
+          ...lines.map(t => ({ type: 'text', text: t, size: 'sm', color: '#555555', wrap: true })),
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', spacing: 'sm',
+        contents: buttons.map(b => ({
+          type: 'button', style: b.primary ? 'primary' : 'secondary', height: 'sm',
+          ...(b.primary ? { color: b.color || '#1C7ED6' } : {}),
+          action: b.uri ? { type: 'uri', label: b.label.slice(0, 40), uri: b.uri } : { type: 'postback', label: b.label.slice(0, 40), data: b.data, displayText: b.label },
+        })),
+      },
+    },
+  };
+}
+
+function adminLineIds(companyId: number): string[] {
+  return (db.prepare(`
+    SELECT uli.line_user_id FROM user_line_ids uli
+    JOIN users u ON u.id = uli.user_id AND u.is_active = 1
+    JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ?
+    WHERE uc.role = 'admin' OR u.role IN ('admin', 'super_admin')
+  `).all(companyId) as { line_user_id: string }[]).map(r => r.line_user_id);
+}
+
+// メニュー「休みの連絡」: これからの自分のシフト（公開済み・30日以内）をボタンで出す
+async function replyAbsentPicker(companyId: number, lineUserId: string, token: string, replyToken: string) {
+  const me = lineMember(companyId, lineUserId);
+  if (!me) { await replyLine(token, replyToken, 'まだシフトログと連携されていません。お店の人からもらった招待QRを読んでください。'); return; }
+  const today = jstToday();
+  const limit = new Date(Date.now() + 9 * 3600 * 1000 + 30 * 86400 * 1000).toISOString().slice(0, 10);
+  const shifts = db.prepare(`
+    SELECT s.id, s.date, s.start_time, s.end_time, st.name AS store_name FROM shifts s
+    LEFT JOIN stores st ON st.id = s.store_id
+    JOIN shift_publications p ON p.company_id = s.company_id AND p.is_published = 1
+      AND p.year = CAST(substr(s.date, 1, 4) AS INTEGER) AND p.month = CAST(substr(s.date, 6, 2) AS INTEGER)
+    WHERE s.company_id = ? AND s.user_id = ? AND s.date >= ? AND s.date <= ?
+    ORDER BY s.date, s.start_time LIMIT 8
+  `).all(companyId, me.id, today, limit) as any[];
+  if (shifts.length === 0) { await replyLine(token, replyToken, 'この先30日に、公開済みのシフトはありません。'); return; }
+  await replyLine(token, replyToken, buttonsCard('休みの連絡', 'どのシフトを休みますか？', ['押すと、理由を選ぶ画面になります。'],
+    shifts.map(x => ({ label: shiftLabel(x), data: `a=pick&s=${x.id}` }))));
+}
+
+async function handleAbsencePostback(q: URLSearchParams, companyId: number, lineUserId: string, token: string, replyToken: string) {
+  const a = q.get('a');
+  const me = lineMember(companyId, lineUserId);
+  if (!me) { await replyLine(token, replyToken, 'まだシフトログと連携されていません。'); return; }
+
+  // スタッフ: 休むシフトを選んだ → 理由を選ぶ
+  if (a === 'pick') {
+    const sh = shiftWithStore(Number(q.get('s')));
+    if (!sh || sh.user_id !== me.id || sh.company_id !== companyId) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
+    await replyLine(token, replyToken, buttonsCard('休みの理由', `${shiftLabel(sh)} を休みます`, ['理由を選ぶと、店長に届きます。'],
+      [...REASONS.map((r, i) => ({ label: r, data: `a=report&s=${sh.id}&r=${i}`, primary: i === 0, color: '#E03131' }))]));
+    return;
+  }
+
+  // スタッフ: 理由を選んだ → 記録して管理者に知らせる
+  if (a === 'report') {
+    const sh = shiftWithStore(Number(q.get('s')));
+    if (!sh || sh.user_id !== me.id || sh.company_id !== companyId) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
+    const reason = REASONS[Number(q.get('r'))] || 'その他';
+    let ab = db.prepare("SELECT * FROM absence_reports WHERE shift_id = ? AND status IN ('pending','recruiting')").get(sh.id) as any;
+    if (!ab) {
+      const r = db.prepare('INSERT INTO absence_reports (company_id, user_id, shift_id, date, reason) VALUES (?, ?, ?, ?, ?)').run(companyId, me.id, sh.id, sh.date, reason);
+      ab = { id: Number(r.lastInsertRowid) };
+    }
+    await replyLine(token, replyToken, `${shiftLabel(sh)} のお休みを店長に伝えました。\n代わりが決まったら、このLINEでお知らせします。お大事にしてください。`);
+    const card = buttonsCard(`${me.name}さんから休みの連絡`, `${me.name}さんが休みます`, [shiftLabel(sh), `理由: ${reason}`],
+      [{ label: '代わりを募集する', data: `a=recruit&ab=${ab.id}`, primary: true }, { label: 'シフト画面を開く', uri: `${APP_URL}/shifts` }]);
+    for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
+    return;
+  }
+
+  // 管理者: 代わりを募集 → その日空いている人に「入れます」
+  if (a === 'recruit') {
+    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は店長だけができます。'); return; }
+    const ab = db.prepare('SELECT * FROM absence_reports WHERE id = ? AND company_id = ?').get(Number(q.get('ab')), companyId) as any;
+    const sh = ab?.shift_id ? shiftWithStore(ab.shift_id) : null;
+    if (!ab || !sh) { await replyLine(token, replyToken, 'このお休みの連絡は見つかりませんでした。'); return; }
+    if (ab.status === 'covered') { await replyLine(token, replyToken, 'もう代わりが決まっています。'); return; }
+    // その日にシフトがない・「出られない」と出していない・LINE連携済みのスタッフ
+    const cands = db.prepare(`
+      SELECT u.id, u.name, uli.line_user_id FROM user_companies uc
+      JOIN users u ON u.id = uc.user_id AND u.is_active = 1
+      JOIN user_line_ids uli ON uli.user_id = u.id
+      WHERE uc.company_id = ? AND uc.role = 'staff' AND u.id != ?
+        AND NOT EXISTS (SELECT 1 FROM shifts x WHERE x.company_id = uc.company_id AND x.user_id = u.id AND x.date = ?
+          AND NOT (x.end_time <= ? OR x.start_time >= ?))
+        AND NOT EXISTS (SELECT 1 FROM shift_requests r WHERE r.company_id = uc.company_id AND r.user_id = u.id AND r.date = ? AND r.availability = 'unavailable')
+      ORDER BY u.name
+    `).all(companyId, sh.user_id, sh.date, sh.start_time, sh.end_time, sh.date) as any[];
+    if (cands.length === 0) { await replyLine(token, replyToken, `${shiftLabel(sh)} に入れそうな人（LINE連携済み・その日空いている人）がいません。電話などで探してください。`); return; }
+    db.prepare("UPDATE absence_reports SET status = 'recruiting', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(ab.id);
+    const card = buttonsCard('代わりに入れる人を探しています', '代わりに入れる人を探しています', [shiftLabel(sh), '入れる場合はボタンを押してください。店長が決めたらお知らせします。'],
+      [{ label: '入れます', data: `a=offer&ab=${ab.id}`, primary: true, color: '#2F9E44' }]);
+    let sent = 0;
+    for (const c of cands) if (await sendLineMessage(token, c.line_user_id, card)) sent++;
+    await replyLine(token, replyToken, `${sent}人に募集を送りました（${cands.map(c => c.name).join('、')}）。\n手を挙げた人がいたら、ここに届きます。`);
+    return;
+  }
+
+  // スタッフ: 入れます → 管理者に「この人に決める」
+  if (a === 'offer') {
+    const ab = db.prepare('SELECT * FROM absence_reports WHERE id = ? AND company_id = ?').get(Number(q.get('ab')), companyId) as any;
+    const sh = ab?.shift_id ? shiftWithStore(ab.shift_id) : null;
+    if (!ab || !sh || ab.status === 'covered') { await replyLine(token, replyToken, 'ありがとうございます。この募集はもう締め切られました。'); return; }
+    db.prepare('INSERT OR IGNORE INTO cover_offers (absence_id, user_id) VALUES (?, ?)').run(ab.id, me.id);
+    await replyLine(token, replyToken, `ありがとうございます！店長に伝えました。\n${shiftLabel(sh)} に入るかどうか、決まったらお知らせします。`);
+    const card = buttonsCard(`${me.name}さんが入れます`, `${me.name}さんが入れます`, [`${shiftLabel(sh)}（${sh.user_name}さんの代わり）`],
+      [{ label: `${me.name}さんに決める`, data: `a=decide&ab=${ab.id}&u=${me.id}`, primary: true, color: '#2F9E44' }]);
+    for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
+    return;
+  }
+
+  // 管理者: この人に決める → シフトを差し替えて、本人たちに知らせる
+  if (a === 'decide') {
+    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は店長だけができます。'); return; }
+    const ab = db.prepare('SELECT * FROM absence_reports WHERE id = ? AND company_id = ?').get(Number(q.get('ab')), companyId) as any;
+    const sh = ab?.shift_id ? shiftWithStore(ab.shift_id) : null;
+    const cover = db.prepare('SELECT u.id, u.name FROM users u JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ? WHERE u.id = ?').get(companyId, Number(q.get('u'))) as any;
+    if (!ab || !sh || !cover) { await replyLine(token, replyToken, '見つかりませんでした。'); return; }
+    if (ab.status === 'covered') { await replyLine(token, replyToken, 'もう代わりが決まっています。'); return; }
+    const absentUser = sh.user_id;
+    db.prepare('UPDATE shifts SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(cover.id, sh.id);
+    db.prepare("UPDATE absence_reports SET status = 'covered', cover_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(cover.id, ab.id);
+    await replyLine(token, replyToken, `${shiftLabel(sh)} は ${cover.name}さんに決めました。シフトを差し替えて、2人に知らせました。`);
+    const coverLine = db.prepare('SELECT line_user_id FROM user_line_ids WHERE user_id = ?').get(cover.id) as any;
+    const absentLine = db.prepare('SELECT line_user_id FROM user_line_ids WHERE user_id = ?').get(absentUser) as any;
+    if (coverLine) {
+      await sendLineMessage(token, coverLine.line_user_id, buttonsCard('シフトに入ることになりました', 'シフトに入ることになりました', [shiftLabel(sh), 'ありがとうございます！'],
+        [{ label: 'シフトを見る', uri: requestLinkUrl(cover.id, companyId, Number(sh.date.slice(0, 4)), Number(sh.date.slice(5, 7)), 'shifts'), primary: true }]));
+    }
+    if (absentLine) await sendLineMessage(token, absentLine.line_user_id, `${shiftLabel(sh)} は ${cover.name}さんが代わりに入ってくれることになりました。`);
+    return;
+  }
+}
+
+// トーク画面の下のメニューを付ける（画像は backend/assets/richmenu.png、2500x843 の4分割）
 export async function installRichMenu(companyId: number): Promise<{ ok: boolean; error?: string }> {
   const s = db.prepare('SELECT channel_access_token, rich_menu_id FROM line_settings WHERE company_id = ?').get(companyId) as any;
   if (!s?.channel_access_token) return { ok: false, error: 'LINE 通知の設定がまだです' };
   const token = s.channel_access_token;
-  const W = 2500, H = 843, w = Math.floor(W / 3);
+  const W = 2500, H = 843, w = Math.floor(W / 4);
   const area = (i: number, data: string, label: string) => ({
-    bounds: { x: i * w, y: 0, width: i === 2 ? W - 2 * w : w, height: H },
+    bounds: { x: i * w, y: 0, width: i === 3 ? W - 3 * w : w, height: H },
     action: { type: 'postback', data: `menu=${data}`, displayText: label },
   });
   const created = await lineApi(token, '/v2/bot/richmenu', {
     method: 'POST',
     body: {
       size: { width: W, height: H }, selected: true, name: 'shiftlog-menu', chatBarText: 'シフトのメニュー',
-      areas: [area(0, 'shifts', 'シフトを見る'), area(1, 'requests', '希望を出す'), area(2, 'howto', '打刻のしかた')],
+      areas: [area(0, 'shifts', 'シフトを見る'), area(1, 'requests', '希望を出す'), area(2, 'absent', '休みの連絡'), area(3, 'howto', '打刻のしかた')],
     },
   });
   const id = created.data?.richMenuId;

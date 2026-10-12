@@ -71,16 +71,11 @@ router.post('/:id/cover', authenticateToken, requireCompany, (req: AuthRequest, 
     path: '/absence',
   });
 
-  // If there's a linked shift, create a new shift for cover user
+  // 元のシフトの担当を代わりの人に差し替える（会場・時間はそのまま）。
+  // 以前は新しいシフトを作って元を cancelled にしていたが、cancelled が一覧に残り二重に見えていた
   if (report.shift_id) {
-    const originalShift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(report.shift_id) as any;
-    if (originalShift) {
-      db.prepare(
-        'INSERT INTO shifts (company_id, user_id, date, start_time, end_time, break_minutes, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(req.companyId!, req.user!.id, originalShift.date, originalShift.start_time, originalShift.end_time, originalShift.break_minutes, 'confirmed');
-      // Cancel original shift
-      db.prepare("UPDATE shifts SET status = 'cancelled' WHERE id = ?").run(report.shift_id);
-    }
+    db.prepare('UPDATE shifts SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?')
+      .run(req.user!.id, report.shift_id, req.companyId!);
   }
 
   res.json({ message: '代替を引き受けました' });
