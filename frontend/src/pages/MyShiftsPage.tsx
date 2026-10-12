@@ -274,8 +274,8 @@ export default function MyShiftsPage() {
           })()}
 
           {/* 月のまとめ ＋ 表示切替 */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-gray-600 whitespace-nowrap">
               {month}月の勤務{storeName ? `（${storeName}）` : ''} <span className="font-bold text-gray-900">{workDays}日</span>・
               <span className="font-bold text-gray-900">{totalHours % 1 === 0 ? totalHours : totalHours.toFixed(1)}時間</span>
             </p>
@@ -284,9 +284,11 @@ export default function MyShiftsPage() {
                 <button
                   key={v}
                   onClick={() => setView(v)}
-                  className={`px-3 py-1.5 text-sm font-semibold flex items-center gap-1 ${view === v ? 'bg-gray-900 text-white' : 'bg-white text-gray-600'}`}
+                  aria-label={label}
+                  title={label}
+                  className={`px-3 py-2 flex items-center ${view === v ? 'bg-gray-900 text-white' : 'bg-white text-gray-600'}`}
                 >
-                  <Icon className="w-4 h-4" />{label}
+                  <Icon className="w-5 h-5" />
                 </button>
               ))}
             </div>
