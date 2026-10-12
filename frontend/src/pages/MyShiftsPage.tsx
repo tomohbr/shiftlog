@@ -32,8 +32,9 @@ const compact = (t?: string) => {
   const [h, m] = hm(t).split(':')
   return m === '00' ? String(Number(h)) : `${Number(h)}:${m}`
 }
-// カレンダーのラベル用の短い名前（「山田 花子」→「山田」）
-const shortName = (name?: string) => (name || '').split(/[\s　（(]/)[0].slice(0, 4)
+// カレンダーのラベル用の短い名前（「山田 花子」→「山田」。同じ名字が複数いれば「山田花」）
+const surname = (name?: string) => (name || '').split(/[\s　（(]/)[0].slice(0, 4)
+const givenInitial = (name?: string) => ((name || '').split(/[\s　]/)[1] || '').slice(0, 1)
 
 function shiftMinutes(s: Shift): number {
   if (!s.start_time || !s.end_time) return 0
@@ -138,6 +139,18 @@ export default function MyShiftsPage() {
     published
       .filter(o => o.date === s.date && o.user_id !== s.user_id && (o.store_id ?? null) === (s.store_id ?? null))
       .sort(byTime)
+
+  // 同じ名字の人が2人以上いるときだけ、名前の1文字目を足す
+  const surnameCount = new Map<string, Set<number>>()
+  for (const x of published) {
+    const k = surname(x.user_name)
+    if (!surnameCount.has(k)) surnameCount.set(k, new Set())
+    surnameCount.get(k)!.add(x.user_id)
+  }
+  const shortName = (name?: string) => {
+    const k = surname(name)
+    return (surnameCount.get(k)?.size || 0) > 1 ? `${k}${givenInitial(name)}` : k
+  }
 
   const workDays = new Set(myVisible.map(s => s.date)).size
   const totalHours = myVisible.reduce((sum, s) => sum + shiftMinutes(s), 0) / 60
@@ -296,7 +309,13 @@ export default function MyShiftsPage() {
                       <span key={s.id} className="block mx-[2px] mt-[3px] rounded-[5px] px-0.5 py-1 text-center text-white font-bold leading-tight"
                         style={{ backgroundColor: barColor(s).solid }} title={s.store_name || undefined}>
                         <span className="block text-[12.5px] truncate">{s.store_name || '勤務'}</span>
-                        <span className="block text-[12px] tabular-nums">{compact(s.start_time)}-{compact(s.end_time)}</span>
+                        {(() => {
+                          // 1行に収まる長さなら1行、分つきで長い（9:30-17:30 など）ときは開始と終了を2行に分ける（途中で切れないように）
+                          const t = `${compact(s.start_time)}-${compact(s.end_time)}`
+                          return t.length <= 7
+                            ? <span className={`block tabular-nums whitespace-nowrap tracking-tight ${t.length === 7 ? 'text-[11px]' : 'text-[12px]'}`}>{t}</span>
+                            : <span className="block tabular-nums whitespace-nowrap text-[11.5px] leading-[1.2]">{compact(s.start_time)}<br />-{compact(s.end_time)}</span>
+                        })()}
                       </span>
                     ))
                   : <>
