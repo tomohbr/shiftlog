@@ -55,16 +55,19 @@ async function lineApi(token: string, path: string, init: { method?: string; bod
   return { ok: res.ok, status: res.status, data };
 }
 
-async function sendLineMessage(accessToken: string, lineUserId: string, message: string) {
+type LineMessage = string | Record<string, unknown>;
+const toMessage = (m: LineMessage) => (typeof m === 'string' ? { type: 'text', text: m } : m);
+
+async function sendLineMessage(accessToken: string, lineUserId: string, message: LineMessage) {
   try {
-    const r = await lineApi(accessToken, '/v2/bot/message/push', { method: 'POST', body: { to: lineUserId, messages: [{ type: 'text', text: message }] } });
+    const r = await lineApi(accessToken, '/v2/bot/message/push', { method: 'POST', body: { to: lineUserId, messages: [toMessage(message)] } });
     if (!r.ok) console.error('[line] push 失敗', r.status, JSON.stringify(r.data).slice(0, 200));
     return r.ok;
   } catch { return false; }
 }
 
-async function replyLine(accessToken: string, replyToken: string, message: string) {
-  try { await lineApi(accessToken, '/v2/bot/message/reply', { method: 'POST', body: { replyToken, messages: [{ type: 'text', text: message }] } }); } catch { /* 返信失敗は無視 */ }
+async function replyLine(accessToken: string, replyToken: string, message: LineMessage) {
+  try { await lineApi(accessToken, '/v2/bot/message/reply', { method: 'POST', body: { replyToken, messages: [toMessage(message)] } }); } catch { /* 返信失敗は無視 */ }
 }
 
 // Send to all members of the company who linked LINE
@@ -93,12 +96,58 @@ export function notifyShiftPublished(companyId: number, year: number, month: num
   notifyCompanyStaff(companyId, msg).catch(() => {});
 }
 
+// 希望提出の案内カード（長いURLを見せず、ボタン1つで提出ページを開く）
+type CardPeriod = { year: number; month: number; start_date?: string | null; end_date?: string | null; deadline?: string | null };
+const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+
+function requestBubble(heading: string, name: string, p: CardPeriod, url: string) {
+  const rows: [string, string][] = [
+    ['対象', p.start_date && p.end_date ? `${md(p.start_date)} 〜 ${md(p.end_date)}` : `${p.year}年${p.month}月`],
+  ];
+  if (p.deadline) rows.push(['締切', md(p.deadline)]);
+  return {
+    type: 'bubble',
+    size: 'kilo',
+    body: {
+      type: 'box', layout: 'vertical', spacing: 'md',
+      contents: [
+        { type: 'text', text: heading, weight: 'bold', size: 'md', wrap: true },
+        { type: 'text', text: `${p.year}年${p.month}月のシフト希望`, size: 'sm', color: '#555555' },
+        {
+          type: 'box', layout: 'vertical', spacing: 'xs',
+          contents: rows.map(([k, v]) => ({
+            type: 'box', layout: 'baseline',
+            contents: [
+              { type: 'text', text: k, size: 'sm', color: '#888888', flex: 2 },
+              { type: 'text', text: v, size: 'sm', weight: 'bold', flex: 5, wrap: true },
+            ],
+          })),
+        },
+        { type: 'text', text: `${name}さん専用のボタンです。名前を選ばずに開けます。`, size: 'xs', color: '#888888', wrap: true },
+      ],
+    },
+    footer: {
+      type: 'box', layout: 'vertical',
+      contents: [{ type: 'button', style: 'primary', color: '#06C755', action: { type: 'uri', label: '希望を提出する', uri: url } }],
+    },
+  };
+}
+
+function requestCard(heading: string, name: string, periods: CardPeriod[], urlFor: (p: CardPeriod) => string) {
+  const bubbles = periods.map(p => requestBubble(heading, name, p, urlFor(p)));
+  return {
+    type: 'flex',
+    altText: `【シフトログ】${heading}`,
+    contents: bubbles.length === 1 ? bubbles[0] : { type: 'carousel', contents: bubbles },
+  };
+}
+
 /**
  * 希望シフトの案内を、LINE 連携済みの人へ本人専用リンク付きで送る。
  * onlyUserIds を渡すとその人だけ（未提出者への催促用）。
  */
 export async function sendRequestLinks(
-  companyId: number, year: number, month: number, heading: string, detail: string, onlyUserIds?: number[],
+  companyId: number, period: CardPeriod, heading: string, onlyUserIds?: number[],
 ): Promise<{ sent: number; targets: number }> {
   const settings = db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
   if (!settings?.channel_access_token) return { sent: 0, targets: 0 };
@@ -113,15 +162,10 @@ export async function sendRequestLinks(
   }
   let sent = 0;
   for (const r of rows) {
-    const msg = `【シフトログ】${heading}\n${detail}\n\n${r.name}さん専用の提出ページ（名前を選ばずに開けます）:\n${requestLinkUrl(r.user_id, companyId, year, month)}`;
-    if (await sendLineMessage(settings.channel_access_token, r.line_user_id, msg)) sent++;
+    const card = requestCard(heading, r.name, [period], p => requestLinkUrl(r.user_id, companyId, p.year, p.month));
+    if (await sendLineMessage(settings.channel_access_token, r.line_user_id, card)) sent++;
   }
   return { sent, targets: rows.length };
-}
-
-export function periodText(p: { year: number; month: number; start_date?: string | null; end_date?: string | null; deadline?: string | null }): string {
-  const range = p.start_date && p.end_date ? `対象期間: ${p.start_date} 〜 ${p.end_date}` : `対象: ${p.year}年${p.month}月`;
-  return p.deadline ? `${range}\n締切: ${p.deadline}` : range;
 }
 
 function membersWithLink(companyId: number) {
@@ -344,8 +388,7 @@ async function replyRequestLink(companyId: number, lineUserId: string, token: st
     await replyLine(token, replyToken, '今はシフト希望の受付をしていません。受付が始まったらこのLINEでお知らせします。');
     return;
   }
-  const lines = open.map(p => `■ ${p.year}年${p.month}月（${periodText(p).replace(/\n/g, '／')}）\n${requestLinkUrl(who.id, companyId, p.year, p.month)}`);
-  await replyLine(token, replyToken, `${who.name}さんの希望提出ページです。\n\n${lines.join('\n\n')}`);
+  await replyLine(token, replyToken, requestCard('希望の提出はこちら', who.name, open.slice(0, 10), p => requestLinkUrl(who.id, companyId, p.year, p.month)));
 }
 
 // POST /api/line/webhook - 旧URL（会社IDなし）。何もしない

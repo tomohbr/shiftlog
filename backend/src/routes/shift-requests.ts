@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
-import { sendRequestLinks, periodText } from './line';
+import { sendRequestLinks } from './line';
 import { pushToCompanyAsync } from '../utils/apns';
 
 const router = Router();
@@ -140,8 +140,7 @@ router.post('/period', authenticateToken, requireCompany, (req: AuthRequest, res
 
     const lineSettings = db.prepare('SELECT notify_request_open FROM line_settings WHERE company_id = ?').get(companyId) as any;
     if (lineSettings?.notify_request_open) {
-      const detail = periodText({ year: Number(year), month: Number(month), start_date, end_date, deadline });
-      sendRequestLinks(companyId, Number(year), Number(month), 'シフト希望の受付が始まりました。', detail).catch(() => {});
+      sendRequestLinks(companyId, { year: Number(year), month: Number(month), start_date, end_date, deadline }, 'シフト希望の受付が始まりました').catch(() => {});
     }
   }
 
@@ -187,7 +186,7 @@ router.post('/remind', authenticateToken, requireCompany, async (req: AuthReques
 
   const linkedIds = unsubmitted.filter(u => u.linked).map(u => u.id);
   const result = linkedIds.length
-    ? await sendRequestLinks(companyId, year, month, 'シフト希望がまだ届いていません。', periodText({ year, month, ...period }), linkedIds)
+    ? await sendRequestLinks(companyId, { year, month, start_date: period.start_date, end_date: period.end_date, deadline: period.deadline }, 'シフト希望がまだ届いていません', linkedIds)
     : { sent: 0, targets: 0 };
 
   res.json({
