@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { format, addMonths, subMonths, getDaysInMonth, startOfMonth, getDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
 import MonthNavigator from '../components/MonthNavigator'
 import ShiftModal from '../components/ShiftModal'
 import { shiftsApi, usersApi, shiftRequestsApi, storesApi, Shift, User, Store } from '../api/client'
@@ -14,7 +15,13 @@ const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
 export default function ShiftEditPage() {
   const { user } = useAuth()
-  const [currentDate, setCurrentDate] = useState(new Date())
+  // ?month=2026-11 で開いたらその月から（自動作成の画面から戻ってきたとき用）
+  const [searchParams] = useSearchParams()
+  const [currentDate, setCurrentDate] = useState(() => {
+    const q = searchParams.get('month')
+    if (q && /^\d{4}-\d{2}$/.test(q)) { const [y, m] = q.split('-').map(Number); return new Date(y, m - 1, 1) }
+    return new Date()
+  })
   const [shifts, setShifts] = useState<Shift[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -117,7 +124,7 @@ export default function ShiftEditPage() {
           onToday={() => setCurrentDate(new Date())}
         />
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={filterUserId || ''}
             onChange={e => setFilterUserId(e.target.value ? parseInt(e.target.value) : null)}
@@ -128,6 +135,15 @@ export default function ShiftEditPage() {
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
+
+          {/* 1マスずつ入れる代わりに、会場ごとの必要人数と希望から下書きを作る */}
+          <Link
+            to={`/auto-schedule?month=${format(currentDate, 'yyyy-MM')}`}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100"
+          >
+            <Sparkles className="w-4 h-4" />
+            希望から自動で作る
+          </Link>
 
           <button
             onClick={() => { setSelectedDate(new Date()); setSelectedShift(null); setModalOpen(true) }}

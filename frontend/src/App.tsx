@@ -29,7 +29,7 @@ import AuditLogPage from './pages/AuditLogPage'
 import SkillsPage from './pages/SkillsPage'
 import SwapsPage from './pages/SwapsPage'
 import PayrollPage from './pages/PayrollPage'
-import AutoSchedulePage from './pages/AutoSchedulePage'
+import VenueSchedulePage from './pages/VenueSchedulePage'
 import AdminHubPage from './pages/AdminHubPage'
 import SetupGuidePage from './pages/SetupGuidePage'
 import OrganizationPage from './pages/OrganizationPage'
@@ -168,7 +168,7 @@ function AppRoutes() {
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/swaps" element={<SwapsPage />} />
           <Route path="/payroll" element={<PayrollPage />} />
-          <Route path="/auto-schedule" element={<AutoSchedulePage />} />
+          <Route path="/auto-schedule" element={<VenueSchedulePage />} />
           <Route path="/admin-hub" element={<AdminHubPage />} />
           <Route path="/setup-guide" element={<SetupGuidePage />} />
           <Route path="/organization" element={<OrganizationPage />} />

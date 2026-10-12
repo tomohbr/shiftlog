@@ -444,34 +444,116 @@ export const userBulkApi = {
     api.post<{ results: BulkImportResult[] }>('/users/bulk', { rows }),
 }
 
-// 自動シフト生成
-export interface AutoSlot {
-  date: string
+// 会場ごとの必要人数（枠）と、希望からのシフト下書き
+export interface SlotRule {
+  id: number
+  store_id: number | null
+  /** 曜日番号（0=日〜6=土）を並べた文字列。日付指定のときは null */
+  weekdays: string | null
+  /** 日付指定の上書き（この日はこの会場の曜日ルールを使わない。needed=0 は休み） */
+  date: string | null
   start_time: string
   end_time: string
   needed: number
-  skill_ids?: number[]
+  break_minutes: number
+  valid_from: string | null
+  valid_to: string | null
 }
-export interface AutoAssignment {
-  date: string
-  start_time: string
-  end_time: string
+export type SlotRuleInput = Omit<SlotRule, 'id'>
+export interface DraftPerson {
+  assignment_id: number | null
+  shift_id: number | null
   user_id: number
   user_name: string
-  availability: string | null
+  /** auto=自動 / manual=手で入れた / existing=確定済みのシフト */
+  source: 'auto' | 'manual' | 'existing'
+  availability: 'preferred' | 'available' | 'unavailable' | null
+  partial: boolean
+  warning?: string | null
 }
-export interface AutoUnfilled {
+export interface DraftSlot {
+  id: number
+  store_id: number | null
   date: string
   start_time: string
   end_time: string
   needed: number
-  assigned: number
+  break_minutes: number
+  people: DraftPerson[]
+  short: number
+  over: number
 }
-export const autoScheduleApi = {
-  propose: (year: number, month: number, slots: AutoSlot[]) =>
-    api.post<{ assignments: AutoAssignment[]; unfilled: AutoUnfilled[] }>('/auto-schedule/propose', { year, month, slots }),
-  apply: (assignments: AutoAssignment[]) =>
-    api.post<{ created: number; skipped: number }>('/auto-schedule/apply', { assignments }),
+export interface DraftStaff {
+  id: number
+  name: string
+  color: string | null
+  days: number
+  minutes: number
+  draft_minutes: number
+  existing_minutes: number
+  draft_count: number
+  preferred_days: number
+  available_days: number
+  unavailable_days: number
+  submitted: boolean
+}
+export interface DraftView {
+  draft: {
+    id: number
+    start_date: string
+    end_date: string
+    status: 'draft' | 'committed' | 'discarded'
+    include_unsubmitted: boolean
+    created_at: string
+    committed_at: string | null
+    committed_count: number | null
+  }
+  stores: { id: number; name: string }[]
+  slots: DraftSlot[]
+  staff: DraftStaff[]
+  conflicts: { user_id: number; user_name: string; date: string }[]
+  totals: { needed: number; filled: number; short_slots: number; short_people: number; draft_count: number }
+}
+export interface DraftCandidate {
+  user_id: number
+  name: string
+  color: string | null
+  days: number
+  minutes: number
+  availability: 'preferred' | 'available' | 'unavailable' | null
+  preferred_time: string | null
+  in_slot: boolean
+  ok: boolean
+  partial: boolean
+  reason: string | null
+}
+export interface DraftSummary {
+  id: number
+  start_date: string
+  end_date: string
+  status: 'draft' | 'committed'
+  assignment_count: number
+  created_at: string
+  committed_at: string | null
+}
+export const venueScheduleApi = {
+  getRules: () => api.get<{ rules: SlotRule[] }>('/venue-schedule/rules'),
+  createRule: (data: Partial<SlotRuleInput>) => api.post<{ rule: SlotRule }>('/venue-schedule/rules', data),
+  updateRule: (id: number, data: Partial<SlotRuleInput>) => api.put<{ rule: SlotRule }>(`/venue-schedule/rules/${id}`, data),
+  deleteRule: (id: number) => api.delete(`/venue-schedule/rules/${id}`),
+  listDrafts: () => api.get<{ drafts: DraftSummary[] }>('/venue-schedule/drafts'),
+  createDraft: (data: { start_date: string; end_date: string; include_unsubmitted?: boolean }) =>
+    api.post<DraftView>('/venue-schedule/drafts', data),
+  getDraft: (id: number) => api.get<DraftView>(`/venue-schedule/drafts/${id}`),
+  candidates: (draftId: number, slotId: number) =>
+    api.get<{ candidates: DraftCandidate[] }>(`/venue-schedule/drafts/${draftId}/slots/${slotId}/candidates`),
+  assign: (draftId: number, data: { slot_id: number; user_id: number; replace_assignment_id?: number }) =>
+    api.post<DraftView>(`/venue-schedule/drafts/${draftId}/assign`, data),
+  unassign: (draftId: number, assignmentId: number) =>
+    api.delete<DraftView>(`/venue-schedule/drafts/${draftId}/assignments/${assignmentId}`),
+  discard: (draftId: number) => api.delete(`/venue-schedule/drafts/${draftId}`),
+  commit: (draftId: number) =>
+    api.post<{ created: number; skipped: { user_name: string; date: string; start_time: string; end_time: string; reason: string }[] }>(`/venue-schedule/drafts/${draftId}/commit`),
 }
 
 // 給与ソフト連携
