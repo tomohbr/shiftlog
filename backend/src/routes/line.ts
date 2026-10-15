@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../middleware/auth';
 import { absenceRule, phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
+import { canAddStaff } from '../utils/billing';
 
 // LINE 連携（お店ごとの LINE 公式アカウント → スタッフへの通知）
 //
@@ -594,6 +595,11 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+// requested_name: まだスタッフに登録されていない名前で申し込まれたとき（user_id = 0）
+try {
+  const regCols = (db.prepare('PRAGMA table_info(line_registrations)').all() as any[]).map(c => c.name);
+  if (!regCols.includes('requested_name')) db.exec('ALTER TABLE line_registrations ADD COLUMN requested_name TEXT');
+} catch { /* 起動を止めない */ }
 
 // スタッフに見せる「誰に届くか」。LINE設定の担当者名があれば「担当の○○」、なければ「店長」
 function W(companyId: number): string {
@@ -633,17 +639,26 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
     WHERE uc.company_id = ? AND uli.user_id IS NULL
   `).all(companyId) as { id: number; name: string }[];
   const hit = cands.filter(c => norm(c.name) === norm(text));
-  if (hit.length !== 1) {
-    await replyLine(token, replyToken, hit.length > 1
-      ? `同じ名前の方が複数います。お手数ですが、${W(companyId)}に直接連絡してください。`
-      : text.length > 12
-        ? `メッセージを${W(companyId)}に届けました。\n\nシフトの連絡を受け取るには、このトークに【フルネームだけ】を送ってください。\n例：山田 花子`
-        : `「${text.slice(0, 20)}」さんは、まだ登録されていないようです。\nお店に登録されているフルネーム（例：山田 花子）で送ってください。\nわからない場合は${W(companyId)}に連絡してください。`);
-    // 名前以外の文章（質問など）なら店長にも知らせる
-    if (text.length > 12) {
-      const dn = await lineDisplayName(token, lineUserId);
+  if (hit.length > 1) {
+    await replyLine(token, replyToken, `同じ名前の方が複数います。お手数ですが、${W(companyId)}に直接連絡してください。`);
+    return;
+  }
+  if (hit.length === 0) {
+    // 名前らしい短い文（2〜12文字・数字や記号なし）なら、まだ登録されていない人として担当者に確認する
+    const looksLikeName = text.length >= 2 && text.length <= 12 && !/[0-9０-９?？!！。、,.@:/]/.test(text);
+    const dn = await lineDisplayName(token, lineUserId);
+    if (!looksLikeName) {
+      await replyLine(token, replyToken, `メッセージを${W(companyId)}に届けました。\n\nシフトの連絡を受け取るには、このトークに【フルネームだけ】を送ってください。\n例：山田 花子`);
       for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, `【未登録の方からのメッセージ】LINE名「${dn || '不明'}」\n${text.slice(0, 300)}`);
+      return;
     }
+    const dup = db.prepare("SELECT id FROM line_registrations WHERE company_id = ? AND line_user_id = ? AND status = 'pending' AND requested_name = ?").get(companyId, lineUserId, text) as any;
+    if (dup) { await replyLine(token, replyToken, `${text}さんとして${W(companyId)}に確認をお願いしています。もう少しお待ちください。`); return; }
+    const reg = db.prepare('INSERT INTO line_registrations (company_id, line_user_id, user_id, display_name, requested_name) VALUES (?, ?, 0, ?, ?)').run(companyId, lineUserId, dn, text);
+    await replyLine(token, replyToken, `${text}さんとして登録してよいか、${W(companyId)}に確認をお願いしました。\n承認されたら、このトークでお知らせします。`);
+    const card = buttonsCard('LINEの登録の確認', 'LINEの登録の確認', [`LINE名「${dn || '不明'}」さんが`, `「${text}」さんとして登録したいそうです。`, 'まだスタッフに登録されていない名前です。本人で間違いなければ、この名前でスタッフに登録して承認します。'],
+      [{ label: 'この名前で登録して承認', data: `a=reg_new&r=${reg.lastInsertRowid}`, primary: true, color: '#06C755' }, { label: '断る', data: `a=reg_ng&r=${reg.lastInsertRowid}` }]);
+    for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
     return;
   }
   const target = hit[0];
@@ -790,9 +805,9 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
   if (!me) { await replyLine(token, replyToken, 'まだシフトログと連携されていません。'); return; }
 
   // 店長: 名前での登録を承認／断る
-  if (a === 'reg_ok' || a === 'reg_ng') {
+  if (a === 'reg_ok' || a === 'reg_ng' || a === 'reg_new') {
     if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は担当者（管理者）だけができます。'); return; }
-    const reg = db.prepare('SELECT r.*, u.name FROM line_registrations r JOIN users u ON u.id = r.user_id WHERE r.id = ? AND r.company_id = ?').get(Number(q.get('r')), companyId) as any;
+    const reg = db.prepare('SELECT r.*, COALESCE(u.name, r.requested_name) AS name FROM line_registrations r LEFT JOIN users u ON u.id = r.user_id WHERE r.id = ? AND r.company_id = ?').get(Number(q.get('r')), companyId) as any;
     if (!reg || reg.status !== 'pending') { await replyLine(token, replyToken, 'この確認はもう済んでいます。'); return; }
     if (a === 'reg_ng') {
       db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE id = ?").run(reg.id);
@@ -800,12 +815,22 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
       await sendLineMessage(token, reg.line_user_id, `${W(companyId)}が確認できなかったため、登録できませんでした。お手数ですが、お店に直接連絡してください。`);
       return;
     }
+    // まだスタッフにいない名前: その名前でスタッフを作ってから連携する
+    if (a === 'reg_new' || !reg.user_id) {
+      const already = db.prepare('SELECT 1 FROM user_line_ids WHERE line_user_id = ? AND user_id IN (SELECT user_id FROM user_companies WHERE company_id = ?)').get(reg.line_user_id, companyId);
+      if (already) { await replyLine(token, replyToken, 'このLINEは、もう別のスタッフとつながっています。'); return; }
+      if (!canAddStaff(companyId, 1)) { await replyLine(token, replyToken, 'スタッフ数がプランの上限に達しています。管理画面からプランを確認してください。'); return; }
+      const uid = Number(db.prepare("INSERT INTO users (name, role, is_active) VALUES (?, 'staff', 1)").run(reg.requested_name).lastInsertRowid);
+      db.prepare("INSERT INTO user_companies (user_id, company_id, role, employment_type, color) VALUES (?, ?, 'staff', 'part_time', '#4A90E2')").run(uid, companyId);
+      db.prepare('UPDATE line_registrations SET user_id = ? WHERE id = ?').run(uid, reg.id);
+      reg.user_id = uid;
+    }
     const taken = db.prepare('SELECT 1 FROM user_line_ids WHERE user_id = ?').get(reg.user_id);
     if (taken) { await replyLine(token, replyToken, `${reg.name}さんは、もう別のLINEとつながっています。`); return; }
     db.prepare('INSERT INTO user_line_ids (user_id, line_user_id) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET line_user_id = excluded.line_user_id').run(reg.user_id, reg.line_user_id);
     db.prepare("UPDATE line_registrations SET status = 'approved' WHERE id = ?").run(reg.id);
     db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE company_id = ? AND user_id = ? AND status = 'pending'").run(companyId, reg.user_id);
-    await replyLine(token, replyToken, `${reg.name}さんを承認しました。`);
+    await replyLine(token, replyToken, a === 'reg_new' ? `${reg.name}さんをスタッフに登録して、承認しました。（時給などはスタッフ管理で入れてください）` : `${reg.name}さんを承認しました。`);
     await sendLineMessage(token, reg.line_user_id,
       `${reg.name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。\n\nわからないことは、このトークにそのまま書いて送ってください。${W(companyId)}に届きます。`);
     return;
