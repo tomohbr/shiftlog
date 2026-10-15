@@ -138,7 +138,7 @@ function shiftsCard(companyId: number, userId: number, name: string, heading: st
         { type: 'text', text: `${md2(next.date)} ${String(next.start_time).slice(0, 5)}–${String(next.end_time).slice(0, 5)}`, size: 'lg', weight: 'bold', wrap: true },
         ...(next.store_name ? [{ type: 'text', text: `📍 ${next.store_name}`, size: 'md', weight: 'bold', color: '#E8590C', wrap: true }] : []),
       ]
-    : [{ type: 'text', text: '公開済みのこれからの勤務はありません', size: 'sm', color: '#888888', wrap: true }];
+    : [{ type: 'text', text: `まだシフトは決まっていません。決まったら、このLINEでお知らせします。`, size: 'sm', color: '#888888', wrap: true }];
   return {
     type: 'flex',
     altText: `【シフトログ】${heading}`,
@@ -1026,7 +1026,8 @@ async function replyRequestLink(companyId: number, lineUserId: string, token: st
     WHERE company_id = ? AND status = 'open' ORDER BY year DESC, month DESC
   `).all(companyId) as any[];
   if (open.length === 0) {
-    await replyLine(token, replyToken, '今はシフト希望の受付をしていません。受付が始まったらこのLINEでお知らせします。');
+    await replyLine(token, replyToken, `シフトの候補日は、${W(companyId)}がこれから出します。
+出たらこのLINEでお知らせするので、それまでお待ちください。`);
     return;
   }
   await replyLine(token, replyToken, requestCard('希望の提出はこちら', who.name, open.slice(0, 10), p => requestLinkUrl(who.id, companyId, p.year, p.month)));

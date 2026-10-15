@@ -179,7 +179,7 @@ export default function StaffRequestView({ year, month, userId }: { year: number
             </div>
           </>
         ) : (
-          <p className="text-base font-semibold text-gray-600">{month}月は今、希望の受付をしていません。{submittedBefore && '（出した希望は下のとおりです）'}</p>
+          <p className="text-base font-semibold text-gray-600">{month}月の候補日はまだ出ていません。出たらLINEでお知らせするので、それまでお待ちください。{submittedBefore && '（出した希望は下のとおりです）'}</p>
         )}
       </div>
 
