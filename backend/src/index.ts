@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import authRoutes from './routes/auth';
 import redirectRoutes from './routes/redirect';
 import userRoutes from './routes/users';
@@ -106,6 +107,27 @@ app.get('/api/health', (_req, res) => {
 // __dirname = backend/dist, so frontend/dist is at ../../frontend/dist
 const frontendPath = path.join(__dirname, '..', '..', 'frontend', 'dist');
 app.use(express.static(frontendPath));
+// スタッフ向けのリンク（招待・本人専用リンク・打刻・LINEの画面）は、LINE でプレビューされたときに
+// 販売用の宣伝文（index.html の OGP）が出ないよう、中立の文面に差し替えて返す
+let indexHtmlCache: string | null = null;
+app.get(['/i/*', '/l/*', '/q/*', '/liff/*'], (_req, res) => {
+  try {
+    if (!indexHtmlCache) indexHtmlCache = fs.readFileSync(path.join(frontendPath, 'index.html'), 'utf8');
+    const title = 'シフトの連絡';
+    const desc = 'シフトの確認・希望の提出・お休みの連絡・打刻ができます。';
+    const html = indexHtmlCache
+      .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
+      .replace(/<meta name="description" content="[^"]*"\s*\/?>/, `<meta name="description" content="${desc}" />`)
+      .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${title}" />`)
+      .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${desc}" />`)
+      .replace(/<meta property="og:image[^>]*>\s*/g, '')
+      .replace(/<meta name="twitter:[^>]*>\s*/g, '');
+    res.type('html').send(html);
+  } catch {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  }
+});
+
 app.get('*', (_req, res) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });

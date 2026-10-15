@@ -608,6 +608,10 @@ function W(companyId: number): string {
   return n ? `担当の${n}` : '店長';
 }
 
+// まだ連携していない人への案内（メニューを押したときなど）
+const unlinkedMsg = (companyId: number) =>
+  `まだシフトログと連携されていません。\nこのトークに【名前とふりがな】を送ってください。\n例：山田 花子 やまだ はなこ\n\n${W(companyId)}が確認したら「連携できました」とお知らせします。`;
+
 const norm = (t: string) => t.replace(/[\s　・.]/g, '').toLowerCase();
 
 // 「山田 花子 やまだ はなこ」「山田花子（ヤマダハナコ）」「山田 花子\nやまだはなこ」などを、名前とふりがなに分ける
@@ -709,7 +713,7 @@ async function replyMenu(what: string, companyId: number, lineUserId: string, to
     WHERE uli.line_user_id = ?
   `).get(companyId, lineUserId) as any;
   if (!who) {
-    await replyLine(token, replyToken, 'まだシフトログと連携されていません。アプリの「LINEで通知を受け取る」に出る6桁のコードをこのトークに送ってください。');
+    await replyLine(token, replyToken, unlinkedMsg(companyId));
     return;
   }
   // 今月と、公開済みなら来月
@@ -792,7 +796,7 @@ function adminLineIds(companyId: number): string[] {
 // メニュー「休みの連絡」: これからの自分のシフト（公開済み・30日以内）をボタンで出す
 async function replyAbsentPicker(companyId: number, lineUserId: string, token: string, replyToken: string) {
   const me = lineMember(companyId, lineUserId);
-  if (!me) { await replyLine(token, replyToken, 'まだシフトログと連携されていません。お店の人からもらった招待QRを読んでください。'); return; }
+  if (!me) { await replyLine(token, replyToken, unlinkedMsg(companyId)); return; }
   const today = jstToday();
   const limit = new Date(Date.now() + 9 * 3600 * 1000 + 30 * 86400 * 1000).toISOString().slice(0, 10);
   const shifts = db.prepare(`
@@ -821,7 +825,7 @@ async function replyAbsentPicker(companyId: number, lineUserId: string, token: s
 async function handleAbsencePostback(q: URLSearchParams, companyId: number, lineUserId: string, token: string, replyToken: string) {
   const a = q.get('a');
   const me = lineMember(companyId, lineUserId);
-  if (!me) { await replyLine(token, replyToken, 'まだシフトログと連携されていません。'); return; }
+  if (!me) { await replyLine(token, replyToken, unlinkedMsg(companyId)); return; }
 
   // 店長: 名前での登録を承認／断る
   if (a === 'reg_ok' || a === 'reg_ng' || a === 'reg_new') {
@@ -1014,7 +1018,7 @@ async function replyRequestLink(companyId: number, lineUserId: string, token: st
     WHERE uli.line_user_id = ?
   `).get(companyId, lineUserId) as any;
   if (!who) {
-    await replyLine(token, replyToken, 'まだシフトログと連携されていません。アプリの「LINEで通知を受け取る」に出る6桁のコードをこのトークに送ってください。');
+    await replyLine(token, replyToken, unlinkedMsg(companyId));
     return;
   }
   const open = db.prepare(`
