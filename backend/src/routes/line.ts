@@ -571,8 +571,7 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
           ON CONFLICT(user_id) DO UPDATE SET line_user_id = excluded.line_user_id
         `).run(row.user_id, lineUserId);
         db.prepare('DELETE FROM line_link_codes WHERE code = ?').run(m[0]);
-        await replyLine(s.channel_access_token, event.replyToken,
-          `${row.name}さん、連携できました🎉\n\nこれからはこのLINEで\n・シフトの公開\n・希望の受付\nをお知らせします。\n\nトーク画面の下のメニューから、いつでも「シフトを見る」「希望を出す」ができます。`);
+        await replyLine(s.channel_access_token, event.replyToken, linkedMsg(companyId, row.name));
       }
     } catch (err) {
       console.error('[line] webhook 処理失敗:', (err as Error).message);
@@ -607,6 +606,10 @@ function W(companyId: number): string {
   const n = (db.prepare('SELECT contact_name FROM line_settings WHERE company_id = ?').get(companyId) as any)?.contact_name;
   return n ? `担当の${n}` : '店長';
 }
+
+// 連携できたときの返事（招待リンク・承認のどちらでも同じ文面）
+const linkedMsg = (companyId: number, name: string) =>
+  `${name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。\n\nわからないことは、このトークにそのまま書いて送ってください。${W(companyId)}に届きます。`;
 
 // まだ連携していない人への案内（メニューを押したときなど）
 const unlinkedMsg = (companyId: number) =>
@@ -651,12 +654,16 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
 
   // 未連携: 名前で登録を申し込む（スタッフ一覧にある、まだ LINE とつながっていない人と照合）
   const cands = db.prepare(`
-    SELECT u.id, u.name FROM user_companies uc JOIN users u ON u.id = uc.user_id AND u.is_active = 1
+    SELECT u.id, u.name, u.furigana FROM user_companies uc JOIN users u ON u.id = uc.user_id AND u.is_active = 1
     LEFT JOIN user_line_ids uli ON uli.user_id = u.id
     WHERE uc.company_id = ? AND uli.user_id IS NULL
-  `).all(companyId) as { id: number; name: string }[];
-  const { name: reqName, kana } = splitNameKana(text);
-  const hit = cands.filter(c => norm(c.name) === norm(reqName));
+  `).all(companyId) as { id: number; name: string; furigana: string | null }[];
+  let { name: reqName, kana } = splitNameKana(text);
+  const toHira = (t: string) => t.replace(/[ァ-ヶ]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+  // ひらがな（カタカナ）だけで送られたら、登録済みのふりがなと照らし合わせる
+  const kanaOnly = KANA.test(text.trim()) ? toHira(text.trim()) : '';
+  let hit = cands.filter(c => norm(c.name) === norm(reqName) || (!!kanaOnly && !!c.furigana && norm(c.furigana) === norm(kanaOnly)));
+  if (kanaOnly && hit.length === 1) { kana = kanaOnly; reqName = hit[0].name; }
   if (hit.length > 1) {
     await replyLine(token, replyToken, `同じ名前の方が複数います。お手数ですが、${W(companyId)}に直接連絡してください。`);
     return;
@@ -855,8 +862,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     if (reg.furigana) db.prepare("UPDATE users SET furigana = COALESCE(NULLIF(furigana, ''), ?) WHERE id = ?").run(reg.furigana, reg.user_id);
     db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE company_id = ? AND user_id = ? AND status = 'pending'").run(companyId, reg.user_id);
     await replyLine(token, replyToken, a === 'reg_new' ? `${reg.name}さんをスタッフに登録して、承認しました。（時給などはスタッフ管理で入れてください）` : `${reg.name}さんを承認しました。`);
-    await sendLineMessage(token, reg.line_user_id,
-      `${reg.name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。\n\nわからないことは、このトークにそのまま書いて送ってください。${W(companyId)}に届きます。`);
+    await sendLineMessage(token, reg.line_user_id, linkedMsg(companyId, reg.name));
     return;
   }
 

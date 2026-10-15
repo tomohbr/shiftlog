@@ -87,7 +87,7 @@ export default function LineInvitePage({ token }: { token: string }) {
           友だち追加する
           {addedFriend && <CheckCircle2 className="w-5 h-5 text-gray-400 ml-auto" />}
         </p>
-        <p className="text-sm text-gray-600">「{info.bot_name || 'お店のLINE'}」を友だちに追加します。追加したら、この画面に戻ってきてください。</p>
+        <p className="text-sm text-gray-600">「{info.bot_name || 'お店のLINE'}」を友だちに追加します。追加したら、この画面に戻ってきてください。<br /><b>もう友だちになっている人は、②へ進んでください。</b></p>
         {info.add_friend_url && (
           <a
             href={info.add_friend_url}
