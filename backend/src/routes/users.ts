@@ -93,7 +93,7 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   const companyId = req.companyId!;
 
   const users = db.prepare(`
-    SELECT u.id, u.email, u.name, u.pin, u.role, u.is_active, u.created_at,
+    SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
            uc.employment_type,
            (SELECT MAX(tr.updated_at) FROM time_records tr WHERE tr.user_id = u.id AND tr.company_id = ?) as last_timecard_at,
@@ -126,7 +126,7 @@ router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   }
 
   const user = db.prepare(`
-    SELECT u.id, u.email, u.name, u.pin, u.role, u.is_active, u.created_at,
+    SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
            uc.employment_type
     FROM users u
@@ -201,7 +201,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   }
 
   const user = db.prepare(`
-    SELECT u.id, u.email, u.name, u.pin, u.role, u.is_active, u.created_at,
+    SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
            uc.employment_type
     FROM users u
@@ -230,7 +230,8 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     return;
   }
 
-  const { name, email, password, pin, color, hourly_wage, phone, role, employment_type } = req.body;
+  const { name, email, password, pin, color, hourly_wage, phone, role, employment_type, furigana } = req.body;
+  if (furigana !== undefined) db.prepare('UPDATE users SET furigana = ? WHERE id = ?').run(String(furigana || '').trim() || null, parseInt(req.params.id));
   const staffPin = hasProAccess(companyId) ? pin : undefined;
 
   // Update user table
@@ -262,7 +263,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   );
 
   const updated = db.prepare(`
-    SELECT u.id, u.email, u.name, u.pin, u.role, u.is_active, u.created_at,
+    SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
            uc.employment_type
     FROM users u

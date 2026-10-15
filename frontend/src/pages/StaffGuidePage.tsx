@@ -38,7 +38,7 @@ export default function StaffGuidePage() {
     '■ はじめに（1回だけ）',
     `① このリンクから「${bot}」を友だち追加`,
     ...(addFriend ? [addFriend] : []),
-    '② トークに【自分のフルネーム】を送る（例：山田 花子）',
+    '② トークに【名前とふりがな】を送る（例：山田 花子 やまだ はなこ）',
     `③ ${who}が確認すると「連携できました」と届きます`,
     '',
     '■ いつもの使い方（LINEのトーク画面の下のメニュー）',
@@ -76,10 +76,10 @@ export default function StaffGuidePage() {
           <section className="mt-6 rounded-2xl border-2 border-[#06C755] p-5 flex gap-5 items-center">
             <div className="flex-1">
               <p className="text-sm font-bold text-[#06C755]">はじめに（1回だけ）</p>
-              <p className="text-xl font-bold mt-1">友だち追加して、名前を送る</p>
+              <p className="text-xl font-bold mt-1">友だち追加して、名前とふりがなを送る</p>
               <ol className="mt-2 space-y-1 text-base">
                 <li><b>①</b> 右のQRを読んで「{bot}」を友だち追加</li>
-                <li><b>②</b> トークに<b>自分のフルネーム</b>を送る（例：山田 花子）</li>
+                <li><b>②</b> トークに<b>名前とふりがな</b>を送る（例：山田 花子 やまだ はなこ）</li>
                 <li><b>③</b> {who}が確認すると「連携できました」と届きます</li>
               </ol>
               <p className="text-sm text-gray-500 mt-2">名前入りの「LINE招待」カードをもらった人は、そのQRを読むだけでもOKです。</p>

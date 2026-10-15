@@ -430,7 +430,7 @@ export default function StaffPage() {
               <article key={u.id} className="p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: u.color }} />
-                  <p className="min-w-0 flex-1 text-sm font-medium text-gray-900 break-words">{u.name}</p>
+                  <p className="min-w-0 flex-1 text-sm font-medium text-gray-900 break-words">{u.name}{(u as any).furigana && <span className="block text-[11px] font-normal text-gray-400">{(u as any).furigana}</span>}</p>
                   {lineBadge(u)}
                   <span className={`shrink-0 whitespace-nowrap text-xs px-2 py-0.5 rounded-full ${(u as any).employment_type === 'full_time' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                     {(u as any).employment_type === 'full_time' ? '社員' : 'パート'}
@@ -476,7 +476,7 @@ export default function StaffPage() {
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                          <p className="text-sm font-medium text-gray-900">{u.name}{(u as any).furigana && <span className="ml-1.5 text-[11px] font-normal text-gray-400">{(u as any).furigana}</span>}</p>
                           {lineBadge(u)}
                           {isNeverLoggedIn(u) && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">

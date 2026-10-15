@@ -548,7 +548,7 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
         const known = lineMember(companyId, lineUserId);
         await replyLine(s.channel_access_token, event.replyToken, known
           ? `${known.name}さん、おかえりなさい。トーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。`
-          : `友だち追加ありがとうございます。\n\nシフトの連絡を受け取るために、このトークに【あなたのフルネーム】を送ってください。\n例：山田 花子\n\n${W(companyId)}が確認したら「連携できました」とお知らせします。\n（お店からもらった招待QRがある人は、そちらを読んでもOKです）`);
+          : `友だち追加ありがとうございます。\n\nシフトの連絡を受け取るために、このトークに【名前とふりがな】を送ってください。\n例：山田 花子 やまだ はなこ\n\n${W(companyId)}が確認したら「連携できました」とお知らせします。\n（お店からもらった招待QRがある人は、そちらを読んでもOKです）`);
       } else if (event.type === 'unfollow') {
         db.prepare('DELETE FROM user_line_ids WHERE line_user_id = ?').run(lineUserId);
       } else if (event.type === 'message' && event.message?.type === 'text' && event.replyToken) {
@@ -599,6 +599,7 @@ db.exec(`
 try {
   const regCols = (db.prepare('PRAGMA table_info(line_registrations)').all() as any[]).map(c => c.name);
   if (!regCols.includes('requested_name')) db.exec('ALTER TABLE line_registrations ADD COLUMN requested_name TEXT');
+  if (!regCols.includes('furigana')) db.exec('ALTER TABLE line_registrations ADD COLUMN furigana TEXT');
 } catch { /* 起動を止めない */ }
 
 // スタッフに見せる「誰に届くか」。LINE設定の担当者名があれば「担当の○○」、なければ「店長」
@@ -608,6 +609,18 @@ function W(companyId: number): string {
 }
 
 const norm = (t: string) => t.replace(/[\s　・.]/g, '').toLowerCase();
+
+// 「山田 花子 やまだ はなこ」「山田花子（ヤマダハナコ）」「山田 花子\nやまだはなこ」などを、名前とふりがなに分ける
+const KANA = /^[ぁ-ゖァ-ヺー・\s　]+$/;
+function splitNameKana(text: string): { name: string; kana: string } {
+  const t = text.replace(/[()（）「」【】]/g, ' ').trim();
+  const parts = t.split(/[\s　\n]+/).filter(Boolean);
+  // 後ろから、かなだけの語をふりがなとして集める
+  const kanaParts: string[] = [];
+  while (parts.length > 1 && KANA.test(parts[parts.length - 1])) kanaParts.unshift(parts.pop()!);
+  const toHira = (s: string) => s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  return { name: parts.join(' '), kana: toHira(kanaParts.join(' ')) };
+}
 
 async function lineDisplayName(token: string, lineUserId: string): Promise<string> {
   try { const r = await lineApi(token, `/v2/bot/profile/${lineUserId}`); return r.data?.displayName || ''; } catch { return ''; }
@@ -638,25 +651,31 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
     LEFT JOIN user_line_ids uli ON uli.user_id = u.id
     WHERE uc.company_id = ? AND uli.user_id IS NULL
   `).all(companyId) as { id: number; name: string }[];
-  const hit = cands.filter(c => norm(c.name) === norm(text));
+  const { name: reqName, kana } = splitNameKana(text);
+  const hit = cands.filter(c => norm(c.name) === norm(reqName));
   if (hit.length > 1) {
     await replyLine(token, replyToken, `同じ名前の方が複数います。お手数ですが、${W(companyId)}に直接連絡してください。`);
     return;
   }
+  // 名前だけでふりがながないときは、ふりがなも頼む（文章の質問はこの先で担当者に届ける）
+  if (!kana && reqName.length <= 12 && !/[0-9０-９?？!！。、,.@:/]/.test(text) && !KANA.test(reqName)) {
+    await replyLine(token, replyToken, '【名前】と【ふりがな】を一緒に送ってください。\n例：山田 花子 やまだ はなこ');
+    return;
+  }
   if (hit.length === 0) {
-    // 名前らしい短い文（2〜12文字・数字や記号なし）なら、まだ登録されていない人として担当者に確認する
-    const looksLikeName = text.length >= 2 && text.length <= 12 && !/[0-9０-９?？!！。、,.@:/]/.test(text);
+    // 名前らしい短い文（数字や記号なし）なら、まだ登録されていない人として担当者に確認する
+    const looksLikeName = reqName.length >= 2 && reqName.length <= 12 && text.length <= 40 && !/[0-9０-９?？!！。、,.@:/]/.test(text);
     const dn = await lineDisplayName(token, lineUserId);
     if (!looksLikeName) {
-      await replyLine(token, replyToken, `メッセージを${W(companyId)}に届けました。\n\nシフトの連絡を受け取るには、このトークに【フルネームだけ】を送ってください。\n例：山田 花子`);
+      await replyLine(token, replyToken, `メッセージを${W(companyId)}に届けました。\n\nシフトの連絡を受け取るには、このトークに【名前とふりがな】だけを送ってください。\n例：山田 花子 やまだ はなこ`);
       for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, `【未登録の方からのメッセージ】LINE名「${dn || '不明'}」\n${text.slice(0, 300)}`);
       return;
     }
-    const dup = db.prepare("SELECT id FROM line_registrations WHERE company_id = ? AND line_user_id = ? AND status = 'pending' AND requested_name = ?").get(companyId, lineUserId, text) as any;
-    if (dup) { await replyLine(token, replyToken, `${text}さんとして${W(companyId)}に確認をお願いしています。もう少しお待ちください。`); return; }
-    const reg = db.prepare('INSERT INTO line_registrations (company_id, line_user_id, user_id, display_name, requested_name) VALUES (?, ?, 0, ?, ?)').run(companyId, lineUserId, dn, text);
-    await replyLine(token, replyToken, `${text}さんとして登録してよいか、${W(companyId)}に確認をお願いしました。\n承認されたら、このトークでお知らせします。`);
-    const card = buttonsCard('LINEの登録の確認', 'LINEの登録の確認', [`LINE名「${dn || '不明'}」さんが`, `「${text}」さんとして登録したいそうです。`, 'まだスタッフに登録されていない名前です。本人で間違いなければ、この名前でスタッフに登録して承認します。'],
+    const dup = db.prepare("SELECT id FROM line_registrations WHERE company_id = ? AND line_user_id = ? AND status = 'pending' AND requested_name = ?").get(companyId, lineUserId, reqName) as any;
+    if (dup) { await replyLine(token, replyToken, `${reqName}さんとして${W(companyId)}に確認をお願いしています。もう少しお待ちください。`); return; }
+    const reg = db.prepare('INSERT INTO line_registrations (company_id, line_user_id, user_id, display_name, requested_name, furigana) VALUES (?, ?, 0, ?, ?, ?)').run(companyId, lineUserId, dn, reqName, kana || null);
+    await replyLine(token, replyToken, `${reqName}（${kana}）さんとして登録してよいか、${W(companyId)}に確認をお願いしました。\n承認されたら、このトークでお知らせします。`);
+    const card = buttonsCard('LINEの登録の確認', 'LINEの登録の確認', [`LINE名「${dn || '不明'}」さんが`, `「${reqName}（${kana}）」さんとして登録したいそうです。`, 'まだスタッフに登録されていない名前です。本人で間違いなければ、この名前でスタッフに登録して承認します。'],
       [{ label: 'この名前で登録して承認', data: `a=reg_new&r=${reg.lastInsertRowid}`, primary: true, color: '#06C755' }, { label: '断る', data: `a=reg_ng&r=${reg.lastInsertRowid}` }]);
     for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
     return;
@@ -665,9 +684,9 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
   const pending = db.prepare("SELECT id FROM line_registrations WHERE company_id = ? AND line_user_id = ? AND user_id = ? AND status = 'pending'").get(companyId, lineUserId, target.id) as any;
   if (pending) { await replyLine(token, replyToken, `${target.name}さんとして${W(companyId)}に確認をお願いしています。もう少しお待ちください。`); return; }
   const dn = await lineDisplayName(token, lineUserId);
-  const reg = db.prepare('INSERT INTO line_registrations (company_id, line_user_id, user_id, display_name) VALUES (?, ?, ?, ?)').run(companyId, lineUserId, target.id, dn);
+  const reg = db.prepare('INSERT INTO line_registrations (company_id, line_user_id, user_id, display_name, furigana) VALUES (?, ?, ?, ?, ?)').run(companyId, lineUserId, target.id, dn, kana || null);
   await replyLine(token, replyToken, `${target.name}さんとして登録してよいか、${W(companyId)}に確認をお願いしました。\n承認されたら、このトークでお知らせします。`);
-  const card = buttonsCard('LINEの登録の確認', 'LINEの登録の確認', [`LINE名「${dn || '不明'}」さんが`, `「${target.name}」さんとして登録したいそうです。`, '本人で間違いなければ承認してください。'],
+  const card = buttonsCard('LINEの登録の確認', 'LINEの登録の確認', [`LINE名「${dn || '不明'}」さんが`, `「${target.name}${kana ? `（${kana}）` : ''}」さんとして登録したいそうです。`, '本人で間違いなければ承認してください。'],
     [{ label: '承認する', data: `a=reg_ok&r=${reg.lastInsertRowid}`, primary: true, color: '#06C755' }, { label: '違う人なので断る', data: `a=reg_ng&r=${reg.lastInsertRowid}` }]);
   for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
 }
@@ -820,7 +839,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
       const already = db.prepare('SELECT 1 FROM user_line_ids WHERE line_user_id = ? AND user_id IN (SELECT user_id FROM user_companies WHERE company_id = ?)').get(reg.line_user_id, companyId);
       if (already) { await replyLine(token, replyToken, 'このLINEは、もう別のスタッフとつながっています。'); return; }
       if (!canAddStaff(companyId, 1)) { await replyLine(token, replyToken, 'スタッフ数がプランの上限に達しています。管理画面からプランを確認してください。'); return; }
-      const uid = Number(db.prepare("INSERT INTO users (name, role, is_active) VALUES (?, 'staff', 1)").run(reg.requested_name).lastInsertRowid);
+      const uid = Number(db.prepare("INSERT INTO users (name, furigana, role, is_active) VALUES (?, ?, 'staff', 1)").run(reg.requested_name, reg.furigana || null).lastInsertRowid);
       db.prepare("INSERT INTO user_companies (user_id, company_id, role, employment_type, color) VALUES (?, ?, 'staff', 'part_time', '#4A90E2')").run(uid, companyId);
       db.prepare('UPDATE line_registrations SET user_id = ? WHERE id = ?').run(uid, reg.id);
       reg.user_id = uid;
@@ -829,6 +848,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     if (taken) { await replyLine(token, replyToken, `${reg.name}さんは、もう別のLINEとつながっています。`); return; }
     db.prepare('INSERT INTO user_line_ids (user_id, line_user_id) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET line_user_id = excluded.line_user_id').run(reg.user_id, reg.line_user_id);
     db.prepare("UPDATE line_registrations SET status = 'approved' WHERE id = ?").run(reg.id);
+    if (reg.furigana) db.prepare("UPDATE users SET furigana = COALESCE(NULLIF(furigana, ''), ?) WHERE id = ?").run(reg.furigana, reg.user_id);
     db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE company_id = ? AND user_id = ? AND status = 'pending'").run(companyId, reg.user_id);
     await replyLine(token, replyToken, a === 'reg_new' ? `${reg.name}さんをスタッフに登録して、承認しました。（時給などはスタッフ管理で入れてください）` : `${reg.name}さんを承認しました。`);
     await sendLineMessage(token, reg.line_user_id,

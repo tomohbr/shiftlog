@@ -411,6 +411,8 @@ db.exec(`
 // ---- Migrations for existing DBs ----
 try {
   const userCols = db.prepare("PRAGMA table_info(users)").all().map((c: any) => c.name);
+  // ふりがな（LINE で名前と一緒に送ってもらう。スタッフ一覧に表示）
+  if (!userCols.includes('furigana')) db.exec('ALTER TABLE users ADD COLUMN furigana TEXT');
   if (!userCols.includes('pin')) {
     db.exec("ALTER TABLE users ADD COLUMN pin TEXT");
   }
