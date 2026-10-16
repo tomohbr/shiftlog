@@ -14,6 +14,9 @@ export const PART_LABEL: Record<Part, string> = { a: '昼', b: '夜', full: 'ど
 // 土日など昼夜に分かれる日に、1日通しで入れるか
 export const LONG_DAY = ['yes', 'half', 'depends'] as const;
 export const LONG_DAY_LABEL: Record<string, string> = { yes: '通しOK', half: '半日まで', depends: '日による' };
+// 一緒に働ける人を紹介できるか（人手が足りないときの声かけ先）
+export const REFERRAL = ['yes', 'ask', 'no'] as const;
+export const REFERRAL_LABEL: Record<string, string> = { yes: 'できる', ask: '聞いてみる', no: 'いない' };
 
 // 15時より前に始まる枠を「昼」、それ以外を「夜」とみなす
 const DAY_SLOT_BEFORE = 15 * 60;

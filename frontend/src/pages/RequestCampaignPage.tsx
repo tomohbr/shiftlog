@@ -391,6 +391,8 @@ export default function RequestCampaignPage() {
                           <dt className="text-gray-500">掛け持ち</dt>
                           <dd className="text-gray-900">{s.answer.other_job === 'yes' ? `あり${s.answer.other_job_note ? `（${s.answer.other_job_note}）` : ''}` : s.answer.other_job === 'none' ? 'なし' : '—'}</dd>
                           <dt className="text-gray-500">土日の通し</dt><dd className="text-gray-900">{s.answer.long_day_label || '—'}</dd>
+                          <dt className="text-gray-500">友だち紹介</dt>
+                          <dd className={s.answer.referral === 'yes' || s.answer.referral === 'ask' ? 'font-bold text-green-700' : 'text-gray-900'}>{s.answer.referral_label ? `${s.answer.referral_label}${s.answer.referral_note ? `（${s.answer.referral_note}）` : ''}` : '—'}</dd>
                           {s.answer.comment && <><dt className="text-gray-500">ひとこと</dt><dd className="text-gray-900 whitespace-pre-wrap">{s.answer.comment}</dd></>}
                         </dl>
                       )}

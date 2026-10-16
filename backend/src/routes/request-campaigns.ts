@@ -4,7 +4,7 @@ import { authenticateToken, requireCompany, AuthRequest } from '../middleware/au
 import { logAudit } from '../utils/audit';
 import { sendCampaignLinks, W } from './line';
 import {
-  CampaignDay, Part, PARTS, PART_LABEL, LONG_DAY, LONG_DAY_LABEL, DAYS_PER_WEEK, DAYS_PER_WEEK_LABEL, TRANSPORTS,
+  CampaignDay, Part, PARTS, PART_LABEL, LONG_DAY, LONG_DAY_LABEL, REFERRAL, REFERRAL_LABEL, DAYS_PER_WEEK, DAYS_PER_WEEK_LABEL, TRANSPORTS,
   campaignDays, daysLeft, isAccepting, parseVenues, partTimes,
 } from '../utils/requestCampaign';
 
@@ -91,6 +91,9 @@ function answerView(a: any, storeNames: Map<number, string>) {
     other_job: a.other_job || null,
     long_day: a.long_day || null,
     long_day_label: a.long_day ? LONG_DAY_LABEL[a.long_day] || null : null,
+    referral: a.referral || null,
+    referral_label: a.referral ? REFERRAL_LABEL[a.referral] || null : null,
+    referral_note: a.referral_note || '',
     other_job_note: a.other_job_note || '',
     comment: a.comment || '',
     submitted_at: a.submitted_at || null,
@@ -167,6 +170,7 @@ router.put('/:id/mine', authenticateToken, requireCompany, (req: AuthRequest, re
   const clip = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n) || null;
   const otherJob = a.other_job === 'yes' ? 'yes' : a.other_job === 'none' ? 'none' : null;
   const longDay = (LONG_DAY as readonly string[]).includes(a.long_day) ? a.long_day : null;
+  const referral = (REFERRAL as readonly string[]).includes(a.referral) ? a.referral : null;
 
   const days = campaignDays(companyId, c.start_date, c.end_date);
   const dayOf = new Map<string, CampaignDay>(days.map(d => [d.date, d]));
@@ -202,15 +206,15 @@ router.put('/:id/mine', authenticateToken, requireCompany, (req: AuthRequest, re
       upsert.run(companyId, userId, e.date, e.availability, t.start, t.end, e.part);
     }
     db.prepare(`
-      INSERT INTO request_campaign_answers (campaign_id, company_id, user_id, venues, days_per_week, ng_weekdays, transport, transport_note, other_job, other_job_note, long_day, comment, submitted_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT INTO request_campaign_answers (campaign_id, company_id, user_id, venues, days_per_week, ng_weekdays, transport, transport_note, other_job, other_job_note, long_day, referral, referral_note, comment, submitted_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(campaign_id, user_id) DO UPDATE SET
         venues = excluded.venues, days_per_week = excluded.days_per_week, ng_weekdays = excluded.ng_weekdays,
         transport = excluded.transport, transport_note = excluded.transport_note,
-        other_job = excluded.other_job, other_job_note = excluded.other_job_note, long_day = excluded.long_day, comment = excluded.comment,
+        other_job = excluded.other_job, other_job_note = excluded.other_job_note, long_day = excluded.long_day, referral = excluded.referral, referral_note = excluded.referral_note, comment = excluded.comment,
         submitted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
     `).run(c.id, companyId, userId, venues, dpw, ng, JSON.stringify(transport), clip(a.transport_note, 100),
-      otherJob, otherJob === 'yes' ? clip(a.other_job_note, 100) : null, longDay, clip(a.comment, 300));
+      otherJob, otherJob === 'yes' ? clip(a.other_job_note, 100) : null, longDay, referral, referral && referral !== 'no' ? clip(a.referral_note, 100) : null, clip(a.comment, 300));
   })();
 
   res.json({ message: '希望を提出しました', count: entries.length });

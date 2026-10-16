@@ -28,6 +28,9 @@ const PENS: { key: Pen; mark: string; label: string; color: string }[] = [
 const penOf = (a: CampaignAvailability) => PENS.find(p => p.key === a)!
 // full = 昼か夜のどちらか一方、all = 1日通し（昼も夜も）
 const PART_LABEL: Record<CampaignPart, string> = { a: '昼', b: '夜', full: 'どちらか', all: '通し' }
+const REFERRAL: { key: 'yes' | 'ask' | 'no'; label: string }[] = [
+  { key: 'yes', label: 'できる' }, { key: 'ask', label: '聞いてみる' }, { key: 'no', label: 'いない' },
+]
 const LONG_DAY: { key: 'yes' | 'half' | 'depends'; label: string }[] = [
   { key: 'yes', label: '入れる' }, { key: 'half', label: '半日まで' }, { key: 'depends', label: '日による' },
 ]
@@ -53,7 +56,7 @@ function partRange(day: CampaignDay, part: 'a' | 'b' | 'all') {
 
 const emptyAnswer: CampaignAnswerInput = {
   venues: [], days_per_week: null, ng_weekdays: [], transport: [], transport_note: '',
-  other_job: null, other_job_note: '', long_day: null, comment: '',
+  other_job: null, other_job_note: '', long_day: null, referral: null, referral_note: '', comment: '',
 }
 
 export default function CampaignAnswerPage() {
@@ -77,7 +80,7 @@ export default function CampaignAnswerPage() {
       const ans: CampaignAnswerInput = a ? {
         venues: a.venues_any ? 'any' : a.venue_ids,
         days_per_week: a.days_per_week, ng_weekdays: a.ng_weekdays, transport: a.transport,
-        transport_note: a.transport_note, other_job: a.other_job, other_job_note: a.other_job_note, long_day: a.long_day, comment: a.comment,
+        transport_note: a.transport_note, other_job: a.other_job, other_job_note: a.other_job_note, long_day: a.long_day, referral: a.referral, referral_note: a.referral_note, comment: a.comment,
       } : emptyAnswer
       setAnswer(ans)
       setEntries(r.data.entries)
@@ -352,7 +355,19 @@ export default function CampaignAnswerPage() {
         </div>
 
         <div>
-          <p className="text-sm font-bold text-gray-800 mb-1.5">⑦ ひとこと</p>
+          <p className="text-sm font-bold text-gray-800">⑦ 一緒に働ける友だちを紹介できますか？</p>
+          <p className="text-xs text-gray-500 mb-1.5">クリスマスマーケットの期間だけでも大丈夫です</p>
+          <div className="grid grid-cols-3 gap-2">
+            {REFERRAL.map(o => <Chip key={o.key} on={answer.referral === o.key} disabled={!open} onClick={() => setA('referral', answer.referral === o.key ? null : o.key)}>{o.label}</Chip>)}
+          </div>
+          {(answer.referral === 'yes' || answer.referral === 'ask') && (
+            <input value={answer.referral_note} onChange={e => setA('referral_note', e.target.value)} disabled={!open} maxLength={100}
+              placeholder="何人くらい？（例：大学の友だち2人・土日だけ）" className="mt-2 w-full border border-gray-300 rounded-lg px-3 py-2 text-base disabled:bg-gray-50" />
+          )}
+        </div>
+
+        <div>
+          <p className="text-sm font-bold text-gray-800 mb-1.5">⑧ ひとこと</p>
           <textarea value={answer.comment} onChange={e => setA('comment', e.target.value)} disabled={!open} maxLength={300} rows={2}
             placeholder="例：12/24は早めに上がりたいです" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base disabled:bg-gray-50" />
         </div>

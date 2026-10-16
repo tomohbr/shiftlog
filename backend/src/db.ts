@@ -679,6 +679,8 @@ try {
   if (!srCols.includes('part')) db.exec('ALTER TABLE shift_requests ADD COLUMN part TEXT');
   const rcaCols = db.prepare('PRAGMA table_info(request_campaign_answers)').all().map((c: any) => c.name);
   if (!rcaCols.includes('long_day')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN long_day TEXT');
+  if (!rcaCols.includes('referral')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN referral TEXT');
+  if (!rcaCols.includes('referral_note')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN referral_note TEXT');
 } catch (e) { console.error('[migration] 希望の募集テーブルの作成に失敗', e); }
 
 export const SUPER_ADMIN_EMAIL = 'shibahara.724@gmail.com';
