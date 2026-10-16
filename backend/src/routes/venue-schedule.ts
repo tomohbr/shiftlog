@@ -140,10 +140,15 @@ function loadRequests(companyId: number, start: string, end: string): Map<string
 
 interface LiveShift { id: number; user_id: number; date: string; store_id: number | null; start: number; end: number; break_minutes: number }
 
+// 管理者（店長など、いつも会場にいる「固定」の人）のシフトは枠の人数に数えない。
+// 枠の必要人数は「スタッフ（バイト）が何人ほしいか」で決める
 function loadShifts(companyId: number, start: string, end: string): LiveShift[] {
   return (db.prepare(`
-    SELECT id, user_id, date, store_id, start_time, end_time, break_minutes FROM shifts
-    WHERE company_id = ? AND date >= ? AND date <= ?
+    SELECT s.id, s.user_id, s.date, s.store_id, s.start_time, s.end_time, s.break_minutes FROM shifts s
+    JOIN users u ON u.id = s.user_id
+    JOIN user_companies uc ON uc.user_id = s.user_id AND uc.company_id = s.company_id
+    WHERE s.company_id = ? AND s.date >= ? AND s.date <= ?
+      AND uc.role = 'staff' AND u.role NOT IN ('admin', 'super_admin')
   `).all(companyId, start, end) as any[]).map(s => ({
     id: s.id, user_id: s.user_id, date: s.date, store_id: s.store_id ?? null,
     start: toMinutes(s.start_time), end: toMinutes(s.end_time), break_minutes: s.break_minutes || 0,
