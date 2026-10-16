@@ -10,7 +10,7 @@ import { storeColorMap, storeShortNames } from '../lib/storeColors'
 // 期間の募集（マーケットなど）にスタッフが答える画面。LINE の本人専用リンクから開く前提でスマホ向け。
 // 上から「何の募集か・いつまでか」→「最初の質問（必須は会場と日数だけ）」→「カレンダーで ◎○×」→ 画面下の提出ボタン。
 // カレンダーは希望を出す画面（StaffRequestView）と同じペン方式・月曜はじまり。候補日（どこかの会場が開く日）だけ押せる。
-// 昼と夜に分かれる長い日は、◎○ を付けると「昼／夜／通し」を選ぶ欄が出る（何も選ばなければ通し）。
+// 昼と夜に分かれる長い日は、◎○ を付けると「昼／夜／どちらか／1日通し」を選ぶ欄が出る（何も選ばなければ どちらか）。
 
 type Pen = CampaignAvailability | 'clear'
 type Entry = { availability: CampaignAvailability; part: CampaignPart | null }
@@ -26,7 +26,11 @@ const PENS: { key: Pen; mark: string; label: string; color: string }[] = [
   { key: 'clear', mark: '－', label: '消す', color: '#868E96' },
 ]
 const penOf = (a: CampaignAvailability) => PENS.find(p => p.key === a)!
-const PART_LABEL: Record<CampaignPart, string> = { a: '昼', b: '夜', full: '通し' }
+// full = 昼か夜のどちらか一方、all = 1日通し（昼も夜も）
+const PART_LABEL: Record<CampaignPart, string> = { a: '昼', b: '夜', full: 'どちらか', all: '通し' }
+const LONG_DAY: { key: 'yes' | 'half' | 'depends'; label: string }[] = [
+  { key: 'yes', label: '入れる' }, { key: 'half', label: '半日まで' }, { key: 'depends', label: '日による' },
+]
 const DPW: { key: '1-2' | '3-4' | '5+'; label: string }[] = [
   { key: '1-2', label: '1〜2日' }, { key: '3-4', label: '3〜4日' }, { key: '5+', label: '5日以上' },
 ]
@@ -39,8 +43,8 @@ const hm = (t: string) => { const [h, m] = t.split(':'); return m === '00' ? `${
 const pad = (n: number) => String(n).padStart(2, '0')
 
 // 長い日の「昼」「夜」が何時から何時か（その日に開く会場の枠から）
-function partRange(day: CampaignDay, part: 'a' | 'b') {
-  const slots = day.venues.flatMap(v => v.slots).filter(s => s.part === part)
+function partRange(day: CampaignDay, part: 'a' | 'b' | 'all') {
+  const slots = day.venues.flatMap(v => v.slots).filter(s => part === 'all' || s.part === part)
   if (slots.length === 0) return ''
   const s = slots.map(x => x.start_time).sort()[0]
   const e = slots.map(x => x.end_time).sort().reverse()[0]
@@ -49,7 +53,7 @@ function partRange(day: CampaignDay, part: 'a' | 'b') {
 
 const emptyAnswer: CampaignAnswerInput = {
   venues: [], days_per_week: null, ng_weekdays: [], transport: [], transport_note: '',
-  other_job: null, other_job_note: '', comment: '',
+  other_job: null, other_job_note: '', long_day: null, comment: '',
 }
 
 export default function CampaignAnswerPage() {
@@ -73,7 +77,7 @@ export default function CampaignAnswerPage() {
       const ans: CampaignAnswerInput = a ? {
         venues: a.venues_any ? 'any' : a.venue_ids,
         days_per_week: a.days_per_week, ng_weekdays: a.ng_weekdays, transport: a.transport,
-        transport_note: a.transport_note, other_job: a.other_job, other_job_note: a.other_job_note, comment: a.comment,
+        transport_note: a.transport_note, other_job: a.other_job, other_job_note: a.other_job_note, long_day: a.long_day, comment: a.comment,
       } : emptyAnswer
       setAnswer(ans)
       setEntries(r.data.entries)
@@ -131,8 +135,23 @@ export default function CampaignAnswerPage() {
     }
     const cur = entries[date]
     const longOk = day.long && pen !== 'unavailable'
-    setEntries(prev => ({ ...prev, [date]: { availability: pen, part: longOk ? (cur && cur.availability !== 'unavailable' && cur.part ? cur.part : 'full') : null } }))
+    setEntries(prev => ({ ...prev, [date]: { availability: pen, part: longOk ? (cur && cur.availability !== 'unavailable' && cur.part ? cur.part : defaultPart) : null } }))
     setFocusDay(longOk ? date : null)
+  }
+  // 「1日通しでも入れる」なら、昼夜の日に印をつけたときの最初の選択を「通し」にする
+  const defaultPart: CampaignPart = answer.long_day === 'yes' ? 'all' : 'full'
+  const pickLongDay = (k: 'yes' | 'half' | 'depends') => {
+    const next = answer.long_day === k ? null : k
+    setA('long_day', next)
+    // すでに印をつけた昼夜の日も合わせる（通しOK → どちらか を 通し に／半日まで → 通し を どちらか に）
+    setEntries(prev => {
+      const n = { ...prev }
+      for (const [d, e] of Object.entries(n)) {
+        if (next === 'yes' && e.part === 'full') n[d] = { ...e, part: 'all' }
+        if (next === 'half' && e.part === 'all') n[d] = { ...e, part: 'full' }
+      }
+      return n
+    })
   }
   const setPart = (date: string, part: CampaignPart) => {
     setEntries(prev => (prev[date] ? { ...prev, [date]: { ...prev[date], part } } : prev))
@@ -140,7 +159,7 @@ export default function CampaignAnswerPage() {
   const fillRest = (a: CampaignAvailability) => {
     setEntries(prev => {
       const n = { ...prev }
-      for (const d of days) if (!n[d.date]) n[d.date] = { availability: a, part: d.long && a !== 'unavailable' ? 'full' : null }
+      for (const d of days) if (!n[d.date]) n[d.date] = { availability: a, part: d.long && a !== 'unavailable' ? defaultPart : null }
       return n
     })
     setFocusDay(null)
@@ -317,7 +336,15 @@ export default function CampaignAnswerPage() {
         </div>
 
         <div>
-          <p className="text-sm font-bold text-gray-800 mb-1.5">⑥ ひとこと</p>
+          <p className="text-sm font-bold text-gray-800">⑥ 土日・祝日に、1日通しでも入れますか？</p>
+          <p className="text-xs text-gray-500 mb-1.5">昼と夜に分かれる日（開店〜閉店）のこと。日ごとの時間は下のカレンダーで選べます</p>
+          <div className="grid grid-cols-3 gap-2">
+            {LONG_DAY.map(o => <Chip key={o.key} on={answer.long_day === o.key} disabled={!open} onClick={() => pickLongDay(o.key)}>{o.label}</Chip>)}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-bold text-gray-800 mb-1.5">⑦ ひとこと</p>
           <textarea value={answer.comment} onChange={e => setA('comment', e.target.value)} disabled={!open} maxLength={300} rows={2}
             placeholder="例：12/24は早めに上がりたいです" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base disabled:bg-gray-50" />
         </div>
@@ -336,7 +363,7 @@ export default function CampaignAnswerPage() {
               ))}
             </div>
           )}
-          <p className="text-xs text-gray-500 mt-1"><span className="inline-block px-1 rounded bg-amber-100 text-amber-800 font-bold text-[10px] mr-1">昼夜</span>の日は、昼だけ・夜だけ・通しを選べます</p>
+          <p className="text-xs text-gray-500 mt-1"><span className="inline-block px-1 rounded bg-amber-100 text-amber-800 font-bold text-[10px] mr-1">昼夜</span>の日は、昼だけ・夜だけ・どちらか・1日通し を選べます</p>
         </div>
 
         {open && (
@@ -426,7 +453,7 @@ export default function CampaignAnswerPage() {
             <p className="px-4 pt-3 pb-1 text-sm font-bold text-gray-800">昼夜の日の時間（{longMarked.length}日）</p>
             <div className="divide-y divide-gray-100">
               {longMarked.map(d => (
-                <PartRow key={d.date} day={d} entry={entries[d.date]} disabled={!open} onPick={part => setPart(d.date, part)} />
+                <PartRow key={d.date} day={d} entry={entries[d.date]} disabled={!open} allowAll={answer.long_day !== 'half'} onPick={part => setPart(d.date, part)} />
               ))}
             </div>
           </div>
@@ -442,7 +469,7 @@ export default function CampaignAnswerPage() {
                 <p className="text-sm font-bold text-gray-800">{md(focus.date)} はどの時間？</p>
                 <button onClick={() => setFocusDay(null)} className="ml-auto p-1 text-gray-400" aria-label="閉じる"><X className="w-4 h-4" /></button>
               </div>
-              <PartButtons day={focus} value={focusEntry.part || 'full'} onPick={part => setPart(focus.date, part)} />
+              <PartButtons day={focus} value={focusEntry.part || 'full'} allowAll={answer.long_day !== 'half'} onPick={part => setPart(focus.date, part)} />
             </div>
           )}
           <div className="px-4 py-3">
@@ -469,14 +496,15 @@ function Chip({ on, onClick, disabled, color = '#1C7ED6', children }: { on: bool
   )
 }
 
-function PartButtons({ day, value, onPick, disabled }: { day: CampaignDay; value: CampaignPart; onPick: (p: CampaignPart) => void; disabled?: boolean }) {
+function PartButtons({ day, value, onPick, disabled, allowAll }: { day: CampaignDay; value: CampaignPart; onPick: (p: CampaignPart) => void; disabled?: boolean; allowAll: boolean }) {
   const opts: { key: CampaignPart; label: string; sub: string; icon?: typeof Sun }[] = [
     { key: 'a', label: '昼だけ', sub: partRange(day, 'a'), icon: Sun },
     { key: 'b', label: '夜だけ', sub: partRange(day, 'b'), icon: Moon },
-    { key: 'full', label: '通し', sub: 'どちらでも' },
+    { key: 'full', label: 'どちらか', sub: '昼か夜の片方' },
+    ...(allowAll ? [{ key: 'all' as CampaignPart, label: '1日通し', sub: partRange(day, 'all') }] : []),
   ]
   return (
-    <div className="grid grid-cols-3 gap-1.5 py-2">
+    <div className={`grid ${opts.length === 4 ? 'grid-cols-4' : 'grid-cols-3'} gap-1.5 py-2`}>
       {opts.map(o => {
         const on = value === o.key
         const Icon = o.icon
@@ -484,7 +512,7 @@ function PartButtons({ day, value, onPick, disabled }: { day: CampaignDay; value
           <button key={o.key} onClick={() => onPick(o.key)} disabled={disabled}
             className={`rounded-xl border-2 py-1.5 leading-tight ${on ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-gray-200 text-gray-800'}`}>
             <span className="text-sm font-bold flex items-center justify-center gap-1">{Icon && <Icon className="w-3.5 h-3.5" />}{o.label}</span>
-            <span className={`block text-[11px] ${on ? 'text-white' : 'text-gray-500'}`}>{o.sub || '—'}</span>
+            <span className={`block text-[10px] tracking-tighter ${on ? 'text-white' : 'text-gray-500'}`}>{o.sub || '—'}</span>
           </button>
         )
       })}
@@ -492,18 +520,18 @@ function PartButtons({ day, value, onPick, disabled }: { day: CampaignDay; value
   )
 }
 
-// 見直し用の1行（日付と 昼／夜／通し）
-function PartRow({ day, entry, onPick, disabled }: { day: CampaignDay; entry: Entry; onPick: (p: CampaignPart) => void; disabled: boolean }) {
+// 見直し用の1行（日付と 昼／夜／どちらか／通し）
+function PartRow({ day, entry, onPick, disabled, allowAll }: { day: CampaignDay; entry: Entry; onPick: (p: CampaignPart) => void; disabled: boolean; allowAll: boolean }) {
   const p = penOf(entry.availability)
   const value = entry.part || 'full'
   return (
     <div className="px-4 py-1.5 flex items-center gap-2">
       <p className="text-sm font-semibold w-[6.5rem] flex-shrink-0 whitespace-nowrap" style={{ color: p.color }}>{p.mark} {md(day.date)}</p>
-      <div className="flex-1 grid grid-cols-3 gap-1">
-        {(['a', 'b', 'full'] as CampaignPart[]).map(k => (
-          <button key={k} onClick={() => onPick(k)} disabled={disabled} title={k === 'full' ? '' : partRange(day, k)}
+      <div className={`flex-1 grid ${allowAll ? 'grid-cols-4' : 'grid-cols-3'} gap-1`}>
+        {(allowAll ? ['a', 'b', 'full', 'all'] : ['a', 'b', 'full'] as CampaignPart[]).map(k => (
+          <button key={k} onClick={() => onPick(k as CampaignPart)} disabled={disabled} title={k === 'full' ? '昼か夜の片方' : partRange(day, k as 'a' | 'b' | 'all')}
             className={`rounded-lg border-2 py-1 text-sm font-bold ${value === k ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-gray-200 text-gray-700'}`}>
-            {PART_LABEL[k]}
+            {PART_LABEL[k as CampaignPart]}
           </button>
         ))}
       </div>

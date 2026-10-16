@@ -133,7 +133,7 @@ function loadRequests(companyId: number, start: string, end: string): Map<string
     m.set(`${r.user_id}:${r.date}`, {
       availability: (['preferred', 'available', 'unavailable'].includes(r.availability) ? r.availability : 'available') as Availability,
       start: hasTime ? s : null, end: hasTime ? e : null,
-      part: r.part === 'a' || r.part === 'b' || r.part === 'full' ? r.part : null,
+      part: r.part === 'a' || r.part === 'b' || r.part === 'full' || r.part === 'all' ? r.part : null,
       raw_start: hasTime ? r.preferred_start : null, raw_end: hasTime ? r.preferred_end : null,
     });
   }

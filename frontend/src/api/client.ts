@@ -650,7 +650,7 @@ export const shiftRequestsApi = {
 
 // 期間をまたぐ希望の募集（マーケットなど）
 export type CampaignStatus = 'draft' | 'open' | 'closed'
-export type CampaignPart = 'a' | 'b' | 'full'
+export type CampaignPart = 'a' | 'b' | 'full' | 'all'
 export type CampaignAvailability = 'preferred' | 'available' | 'unavailable'
 export interface Campaign {
   id: number
@@ -682,6 +682,7 @@ export interface CampaignAnswerInput {
   transport_note: string
   other_job: 'none' | 'yes' | null
   other_job_note: string
+  long_day: 'yes' | 'half' | 'depends' | null
   comment: string
 }
 export interface CampaignAnswerView {
@@ -696,6 +697,8 @@ export interface CampaignAnswerView {
   transport_note: string
   other_job: 'none' | 'yes' | null
   other_job_note: string
+  long_day: 'yes' | 'half' | 'depends' | null
+  long_day_label: string | null
   comment: string
   submitted_at: string | null
 }

@@ -360,7 +360,7 @@ export default function RequestCampaignPage() {
                       )
                     })}
                   </div>
-                  <p className="text-xs text-gray-500">「入れる人」は、その日に ◎○ を付けて、入りたい会場にその会場を選んだ（または「どこでも」）人です。昼の枠は昼・通しの人、夜の枠は夜・通しの人で数えます。同じ人が2つの会場に数えられることがあります。</p>
+                  <p className="text-xs text-gray-500">「入れる人」は、その日に ◎○ を付けて、入りたい会場にその会場を選んだ（または「どこでも」）人です。昼の枠は昼・どちらか・通しの人、夜の枠は夜・どちらか・通しの人で数えます（「どちらか」の人は1日に片方しか入れないので、足りない数はそれも考えて出します）。同じ人が2つの会場に数えられることがあります。</p>
                 </>
               )}
 
@@ -390,6 +390,7 @@ export default function RequestCampaignPage() {
                           <dd className="text-gray-900">{[...s.answer.transport, s.answer.transport_note].filter(Boolean).join('・') || '—'}</dd>
                           <dt className="text-gray-500">掛け持ち</dt>
                           <dd className="text-gray-900">{s.answer.other_job === 'yes' ? `あり${s.answer.other_job_note ? `（${s.answer.other_job_note}）` : ''}` : s.answer.other_job === 'none' ? 'なし' : '—'}</dd>
+                          <dt className="text-gray-500">土日の通し</dt><dd className="text-gray-900">{s.answer.long_day_label || '—'}</dd>
                           {s.answer.comment && <><dt className="text-gray-500">ひとこと</dt><dd className="text-gray-900 whitespace-pre-wrap">{s.answer.comment}</dd></>}
                         </dl>
                       )}

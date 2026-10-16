@@ -7,9 +7,13 @@ import { SlotRule, expandRules, toHHMM, weekdayOf } from './venueSchedule';
 //   - 長い日 = その日に昼と夜の2つ以上の枠がある会場がある日、または15時より前に始まる枠がある日
 //     → スタッフは ◎○ を付けたときに「昼／夜／通し」を選べる
 
-export type Part = 'a' | 'b' | 'full';
-export const PARTS: Part[] = ['a', 'b', 'full'];
-export const PART_LABEL: Record<Part, string> = { a: '昼', b: '夜', full: '通し' };
+// full = 昼でも夜でもどちらか一方（どちらでも）、all = 1日通し（昼も夜も両方入る）
+export type Part = 'a' | 'b' | 'full' | 'all';
+export const PARTS: Part[] = ['a', 'b', 'full', 'all'];
+export const PART_LABEL: Record<Part, string> = { a: '昼', b: '夜', full: 'どちらでも', all: '1日通し' };
+// 土日など昼夜に分かれる日に、1日通しで入れるか
+export const LONG_DAY = ['yes', 'half', 'depends'] as const;
+export const LONG_DAY_LABEL: Record<string, string> = { yes: '通しOK', half: '半日まで', depends: '日による' };
 
 // 15時より前に始まる枠を「昼」、それ以外を「夜」とみなす
 const DAY_SLOT_BEFORE = 15 * 60;
@@ -126,7 +130,7 @@ export function campaignPreferences(companyId: number, start: string, end: strin
 
 /** 長い日の昼夜通しを preferred_start/end に直す（通し・短い日は時間なし） */
 export function partTimes(day: CampaignDay | undefined, part: Part | null): { start: string | null; end: string | null } {
-  if (!day || !day.long || !part || part === 'full') return { start: null, end: null };
+  if (!day || !day.long || !part || part === 'full' || part === 'all') return { start: null, end: null };
   return day.times[part];
 }
 

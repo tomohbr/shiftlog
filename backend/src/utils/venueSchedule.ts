@@ -30,7 +30,7 @@ export interface RequestInfo {
   start: number | null;      // 希望の時間帯（なければ null = 終日OK）
   end: number | null;
   // 期間の募集で長い日に選んだ「昼 a / 夜 b / 通し full」。昼だけの人は夜の枠に、夜だけの人は昼の枠に入れない
-  part?: 'a' | 'b' | 'full' | null;
+  part?: 'a' | 'b' | 'full' | 'all' | null;
 }
 
 /** 15時より前に始まる枠を「昼」、それ以外を「夜」とみなす（期間の募集の昼／夜と同じ区切り） */
@@ -243,8 +243,11 @@ export function plan(input: PlanInput): PlanResult {
       const j = judge(s, requests.get(keyOf(id, s.date)), busy.get(keyOf(id, s.date)) || [], includeUnsubmitted);
       if (!j.ok) continue;
       if (j.partial && !allowPartial) continue;
-      // 同じ日にすでに別の枠に入っているなら少し下げる（1日に2回の細切れ勤務を避ける）
-      const sameDay = days.get(id)!.has(s.date) ? 0.3 : 0;
+      // 同じ日の2枠目（昼＋夜）は、本人が「1日通し」と答えた日だけ。そのときはむしろ優先する
+      const part = requests.get(keyOf(id, s.date))?.part;
+      const already = days.get(id)!.has(s.date);
+      if (already && (part === 'a' || part === 'b' || part === 'full')) continue;
+      const sameDay = already ? (part === 'all' ? -0.3 : 0.3) : 0;
       out.push({ id, score: PREF_SCORE[j.fit] * 0.5 - load(id) - sameDay - (j.partial ? 0.5 : 0) });
     }
     // 同点は日付と人で決まる順（毎回同じ人が先に来ないように）
@@ -281,6 +284,7 @@ export function plan(input: PlanInput): PlanResult {
         for (const to of [...staffIds].sort((a, b) => minutes.get(a)! - minutes.get(b)!)) {
           if (to === from || isIn(s, to)) continue;
           if (!venueOk(s, to) || overCap(s, to) > 0) continue;
+          if (days.get(to)!.has(s.date) && requests.get(keyOf(to, s.date))?.part !== 'all') continue;
           const gap = minutes.get(from)! - minutes.get(to)!;
           if (gap <= len(s)) break; // ここから先は差が縮まらない
           const j = judge(s, requests.get(keyOf(to, s.date)), busy.get(keyOf(to, s.date)) || [], includeUnsubmitted);

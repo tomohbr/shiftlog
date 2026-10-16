@@ -4,7 +4,7 @@ import { authenticateToken, requireCompany, AuthRequest } from '../middleware/au
 import { logAudit } from '../utils/audit';
 import { sendCampaignLinks, W } from './line';
 import {
-  CampaignDay, Part, PARTS, PART_LABEL, DAYS_PER_WEEK, DAYS_PER_WEEK_LABEL, TRANSPORTS,
+  CampaignDay, Part, PARTS, PART_LABEL, LONG_DAY, LONG_DAY_LABEL, DAYS_PER_WEEK, DAYS_PER_WEEK_LABEL, TRANSPORTS,
   campaignDays, daysLeft, isAccepting, parseVenues, partTimes,
 } from '../utils/requestCampaign';
 
@@ -89,6 +89,8 @@ function answerView(a: any, storeNames: Map<number, string>) {
     transport,
     transport_note: a.transport_note || '',
     other_job: a.other_job || null,
+    long_day: a.long_day || null,
+    long_day_label: a.long_day ? LONG_DAY_LABEL[a.long_day] || null : null,
     other_job_note: a.other_job_note || '',
     comment: a.comment || '',
     submitted_at: a.submitted_at || null,
@@ -164,6 +166,7 @@ router.put('/:id/mine', authenticateToken, requireCompany, (req: AuthRequest, re
   const transport = (Array.isArray(a.transport) ? a.transport : []).map(String).filter((t: string) => TRANSPORTS.includes(t));
   const clip = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n) || null;
   const otherJob = a.other_job === 'yes' ? 'yes' : a.other_job === 'none' ? 'none' : null;
+  const longDay = (LONG_DAY as readonly string[]).includes(a.long_day) ? a.long_day : null;
 
   const days = campaignDays(companyId, c.start_date, c.end_date);
   const dayOf = new Map<string, CampaignDay>(days.map(d => [d.date, d]));
@@ -175,7 +178,8 @@ router.put('/:id/mine', authenticateToken, requireCompany, (req: AuthRequest, re
     const availability = ['preferred', 'available', 'unavailable'].includes(e.availability) ? e.availability : null;
     if (!availability) continue;
     const day = dayOf.get(date)!;
-    const part: Part | null = availability !== 'unavailable' && day.long ? (PARTS.includes(e.part) ? e.part : 'full') : null;
+    let part: Part | null = availability !== 'unavailable' && day.long ? (PARTS.includes(e.part) ? e.part : 'full') : null;
+    if (part === 'all' && longDay === 'half') part = 'full';
     entries.push({ date, availability, part });
   }
 
@@ -198,15 +202,15 @@ router.put('/:id/mine', authenticateToken, requireCompany, (req: AuthRequest, re
       upsert.run(companyId, userId, e.date, e.availability, t.start, t.end, e.part);
     }
     db.prepare(`
-      INSERT INTO request_campaign_answers (campaign_id, company_id, user_id, venues, days_per_week, ng_weekdays, transport, transport_note, other_job, other_job_note, comment, submitted_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT INTO request_campaign_answers (campaign_id, company_id, user_id, venues, days_per_week, ng_weekdays, transport, transport_note, other_job, other_job_note, long_day, comment, submitted_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(campaign_id, user_id) DO UPDATE SET
         venues = excluded.venues, days_per_week = excluded.days_per_week, ng_weekdays = excluded.ng_weekdays,
         transport = excluded.transport, transport_note = excluded.transport_note,
-        other_job = excluded.other_job, other_job_note = excluded.other_job_note, comment = excluded.comment,
+        other_job = excluded.other_job, other_job_note = excluded.other_job_note, long_day = excluded.long_day, comment = excluded.comment,
         submitted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
     `).run(c.id, companyId, userId, venues, dpw, ng, JSON.stringify(transport), clip(a.transport_note, 100),
-      otherJob, otherJob === 'yes' ? clip(a.other_job_note, 100) : null, clip(a.comment, 300));
+      otherJob, otherJob === 'yes' ? clip(a.other_job_note, 100) : null, longDay, clip(a.comment, 300));
   })();
 
   res.json({ message: '希望を提出しました', count: entries.length });
@@ -348,16 +352,20 @@ router.get('/:id/summary', authenticateToken, requireCompany, (req: AuthRequest,
         if (vs && v.store_id != null && !vs.has(v.store_id)) return [];
         return [{ user_id: s.id, name: nameOf.get(s.id)!, availability: r.availability, part: r.part, part_label: r.part ? PART_LABEL[r.part] : null }];
       }).sort((a, b) => (a.availability === b.availability ? 0 : a.availability === 'preferred' ? -1 : 1));
-      // 枠ごとに足りるか（昼の枠は 昼・通し・指定なし の人、夜の枠は 夜・通し・指定なし の人で数える）
+      // 枠ごとに足りるか（昼の枠は 昼・どちらでも・1日通し・指定なし の人、夜も同じ）
       const slots = v.slots.map(s => {
-        const can = people.filter(p => !p.part || p.part === 'full' || p.part === s.part).length;
+        const can = people.filter(p => !p.part || p.part === 'full' || p.part === 'all' || p.part === s.part).length;
         return { ...s, candidates: can, short: Math.max(0, s.needed - can) };
       });
+      // 「どちらでも」の人は昼か夜の片方にしか入れないので、昼夜ある日は1日で埋められる回数でも確かめる
+      const longVenue = v.slots.some(s => s.part === 'a') && v.slots.some(s => s.part === 'b');
+      const capacity = people.reduce((a, p) => a + (longVenue && p.part === 'all' ? 2 : 1), 0);
+      const short = Math.max(slots.reduce((a, s) => a + s.short, 0), longVenue ? v.slots.reduce((a, s) => a + s.needed, 0) - capacity : 0);
       return {
         store_id: v.store_id, needed: v.needed, slots, people,
         preferred: people.filter(p => p.availability === 'preferred').length,
         available: people.filter(p => p.availability === 'available').length,
-        short: slots.reduce((a, s) => a + s.short, 0),
+        short,
       };
     });
     return { date: d.date, weekday: d.weekday, long: d.long, venues, short: venues.some(v => v.short > 0) };
