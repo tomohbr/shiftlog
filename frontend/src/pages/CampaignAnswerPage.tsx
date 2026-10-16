@@ -121,6 +121,8 @@ export default function CampaignAnswerPage() {
   const count = (a: CampaignAvailability) => days.filter(d => entries[d.date]?.availability === a).length
   const left = days.length - filled
   const hasStores = data.stores.length > 0
+  // 期間中に開く日がある会場（光の森のように日程が決まっていない会場は、会場の希望だけ聞く）
+  const scheduled = new Set(days.flatMap(d => d.venues.map(v => v.store_id)))
 
   const setA = <K extends keyof CampaignAnswerInput>(k: K, v: CampaignAnswerInput[K]) => setAnswer(prev => ({ ...prev, [k]: v }))
 
@@ -283,11 +285,17 @@ export default function CampaignAnswerPage() {
                     className={`px-3 py-2 rounded-xl border-2 text-sm font-bold flex items-center gap-1.5 ${on ? 'text-white' : 'bg-white text-gray-800'}`}
                     style={on ? { backgroundColor: col.solid, borderColor: col.solid } : { borderColor: col.solid + '55' }}>
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: on ? '#fff' : col.solid }} />{s.name}
+                    {!scheduled.has(s.id) && <span className={`text-[11px] font-semibold ${on ? 'text-white/90' : 'text-gray-500'}`}>（日程はこれから）</span>}
                   </button>
                 )
               })}
               <Chip on={answer.venues === 'any'} color="#495057" disabled={!open} onClick={() => toggleVenue('any')}>どこでも</Chip>
             </div>
+            {answer.venues !== 'any' && answer.venues.some(id => !scheduled.has(id)) && (
+              <p className="text-xs text-gray-600 mt-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5">
+                {data.stores.filter(x => answer.venues !== 'any' && answer.venues.includes(x.id) && !scheduled.has(x.id)).map(x => x.name).join('・')}は日程が決まったら、あらためて聞きます。
+              </p>
+            )}
           </div>
         )}
 
@@ -356,7 +364,7 @@ export default function CampaignAnswerPage() {
           <h2 className="text-lg font-black text-gray-900">2. 入れる日に印をつける</h2>
           {hasStores && (
             <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-              {data.stores.map(s => (
+              {data.stores.filter(s => scheduled.has(s.id)).map(s => (
                 <span key={s.id} className="text-xs font-bold flex items-center gap-1" style={{ color: colorOf(s.id).text }}>
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: colorOf(s.id).solid }} />{s.name}が開く日
                 </span>
