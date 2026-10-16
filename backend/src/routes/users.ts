@@ -249,8 +249,10 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   }
 
   // Update company-specific data
-  const newRole = req.user!.role === 'admin' ? (role || uc.role) : uc.role;
-  const newEmploymentType = req.user!.role === 'admin' ? (employment_type || uc.employment_type) : uc.employment_type;
+  // 役割と雇用形態を変えられるのは管理者（スーパー管理者を含む）だけ
+  const canManage = ['admin', 'super_admin'].includes(req.user!.role);
+  const newRole = canManage ? (role || uc.role) : uc.role;
+  const newEmploymentType = canManage ? (employment_type || uc.employment_type) : uc.employment_type;
   db.prepare(
     'UPDATE user_companies SET color = ?, hourly_wage = ?, phone = ?, role = ?, employment_type = ? WHERE user_id = ? AND company_id = ?'
   ).run(
