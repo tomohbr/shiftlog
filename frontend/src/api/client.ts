@@ -648,6 +648,120 @@ export const shiftRequestsApi = {
     api.post<{ sent: number; unsubmitted: number; not_linked: string[] }>('/shift-requests/remind', { year, month }),
 }
 
+// 期間をまたぐ希望の募集（マーケットなど）
+export type CampaignStatus = 'draft' | 'open' | 'closed'
+export type CampaignPart = 'a' | 'b' | 'full'
+export type CampaignAvailability = 'preferred' | 'available' | 'unavailable'
+export interface Campaign {
+  id: number
+  title: string
+  start_date: string
+  end_date: string
+  deadline: string | null
+  status: CampaignStatus
+  sent_at: string | null
+  created_at: string
+  days_left: number | null
+  accepting: boolean
+  answered?: number
+  staff_count?: number
+  submitted?: boolean
+}
+export interface CampaignDay {
+  date: string
+  weekday: number
+  long: boolean
+  venues: { store_id: number | null; slots: { start_time: string; end_time: string; part: 'a' | 'b' }[] }[]
+  times: Record<'a' | 'b', { start: string; end: string }>
+}
+export interface CampaignAnswerInput {
+  venues: 'any' | number[]
+  days_per_week: '1-2' | '3-4' | '5+' | null
+  ng_weekdays: number[]
+  transport: string[]
+  transport_note: string
+  other_job: 'none' | 'yes' | null
+  other_job_note: string
+  comment: string
+}
+export interface CampaignAnswerView {
+  venues_any: boolean
+  venue_ids: number[]
+  venue_names: string[]
+  days_per_week: '1-2' | '3-4' | '5+' | null
+  days_per_week_label: string | null
+  ng_weekdays: number[]
+  ng_label: string
+  transport: string[]
+  transport_note: string
+  other_job: 'none' | 'yes' | null
+  other_job_note: string
+  comment: string
+  submitted_at: string | null
+}
+export interface CampaignMine {
+  campaign: Campaign
+  contact: string
+  me: { name: string }
+  stores: { id: number; name: string }[]
+  days: CampaignDay[]
+  answer: CampaignAnswerView | null
+  entries: Record<string, { availability: CampaignAvailability; part: CampaignPart | null }>
+  transports: string[]
+}
+export interface CampaignPerson { user_id: number; name: string; availability: CampaignAvailability; part: CampaignPart | null; part_label: string | null }
+export interface CampaignSummary {
+  campaign: Campaign
+  line_configured: boolean
+  contact: string
+  stores: { id: number; name: string }[]
+  days: {
+    date: string
+    weekday: number
+    long: boolean
+    short: boolean
+    venues: {
+      store_id: number | null
+      needed: number
+      preferred: number
+      available: number
+      short: number
+      people: CampaignPerson[]
+      slots: { start_time: string; end_time: string; needed: number; part: 'a' | 'b'; candidates: number; short: number }[]
+    }[]
+  }[]
+  staff: {
+    id: number
+    name: string
+    color: string | null
+    linked: boolean
+    answered: boolean
+    answer: CampaignAnswerView | null
+    counts: { preferred: number; available: number; unavailable: number; blank: number }
+  }[]
+  totals: { staff: number; answered: number; days: number; short_days: number }
+}
+type SendResult = { sent: number; targets: number; failed: string[]; not_linked: string[] }
+export const campaignsApi = {
+  list: () => api.get<{ campaigns: Campaign[] }>('/request-campaigns'),
+  open: () => api.get<{ campaigns: Campaign[] }>('/request-campaigns/open'),
+  previewDays: (start_date: string, end_date: string) =>
+    api.get<{ count: number; long: number; first: string | null; last: string | null }>('/request-campaigns/preview-days', { params: { start_date, end_date } }),
+  create: (data: { title: string; start_date: string; end_date: string; deadline: string | null }) =>
+    api.post<{ campaign: Campaign }>('/request-campaigns', data),
+  update: (id: number, data: Partial<{ title: string; start_date: string; end_date: string; deadline: string | null }>) =>
+    api.put<{ campaign: Campaign }>(`/request-campaigns/${id}`, data),
+  remove: (id: number) => api.delete(`/request-campaigns/${id}`),
+  send: (id: number) => api.post<SendResult & { campaign: Campaign }>(`/request-campaigns/${id}/send`),
+  remind: (id: number) => api.post<SendResult & { unanswered: number }>(`/request-campaigns/${id}/remind`),
+  close: (id: number) => api.post<{ campaign: Campaign }>(`/request-campaigns/${id}/close`),
+  reopen: (id: number) => api.post<{ campaign: Campaign }>(`/request-campaigns/${id}/reopen`),
+  summary: (id: number) => api.get<CampaignSummary>(`/request-campaigns/${id}/summary`),
+  mine: (id: number) => api.get<CampaignMine>(`/request-campaigns/${id}/mine`),
+  submit: (id: number, data: { answer: CampaignAnswerInput; entries: { date: string; availability: CampaignAvailability; part?: CampaignPart | null }[] }) =>
+    api.put<{ message: string; count: number }>(`/request-campaigns/${id}/mine`, data),
+}
+
 // Labor costs & alerts
 export const laborApi = {
   getCosts: (year: number, month: number) =>

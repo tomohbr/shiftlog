@@ -7,6 +7,7 @@ import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../middleware/auth';
 import { absenceRule, phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
 import { canAddStaff } from '../utils/billing';
+import { daysLeft, isAccepting } from '../utils/requestCampaign';
 
 // LINE 連携（お店ごとの LINE 公式アカウント → スタッフへの通知）
 //
@@ -37,17 +38,27 @@ const sendCodeUrl = (basicId: string, code: string) => `https://line.me/R/oaMess
 const LINK_SECRET = `${JWT_SECRET}:line-request-link`;
 const REQUEST_LINK_DAYS = 21;
 
-export type LinkPage = 'requests' | 'shifts';
+export type LinkPage = 'requests' | 'shifts' | 'campaign';
 
 export function requestLinkUrl(userId: number, companyId: number, year: number, month: number, page: LinkPage = 'requests'): string {
   const t = jwt.sign({ uid: userId, cid: companyId, y: year, m: month, ...(page === 'shifts' ? { p: 's' } : {}) }, LINK_SECRET, { expiresIn: `${REQUEST_LINK_DAYS}d` });
   return `${APP_URL}/l/${t}`;
 }
 
-export function verifyRequestLink(token: string): { uid: number; cid: number; y: number; m: number; page: LinkPage } | null {
+// 期間の募集（request_campaigns）の本人専用リンク。開くとその募集の回答画面に入る。
+// 締切が先の募集でも途中で切れないよう、締切の3日後まで（最低でも21日）有効にする
+export function campaignLinkUrl(userId: number, companyId: number, c: { id: number; start_date: string; deadline: string | null }): string {
+  const left = daysLeft(c.deadline);
+  const days = Math.max(REQUEST_LINK_DAYS, (left ?? 0) + 3);
+  const t = jwt.sign({ uid: userId, cid: companyId, y: Number(c.start_date.slice(0, 4)), m: Number(c.start_date.slice(5, 7)), p: 'c', k: c.id }, LINK_SECRET, { expiresIn: `${days}d` });
+  return `${APP_URL}/l/${t}`;
+}
+
+export function verifyRequestLink(token: string): { uid: number; cid: number; y: number; m: number; page: LinkPage; campaign_id?: number } | null {
   try {
     const d = jwt.verify(token, LINK_SECRET) as any;
     if (!d?.uid || !d?.cid || !d?.y || !d?.m) return null;
+    if (d.p === 'c' && d.k) return { uid: Number(d.uid), cid: Number(d.cid), y: Number(d.y), m: Number(d.m), page: 'campaign', campaign_id: Number(d.k) };
     return { uid: Number(d.uid), cid: Number(d.cid), y: Number(d.y), m: Number(d.m), page: d.p === 's' ? 'shifts' : 'requests' };
   } catch { return null; }
 }
@@ -275,6 +286,76 @@ export async function sendRequestLinks(
     if (await sendLineMessage(settings.channel_access_token, r.line_user_id, card)) sent++;
   }
   return { sent, targets: rows.length };
+}
+
+// ---- 期間の募集（request_campaigns）の案内カード ----
+// 「【クリスマスマーケット】シフトの希望を教えてください」「期間 11/20〜12/25」「締切 11/10（あと7日）」「担当の○○」＋「希望を出す」
+export type CampaignCard = { id: number; title: string; start_date: string; end_date: string; deadline: string | null };
+
+export function campaignHeading(c: CampaignCard, kind: 'open' | 'remind' | 'reply') {
+  return kind === 'remind' ? `【${c.title}】シフトの希望がまだ届いていません` : `【${c.title}】シフトの希望を教えてください`;
+}
+
+function campaignBubble(companyId: number, heading: string, name: string, c: CampaignCard, url: string) {
+  const left = daysLeft(c.deadline);
+  const rows: [string, string][] = [['期間', `${md(c.start_date)}〜${md(c.end_date)}`]];
+  if (c.deadline) rows.push(['締切', `${md2(c.deadline)}${left !== null && left >= 0 ? `（${left === 0 ? '今日まで' : `あと${left}日`}）` : ''}`]);
+  return {
+    type: 'bubble',
+    size: 'kilo',
+    body: {
+      type: 'box', layout: 'vertical', spacing: 'md',
+      contents: [
+        { type: 'text', text: heading, weight: 'bold', size: 'md', wrap: true },
+        {
+          type: 'box', layout: 'vertical', spacing: 'xs',
+          contents: rows.map(([k, v]) => ({
+            type: 'box', layout: 'baseline',
+            contents: [
+              { type: 'text', text: k, size: 'sm', color: '#888888', flex: 2 },
+              { type: 'text', text: v, size: 'sm', weight: 'bold', flex: 6, wrap: true },
+            ],
+          })),
+        },
+        { type: 'text', text: `${W(companyId)}より`, size: 'sm', color: '#555555', wrap: true },
+        { type: 'text', text: `${name}さん専用のボタンです。名前を選ばずに開けます。`, size: 'xs', color: '#888888', wrap: true },
+      ],
+    },
+    footer: {
+      type: 'box', layout: 'vertical',
+      contents: [{ type: 'button', style: 'primary', color: '#06C755', action: { type: 'uri', label: '希望を出す', uri: url } }],
+    },
+  };
+}
+
+export function campaignCard(companyId: number, userId: number, name: string, c: CampaignCard, kind: 'open' | 'remind' | 'reply') {
+  const heading = campaignHeading(c, kind);
+  const left = daysLeft(c.deadline);
+  const alt = `${heading} 期間 ${md(c.start_date)}〜${md(c.end_date)}${c.deadline ? `・締切 ${md(c.deadline)}${left !== null && left >= 0 ? `（あと${left}日）` : ''}` : ''}`;
+  return { type: 'flex', altText: alt.slice(0, 400), contents: campaignBubble(companyId, heading, name, c, campaignLinkUrl(userId, companyId, c)) };
+}
+
+/**
+ * 期間の募集を、LINE 連携済みの人へ本人専用リンク付きで1人1通送る。
+ * onlyUserIds を渡すとその人だけ（未回答の人への催促用）。送った人の id を返す
+ */
+export async function sendCampaignLinks(
+  companyId: number, c: CampaignCard, kind: 'open' | 'remind', onlyUserIds?: number[],
+): Promise<{ sent: number; targets: number; failed: string[] }> {
+  const settings = db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  if (!settings?.channel_access_token) return { sent: 0, targets: 0, failed: [] };
+  let rows = linkedMembers(companyId);
+  if (onlyUserIds) {
+    const only = new Set(onlyUserIds);
+    rows = rows.filter(r => only.has(r.user_id));
+  }
+  let sent = 0;
+  const failed: string[] = [];
+  for (const r of rows) {
+    if (await sendLineMessage(settings.channel_access_token, r.line_user_id, campaignCard(companyId, r.user_id, r.name, c, kind))) sent++;
+    else failed.push(r.name);
+  }
+  return { sent, targets: rows.length, failed };
 }
 
 function membersWithLink(companyId: number) {
@@ -602,7 +683,7 @@ try {
 } catch { /* 起動を止めない */ }
 
 // スタッフに見せる「誰に届くか」。LINE設定の担当者名があれば「担当の○○」、なければ「店長」
-function W(companyId: number): string {
+export function W(companyId: number): string {
   const n = (db.prepare('SELECT contact_name FROM line_settings WHERE company_id = ?').get(companyId) as any)?.contact_name;
   return n ? `担当の${n}` : '店長';
 }
@@ -1031,6 +1112,20 @@ async function replyRequestLink(companyId: number, lineUserId: string, token: st
     SELECT year, month, start_date, end_date, deadline FROM shift_request_periods
     WHERE company_id = ? AND status = 'open' ORDER BY year DESC, month DESC
   `).all(companyId) as any[];
+  // 期間の募集（マーケットなど）が受付中なら、そのリンクを先に出す
+  const campaigns = (db.prepare(`
+    SELECT id, title, start_date, end_date, deadline, status FROM request_campaigns
+    WHERE company_id = ? AND status = 'open' ORDER BY start_date
+  `).all(companyId) as any[]).filter(isAccepting);
+  if (campaigns.length > 0) {
+    const bubbles = [
+      ...campaigns.slice(0, 5).map(c => campaignCard(companyId, who.id, who.name, c, 'reply').contents),
+      ...open.slice(0, 5).map(p => requestBubble('希望の提出はこちら', who.name, p, requestLinkUrl(who.id, companyId, p.year, p.month))),
+    ];
+    const first = campaignCard(companyId, who.id, who.name, campaigns[0], 'reply');
+    await replyLine(token, replyToken, bubbles.length === 1 ? first : { type: 'flex', altText: first.altText, contents: { type: 'carousel', contents: bubbles } });
+    return;
+  }
   if (open.length === 0) {
     await replyLine(token, replyToken, `シフトの候補日は、${W(companyId)}がこれから出します。
 出たらこのLINEでお知らせするので、それまでお待ちください。`);

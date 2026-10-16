@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 // LINE で届いた「本人専用の希望提出リンク」の受け口。
-// リンクの本人としてログインし、その月の希望提出画面へ移る（名前選択を省く）
+// リンクの本人としてログインし、その月の希望提出画面へ移る（名前選択を省く）。期間の募集なら /campaign/:id へ
 export default function LineLinkPage({ token }: { token: string }) {
   const { lineLinkLogin } = useAuth()
   const [error, setError] = useState('')
 
   useEffect(() => {
     lineLinkLogin(token)
-      .then(({ year, month, page }) => {
+      .then(({ year, month, page, campaign_id }) => {
+        // 期間の募集（マーケットなど）のリンクは、その募集の回答画面へ
+        if (page === 'campaign' && campaign_id) { window.location.replace(`/campaign/${campaign_id}`); return }
         const to = page === 'shifts' ? '/my-shifts' : '/shift-requests'
         window.location.replace(`${to}?year=${year}&month=${month}`)
       })

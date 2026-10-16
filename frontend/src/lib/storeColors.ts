@@ -25,6 +25,20 @@ export function storeColorMap(stores: { id: number }[]): (storeId?: number | nul
   }
 }
 
+/**
+ * カレンダーの小さなマスに出す会場の略称。3文字以内ならそのまま、長ければ「会場」「広場」などを除いて先頭2文字。
+ * 略称が重なるときは3文字にする（色と合わせて見分けられるように）
+ */
+export function storeShortNames(stores: { id: number; name: string }[]): (storeId?: number | null) => string {
+  const strip = (n: string) => n.replace(/(クリスマスマーケット|マーケット|会場|広場|店)$/u, '').trim() || n
+  const cut = (n: string, k: number) => [...strip(n)].slice(0, k).join('')
+  const base = new Map(stores.map(s => [s.id, [...s.name].length <= 3 ? s.name : cut(s.name, 2)]))
+  const count = new Map<string, number>()
+  for (const v of base.values()) count.set(v, (count.get(v) || 0) + 1)
+  for (const s of stores) if ((count.get(base.get(s.id)!) || 0) > 1) base.set(s.id, cut(s.name, 3))
+  return (storeId?: number | null) => (storeId != null && base.get(storeId)) || '会場'
+}
+
 /** 並び順（id 昇順で何番目か）から色を引く。会場一覧を持たない画面（QR打刻）用 */
 export function storeColorByIndex(index?: number | null): StoreColor {
   return index == null || index < 0 ? NONE : PALETTE[index % PALETTE.length]

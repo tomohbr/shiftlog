@@ -632,6 +632,53 @@ try {
   `);
 } catch (e) { console.error('[migration] 会場の枠・下書きテーブルの作成に失敗', e); }
 
+// ---- 期間をまたぐ希望の募集（2026-10。クリスマスマーケットのように月をまたぐ期間を1回で集める） ----
+//   request_campaigns         募集。status = draft（下書き・スタッフには見えない）/ open（受付中）/ closed（締め切り）
+//                             候補日は保存せず、venue_slot_rules から毎回出す（どこかの会場が開いている日だけ）
+//   request_campaign_answers  最初の質問の答え（入りたい会場・週の日数・入れない曜日・交通手段・掛け持ち・ひとこと）。
+//                             日ごとの ◎○× は既存の shift_requests に入れる（自動作成がそのまま読める）
+//   shift_requests.part       長い日の「昼 a / 夜 b / 通し full」。時間は preferred_start/end にも入れる
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS request_campaigns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      deadline TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      sent_at DATETIME,
+      created_by INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (company_id) REFERENCES companies(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_request_campaigns_company ON request_campaigns(company_id, status);
+
+    CREATE TABLE IF NOT EXISTS request_campaign_answers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      company_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      venues TEXT,
+      days_per_week TEXT,
+      ng_weekdays TEXT,
+      transport TEXT,
+      transport_note TEXT,
+      other_job TEXT,
+      other_job_note TEXT,
+      comment TEXT,
+      submitted_at DATETIME,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (campaign_id) REFERENCES request_campaigns(id) ON DELETE CASCADE,
+      UNIQUE(campaign_id, user_id)
+    );
+  `);
+  const srCols = db.prepare('PRAGMA table_info(shift_requests)').all().map((c: any) => c.name);
+  if (!srCols.includes('part')) db.exec('ALTER TABLE shift_requests ADD COLUMN part TEXT');
+} catch (e) { console.error('[migration] 希望の募集テーブルの作成に失敗', e); }
+
 export const SUPER_ADMIN_EMAIL = 'shibahara.724@gmail.com';
 
 // 一度だけ実行するマイグレーション管理

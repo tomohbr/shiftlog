@@ -29,7 +29,12 @@ export interface RequestInfo {
   availability: Availability;
   start: number | null;      // 希望の時間帯（なければ null = 終日OK）
   end: number | null;
+  // 期間の募集で長い日に選んだ「昼 a / 夜 b / 通し full」。昼だけの人は夜の枠に、夜だけの人は昼の枠に入れない
+  part?: 'a' | 'b' | 'full' | null;
 }
+
+/** 15時より前に始まる枠を「昼」、それ以外を「夜」とみなす（期間の募集の昼／夜と同じ区切り） */
+export const slotPart = (slot: { start: number }): 'a' | 'b' => (slot.start < 15 * 60 ? 'a' : 'b');
 
 export interface Interval { start: number; end: number }
 
@@ -108,6 +113,9 @@ export function judge(
   } else if (req.availability === 'unavailable') {
     return { ok: false, reason: '出勤不可' };
   }
+  if (req && (req.part === 'a' || req.part === 'b') && req.part !== slotPart(slot)) {
+    return { ok: false, reason: req.part === 'a' ? '昼だけの希望' : '夜だけの希望' };
+  }
   let partial = false;
   if (req && req.start != null && req.end != null && !Number.isNaN(req.start) && !Number.isNaN(req.end)) {
     const ov = Math.min(slot.end, req.end) - Math.max(slot.start, req.start);
@@ -128,6 +136,19 @@ export interface PlanInput {
   existingMinutes: Map<number, number>;      // 期間内の確定シフトの合計分（偏りの計算に入れる）
   existingDays: Map<number, Set<string>>;
   includeUnsubmitted: boolean;
+  // 期間の募集（request_campaigns）の答え。なければ従来どおり
+  //   venueOk   … 「入りたい会場」以外の会場には入れない（どこでも・未回答なら true を返す）
+  //   weeklyCap … 「週に入りたい日数」の上限（1〜2日→2、3〜4日→4）。自動では上限を超えて入れない
+  //               （足りない枠は下書きに「あと○人」と出るので、管理者が本人と話して手で入れる）
+  venueOk?: (userId: number, date: string, storeId: number | null) => boolean;
+  weeklyCap?: (userId: number, date: string) => number | null;
+}
+
+/** その日を含む週（月曜はじまり）の月曜の日付 */
+export function weekOf(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
 }
 
 export interface PlanResult {
@@ -177,6 +198,18 @@ export function plan(input: PlanInput): PlanResult {
   const load = (id: number) => 0.5 * (minutes.get(id)! / avgMin) + 0.5 * (days.get(id)!.size / avgDays);
 
   const keyOf = (id: number, date: string) => `${id}:${date}`;
+  const venueOk = (s: Slot, id: number) => !input.venueOk || input.venueOk(id, s.date, s.store_id);
+  // 週の希望日数を超える分（その日に入れたら上限を何日超えるか。同じ日の2枠目は数えない）
+  const overCap = (s: Slot, id: number) => {
+    const cap = input.weeklyCap?.(id, s.date);
+    if (cap == null) return 0;
+    const dm = days.get(id)!;
+    if (dm.has(s.date)) return 0;
+    const wk = weekOf(s.date);
+    let n = 0;
+    for (const d of dm.keys()) if (weekOf(d) === wk) n++;
+    return Math.max(0, n + 1 - cap);
+  };
   const isIn = (s: Slot, id: number) =>
     assigned.get(s.key)!.includes(id) || (existingInSlot.get(s.key) || []).includes(id);
 
@@ -206,6 +239,7 @@ export function plan(input: PlanInput): PlanResult {
     const out: Array<{ id: number; score: number }> = [];
     for (const id of staffIds) {
       if (isIn(s, id)) continue;
+      if (!venueOk(s, id) || overCap(s, id) > 0) continue;
       const j = judge(s, requests.get(keyOf(id, s.date)), busy.get(keyOf(id, s.date)) || [], includeUnsubmitted);
       if (!j.ok) continue;
       if (j.partial && !allowPartial) continue;
@@ -246,6 +280,7 @@ export function plan(input: PlanInput): PlanResult {
         const fromPref = fromFit.ok ? PREF_SCORE[fromFit.fit] : 0;
         for (const to of [...staffIds].sort((a, b) => minutes.get(a)! - minutes.get(b)!)) {
           if (to === from || isIn(s, to)) continue;
+          if (!venueOk(s, to) || overCap(s, to) > 0) continue;
           const gap = minutes.get(from)! - minutes.get(to)!;
           if (gap <= len(s)) break; // ここから先は差が縮まらない
           const j = judge(s, requests.get(keyOf(to, s.date)), busy.get(keyOf(to, s.date)) || [], includeUnsubmitted);

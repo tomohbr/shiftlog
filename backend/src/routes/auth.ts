@@ -258,6 +258,7 @@ router.post('/line-link', (req: Request, res: Response): void => {
     year: link.y,
     month: link.m,
     page: link.page,
+    campaign_id: link.campaign_id ?? null,
   });
 });
 

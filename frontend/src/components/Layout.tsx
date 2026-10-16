@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Settings,
   ClipboardList,
+  Megaphone,
   DollarSign,
   AlertCircle,
   Copy,
@@ -63,6 +64,7 @@ export default function Layout({ children }: LayoutProps) {
   const adminNavMore = [
     { path: '/auto-schedule', label: '希望から自動作成', icon: Sparkles },
     { path: '/shift-requests', label: '希望シフト収集', icon: ClipboardList },
+    { path: '/request-campaigns', label: '期間で希望を募集', icon: Megaphone },
     { path: '/templates', label: 'テンプレート', icon: Copy },
     { path: '/labor', label: '人件費・売上', icon: DollarSign },
     { path: '/payroll', label: '給与エクスポート', icon: FileSpreadsheet },

@@ -4,6 +4,9 @@ import toast from 'react-hot-toast'
 import { venueScheduleApi, DraftView, DraftSlot, DraftPerson, DraftCandidate, DraftStaff } from '../../api/client'
 import { StoreColor } from '../../lib/storeColors'
 
+// 期間の募集で答えた「入りたい会場」以外の枠（サーバーの candidates の reason と同じ文言）
+const OTHER_VENUE = '希望の会場ではない'
+
 // 下書きの確認画面。管理者が最初に知りたい「どこが足りないか」「誰が多すぎ／少なすぎか」を上と右に出し、
 // 真ん中は 行=会場の時間帯・列=日付 の表。セルを押すと、その枠の人の差し替え・外す・足すができる。
 
@@ -322,7 +325,7 @@ function SlotModal({ view, slot, color, storeName, editable, onClose, onChange }
   const remove = (p: DraftPerson) => run(() => venueScheduleApi.unassign(view.draft.id, p.assignment_id!), `${p.user_name}さんを外しました`)
 
   const usable = (candidates || []).filter(c => c.ok && !c.in_slot)
-  const rank = (c: DraftCandidate) => (c.availability === 'preferred' ? 0 : c.availability === 'available' ? 1 : 2) + (c.partial ? 0.5 : 0)
+  const rank = (c: DraftCandidate) => (c.availability === 'preferred' ? 0 : c.availability === 'available' ? 1 : 2) + (c.partial ? 0.5 : 0) + (c.reason === OTHER_VENUE ? 3 : 0)
   usable.sort((a, b) => rank(a) - rank(b) || a.minutes - b.minutes)
   const blocked = (candidates || []).filter(c => !c.ok && !c.in_slot)
 
@@ -394,6 +397,8 @@ function SlotModal({ view, slot, color, storeName, editable, onClose, onChange }
                           {c.availability === 'preferred' ? '◎希望' : c.availability === 'available' ? '○可' : '未提出'}
                         </span>
                         {c.partial && <span className="text-[11px] text-amber-700 flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" />希望 {c.preferred_time}</span>}
+                        {/* 期間の募集で「入りたい会場」に入っていない人（入れることはできる） */}
+                        {c.reason === OTHER_VENUE && <span className="text-[11px] text-amber-700 flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" />{c.reason}</span>}
                         <span className="ml-auto text-xs text-gray-500 tabular-nums">{c.days}日・{hours(c.minutes)}</span>
                       </button>
                     </li>

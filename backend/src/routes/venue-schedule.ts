@@ -7,6 +7,7 @@ import {
   SlotRule, Slot, RequestInfo, Interval, Availability,
   expandRules, plan, judge, toMinutes, toHHMM, datesBetween,
 } from '../utils/venueSchedule';
+import { campaignPreferences } from '../utils/requestCampaign';
 
 // 会場ごとの必要人数（枠）と、希望からのシフト下書き。
 //   /rules         枠のルール（会場 × 曜日 or 日付 × 時間帯 × 人数）
@@ -122,7 +123,7 @@ function loadStaff(companyId: number): Staff[] {
 
 function loadRequests(companyId: number, start: string, end: string): Map<string, RequestInfo & { raw_start: string | null; raw_end: string | null }> {
   const rows = db.prepare(`
-    SELECT user_id, date, availability, preferred_start, preferred_end FROM shift_requests
+    SELECT user_id, date, availability, preferred_start, preferred_end, part FROM shift_requests
     WHERE company_id = ? AND date >= ? AND date <= ?
   `).all(companyId, start, end) as any[];
   const m = new Map<string, RequestInfo & { raw_start: string | null; raw_end: string | null }>();
@@ -132,6 +133,7 @@ function loadRequests(companyId: number, start: string, end: string): Map<string
     m.set(`${r.user_id}:${r.date}`, {
       availability: (['preferred', 'available', 'unavailable'].includes(r.availability) ? r.availability : 'available') as Availability,
       start: hasTime ? s : null, end: hasTime ? e : null,
+      part: r.part === 'a' || r.part === 'b' || r.part === 'full' ? r.part : null,
       raw_start: hasTime ? r.preferred_start : null, raw_end: hasTime ? r.preferred_end : null,
     });
   }
@@ -201,7 +203,8 @@ function buildView(companyId: number, draftId: number) {
   for (const u of db.prepare('SELECT u.id, u.name FROM users u JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ?').all(companyId) as any[]) nameOf.set(u.id, u.name);
   const requests = loadRequests(companyId, draft.start_date, draft.end_date);
   const shifts = draft.status === 'committed' ? [] : loadShifts(companyId, draft.start_date, draft.end_date);
-  const stores = db.prepare('SELECT id, name FROM stores WHERE company_id = ? ORDER BY id').all(companyId);
+  const stores = db.prepare('SELECT id, name FROM stores WHERE company_id = ? ORDER BY id').all(companyId) as { id: number; name: string }[];
+  const prefs = campaignPreferences(companyId, draft.start_date, draft.end_date);
 
   const asgBySlot = new Map<number, DraftAsgRow[]>();
   for (const a of asgs) {
@@ -245,7 +248,9 @@ function buildView(companyId: number, draftId: number) {
           availability: req?.availability || null,
           partial: j.ok ? j.partial : false,
           // 手で入れた人が「出勤不可」や「希望時間外」なら画面で警告する
-          warning: j.ok ? (j.partial ? `希望は${req?.raw_start?.slice(0, 5)}-${req?.raw_end?.slice(0, 5)}` : null) : j.reason,
+          warning: !j.ok ? j.reason
+            : !prefs.venueOk(a.user_id, s.date, s.store_id) ? '希望の会場ではありません'
+            : j.partial ? `希望は${req?.raw_start?.slice(0, 5)}-${req?.raw_end?.slice(0, 5)}` : null,
         };
       }),
     ];
@@ -355,9 +360,12 @@ router.post('/drafts', authenticateToken, requireCompany, (req: AuthRequest, res
     existingDays.get(sh.user_id)!.add(sh.date);
   }
 
+  // 期間の募集で答えた「入りたい会場」「週の日数」を使う（答えていない人は従来どおり）
+  const prefs = campaignPreferences(companyId, start_date, end_date);
   const result = plan({
     slots, staffIds: staff.map(s => s.id), requests, busy: busyMap(shifts),
     existingInSlot, existingMinutes, existingDays, includeUnsubmitted,
+    venueOk: prefs.venueOk, weeklyCap: prefs.weeklyCap,
   });
 
   let draftId = 0;
@@ -419,6 +427,7 @@ router.get('/drafts/:id/slots/:slotId/candidates', authenticateToken, requireCom
   const busy = busyMapWithDraft(draft.id, slot.date, shifts);
   const range: Slot = { key: slot.id, store_id: slot.store_id, date: slot.date, start: toMinutes(slot.start_time), end: toMinutes(slot.end_time), needed: slot.needed };
   const inSlot = new Set(view.slots.find(s => s.id === slot.id)!.people.map(p => p.user_id));
+  const prefs = campaignPreferences(companyId, slot.date, slot.date);
   const candidates = view.staff.map(u => {
     const req = requests.get(`${u.id}:${slot.date}`);
     const j = judge(range, req, busy.get(`${u.id}:${slot.date}`) || [], true);
@@ -428,7 +437,7 @@ router.get('/drafts/:id/slots/:slotId/candidates', authenticateToken, requireCom
       preferred_time: req?.raw_start ? `${req.raw_start.slice(0, 5)}-${req.raw_end!.slice(0, 5)}` : null,
       in_slot: inSlot.has(u.id),
       ok: j.ok, partial: j.ok ? j.partial : false,
-      reason: j.ok ? (req ? null : '希望未提出') : j.reason,
+      reason: j.ok ? (req ? (prefs.venueOk(u.id, slot.date, slot.store_id) ? null : '希望の会場ではない') : '希望未提出') : j.reason,
     };
   });
   res.json({ slot, candidates });

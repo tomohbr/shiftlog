@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Calendar, Check, X as XIcon, Clock, Send, Settings, Megaphone, Copy, Printer, Share2, AlertCircle } from 'lucide-react'
-import { shiftRequestsApi, usersApi, User } from '../api/client'
+import { shiftRequestsApi, usersApi, User, campaignsApi, Campaign } from '../api/client'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { staffLoginUrl } from '../components/StaffLoginQR'
 import LineShareButton from '../components/LineShareButton'
@@ -717,6 +718,30 @@ function AdminView({
   )
 }
 
+// ===================== 期間の募集の案内 =====================
+
+// スタッフ: 受付中の「期間の募集」（マーケットなど）があれば、月の希望より先に出す
+function OpenCampaigns() {
+  const [list, setList] = useState<Campaign[]>([])
+  useEffect(() => { campaignsApi.open().then(r => setList(r.data.campaigns)).catch(() => {}) }, [])
+  if (list.length === 0) return null
+  return (
+    <div className="space-y-2 max-w-xl mx-auto">
+      {list.map(c => (
+        <Link key={c.id} to={`/campaign/${c.id}`} className="block rounded-2xl border-2 border-green-300 bg-green-50 px-4 py-3">
+          <p className="text-xs font-bold text-green-700">シフトの希望を募集中</p>
+          <p className="text-lg font-black text-gray-900">{c.title}</p>
+          <p className="text-sm text-gray-700">
+            {fmtMD(c.start_date)}〜{fmtMD(c.end_date)}
+            {c.deadline && <>・締切 {fmtMD(c.deadline)}{c.days_left !== null && c.days_left >= 0 ? `（あと${c.days_left}日）` : ''}</>}
+          </p>
+          <p className="mt-2 text-center text-white font-bold bg-green-600 rounded-xl py-2">{c.submitted ? '出した希望を見る・直す' : '希望を出す'}</p>
+        </Link>
+      ))}
+    </div>
+  )
+}
+
 // ===================== Main Page =====================
 
 export default function ShiftRequestPage() {
@@ -800,9 +825,18 @@ export default function ShiftRequestPage() {
 
       {/* Conditional view */}
       {isAdmin ? (
-        <AdminView year={year} month={month} days={days} />
+        <>
+          <Link to="/request-campaigns" className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-900 hover:bg-green-100">
+            <Megaphone className="w-4 h-4 flex-shrink-0" />
+            <span><b>マーケットなど、月をまたぐ期間</b>の希望は「期間で希望を募集」から1回で集められます（会場・週の日数などの質問つき）</span>
+          </Link>
+          <AdminView year={year} month={month} days={days} />
+        </>
       ) : (
-        <StaffRequestView year={year} month={month} userId={user?.id || 0} />
+        <>
+          <OpenCampaigns />
+          <StaffRequestView year={year} month={month} userId={user?.id || 0} />
+        </>
       )}
     </div>
   )

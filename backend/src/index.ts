@@ -24,6 +24,7 @@ import swapsRoutes from './routes/swaps';
 import icalRoutes from './routes/ical';
 import autoScheduleRoutes from './routes/auto-schedule';
 import venueScheduleRoutes from './routes/venue-schedule';
+import requestCampaignRoutes from './routes/request-campaigns';
 import payrollRoutes from './routes/payroll';
 import seedRoutes from './routes/seed';
 import pushRoutes from './routes/push';
@@ -90,6 +91,8 @@ app.use('/api/ical', icalRoutes);
 app.use('/api/auto-schedule', autoScheduleRoutes);
 // 会場ごとの必要人数と、希望からのシフト下書き
 app.use('/api/venue-schedule', venueScheduleRoutes);
+// 期間をまたぐ希望の募集（マーケットなど）
+app.use('/api/request-campaigns', requestCampaignRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/seed', seedRoutes);
 app.use('/api/push', pushRoutes);

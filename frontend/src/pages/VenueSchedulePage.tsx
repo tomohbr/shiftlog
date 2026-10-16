@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Sparkles, Send, Trash2, RefreshCw, CheckCircle2, ClipboardList, ArrowRight } from 'lucide-react'
+import { Sparkles, Send, Trash2, RefreshCw, CheckCircle2, ClipboardList, ArrowRight, Megaphone } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { venueScheduleApi, storesApi, SlotRule, DraftView, DraftSummary, Store } from '../api/client'
 import { storeColorMap } from '../lib/storeColors'
@@ -25,8 +25,10 @@ export default function VenueSchedulePage() {
   const [tab, setTab] = useState<'rules' | 'draft'>('rules')
   const [loading, setLoading] = useState(true)
 
-  // 期間の初期値: ?month=2026-11 があればその月、なければ来月
+  // 期間の初期値: ?start=&end=（期間の募集から来たとき）> ?month=2026-11 > 来月
+  const fromCampaign = /^\d{4}-\d{2}-\d{2}$/.test(params.get('start') || '') && /^\d{4}-\d{2}-\d{2}$/.test(params.get('end') || '')
   const initial = useMemo(() => {
+    if (fromCampaign) return [params.get('start')!, params.get('end')!] as const
     const q = params.get('month')
     const now = new Date()
     const [y, m] = q && /^\d{4}-\d{2}$/.test(q) ? q.split('-').map(Number) : [now.getFullYear(), now.getMonth() + 2]
@@ -60,7 +62,8 @@ export default function VenueSchedulePage() {
         setStores(st.data.stores)
         setDrafts(dr.data.drafts)
         // 作りかけの下書きがあれば、そこから再開する
-        const open = dr.data.drafts.find(d => d.status === 'draft')
+        // 期間の募集から来たときは、その期間で作れるように①の画面のまま
+        const open = fromCampaign ? undefined : dr.data.drafts.find(d => d.status === 'draft')
         if (open) {
           const v = await venueScheduleApi.getDraft(open.id)
           setView(v.data)
@@ -157,9 +160,14 @@ export default function VenueSchedulePage() {
             会場ごとの必要人数と、スタッフの希望から下書きを作ります。確定するまでスタッフには見えません。
           </p>
         </div>
-        <Link to="/shift-requests" className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1">
-          <ClipboardList className="w-4 h-4" />希望の集まり具合を見る
-        </Link>
+        <div className="flex flex-col items-end gap-1">
+          <Link to="/shift-requests" className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1">
+            <ClipboardList className="w-4 h-4" />希望の集まり具合を見る
+          </Link>
+          <Link to="/request-campaigns" className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1">
+            <Megaphone className="w-4 h-4" />マーケットなどの期間で募集
+          </Link>
+        </div>
       </div>
 
       {/* 手順のタブ */}
@@ -206,6 +214,7 @@ export default function VenueSchedulePage() {
               <p>・希望の時間帯があれば、枠と合う人を優先します（一部だけ合う人は、足りないときだけ・印付き）</p>
               <p>・同じ日に時間の重なる2か所には入れません。勤務日数と時間がなるべく均等になるようにします</p>
               <p>・すでに入っている確定シフトは消さず、その分を差し引いて空いている枠だけ埋めます</p>
+              <p>・期間の募集で答えた「入りたい会場」以外の会場には入れません。「週に入りたい日数」の上限も超えません（足りない枠は手で入れてください）</p>
             </div>
             <button onClick={generate} disabled={generating || rules.length === 0}
               className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2">

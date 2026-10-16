@@ -51,6 +51,9 @@ export function deleteCompanyData(companyId: number): void {
   db.prepare('DELETE FROM shift_publications WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_requests WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_request_periods WHERE company_id = ?').run(companyId);
+  // 期間の募集と、その質問の答え
+  db.prepare('DELETE FROM request_campaign_answers WHERE company_id = ?').run(companyId);
+  db.prepare('DELETE FROM request_campaigns WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM shift_templates WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM daily_sales WHERE company_id = ?').run(companyId);
   db.prepare('DELETE FROM line_settings WHERE company_id = ?').run(companyId);
@@ -87,6 +90,7 @@ function deleteUserPersonalData(userId: number): void {
   db.prepare('DELETE FROM shift_changes WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM schedule_draft_assignments WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM shift_requests WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM request_campaign_answers WHERE user_id = ?').run(userId);
 
   db.prepare('DELETE FROM user_skills WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM ical_tokens WHERE user_id = ?').run(userId);

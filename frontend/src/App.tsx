@@ -41,6 +41,8 @@ import LineInvitePage from './pages/LineInvitePage'
 import LiffPunchPage from './pages/LiffPunchPage'
 import LineInvitePrintPage from './pages/LineInvitePrintPage'
 import StaffGuidePage from './pages/StaffGuidePage'
+import RequestCampaignPage from './pages/RequestCampaignPage'
+import CampaignAnswerPage from './pages/CampaignAnswerPage'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
@@ -169,6 +171,8 @@ function AppRoutes() {
           <Route path="/companies" element={<CompanyPage />} />
           <Route path="/timecards" element={<TimecardPage />} />
           <Route path="/shift-requests" element={<ShiftRequestPage />} />
+          <Route path="/request-campaigns" element={<RequestCampaignPage />} />
+          <Route path="/campaign/:id" element={<CampaignAnswerPage />} />
           <Route path="/labor" element={<LaborPage />} />
           <Route path="/absence" element={<AbsencePage />} />
           <Route path="/templates" element={<TemplatePage />} />
@@ -209,6 +213,8 @@ function AppRoutes() {
         <Route path="/timecards" element={<TimecardPage />} />
         <Route path="/my-shifts" element={<MyShiftsPage />} />
         <Route path="/shift-requests" element={<ShiftRequestPage />} />
+        {/* 期間の募集（マーケットなど）の回答画面。LINE の本人専用リンクから来る */}
+        <Route path="/campaign/:id" element={<CampaignAnswerPage />} />
         <Route path="/absence" element={<AbsencePage />} />
         <Route path="/swaps" element={<SwapsPage />} />
         <Route path="/setup-guide" element={<SetupGuidePage />} />
