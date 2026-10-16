@@ -297,6 +297,17 @@ router.post('/:id/send', authenticateToken, requireCompany, async (req: AuthRequ
   res.json({ ...result, not_linked: staff.filter(s => !s.linked).map(s => s.name), campaign: view(getCampaign(companyId, c.id)!) });
 });
 
+// POST /api/request-campaigns/:id/preview  管理者が自分のLINEに見本を1通送る（スタッフと同じカード。見え方の確認用）
+router.post('/:id/preview', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!adminOnly(req, res)) return;
+  const companyId = req.companyId!;
+  const c = getCampaign(companyId, req.params.id);
+  if (!c) { res.status(404).json({ error: '募集が見つかりません' }); return; }
+  const result = await sendCampaignLinks(companyId, c, 'open', [req.user!.id]);
+  if (result.targets === 0) { res.status(409).json({ error: 'あなたのLINEがまだ連携されていません' }); return; }
+  res.json(result);
+});
+
 // POST /api/request-campaigns/:id/remind  まだ答えていない人（LINE 連携済み）にだけ送る
 router.post('/:id/remind', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!adminOnly(req, res)) return;

@@ -115,6 +115,7 @@ export default function RequestCampaignPage() {
     if (!confirm(`まだ答えていない ${linked.length}人（${linked.map(s => s.name).join('・')}）に、LINEで催促を送ります。よろしいですか？`)) return
     act(() => campaignsApi.remind(summary!.campaign.id), d => toast.success(`催促を${d.sent}人に送りました`))
   }
+  const sendSample = () => act(() => campaignsApi.preview(summary!.campaign.id), d => toast.success(d.sent ? 'あなたのLINEに見本を送りました' : '送れませんでした'))
   const close = () => {
     if (!confirm('締め切りますか？ スタッフは希望を出せなくなります（あとで受付に戻せます）')) return
     act(() => campaignsApi.close(summary!.campaign.id), () => toast.success('締め切りました'))
@@ -239,6 +240,11 @@ export default function RequestCampaignPage() {
                   <Lock className="w-4 h-4" />締め切る
                 </button>
               </div>
+            )}
+            {c.status !== 'closed' && summary.line_configured && (
+              <button onClick={sendSample} disabled={busy} className="w-full text-sm text-gray-600 underline underline-offset-2 py-1">
+                自分のLINEに見本を送る（スタッフと同じカード・1通）
+              </button>
             )}
             {c.status === 'closed' && (
               <button onClick={reopen} disabled={busy} className="w-full py-2.5 rounded-xl border-2 border-gray-300 text-gray-700 font-bold text-sm flex items-center justify-center gap-1.5">

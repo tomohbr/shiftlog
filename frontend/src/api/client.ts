@@ -762,6 +762,7 @@ export const campaignsApi = {
   remove: (id: number) => api.delete(`/request-campaigns/${id}`),
   send: (id: number) => api.post<SendResult & { campaign: Campaign }>(`/request-campaigns/${id}/send`),
   remind: (id: number) => api.post<SendResult & { unanswered: number }>(`/request-campaigns/${id}/remind`),
+  preview: (id: number) => api.post<SendResult>(`/request-campaigns/${id}/preview`),
   close: (id: number) => api.post<{ campaign: Campaign }>(`/request-campaigns/${id}/close`),
   reopen: (id: number) => api.post<{ campaign: Campaign }>(`/request-campaigns/${id}/reopen`),
   summary: (id: number) => api.get<CampaignSummary>(`/request-campaigns/${id}/summary`),
