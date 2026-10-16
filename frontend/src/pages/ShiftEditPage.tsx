@@ -53,7 +53,9 @@ export default function ShiftEditPage() {
       if (id !== reqId.current) return
       setShifts(shiftsRes.data.shifts)
       setStores(storesRes?.data.stores || [])
-      setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
+      // 行に出すのはスタッフと、この月にシフトがある管理者（店長が自分でも入る場合）
+      const withShift = new Set(shiftsRes.data.shifts.map((x: Shift) => x.user_id))
+      setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff' || withShift.has(u.id)))
       const reqMap: Record<string, { availability: string; preferred_start?: string | null; preferred_end?: string | null }> = {}
       for (const r of requestsRes?.data.requests || []) {
         reqMap[`${r.user_id}-${r.date}`] = {
