@@ -601,6 +601,31 @@ router.post('/test', authenticateToken, requireCompany, async (req: AuthRequest,
   res.json({ message: `テスト通知を${sent}人に送信しました`, sent });
 });
 
+// POST /api/line/message  { user_ids, texts }  管理者から選んだ人へ、文章を1人ずつ送る（最大5通。{名前} はその人の名前に置き換える）
+router.post('/message', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  const companyId = req.companyId!;
+  const settings = db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  if (!settings?.channel_access_token) { res.status(400).json({ error: 'LINEが設定されていません' }); return; }
+  const ids = new Set((Array.isArray(req.body?.user_ids) ? req.body.user_ids : []).map(Number));
+  const texts = (Array.isArray(req.body?.texts) ? req.body.texts : []).map((t: unknown) => String(t ?? '').trim()).filter(Boolean).slice(0, 5);
+  if (ids.size === 0 || texts.length === 0) { res.status(400).json({ error: '送る人と文章を入れてください' }); return; }
+  const rows = linkedMembers(companyId).filter(r => ids.has(r.user_id));
+  let sent = 0;
+  const failed: string[] = [];
+  for (const r of rows) {
+    const given = r.name.split(/[\s　]/)[0];
+    try {
+      const out = await lineApi(settings.channel_access_token, '/v2/bot/message/push', {
+        method: 'POST',
+        body: { to: r.line_user_id, messages: texts.map((t: string) => ({ type: 'text', text: t.replace(/\{名前\}/g, given).slice(0, 5000) })) },
+      });
+      if (out.ok) sent++; else failed.push(r.name);
+    } catch { failed.push(r.name); }
+  }
+  res.json({ sent, targets: rows.length, failed });
+});
+
 // POST /api/line/webhook/:companyId - お店ごとの LINE 公式アカウントからのイベント
 router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<void> => {
   const companyId = parseInt(req.params.companyId);
