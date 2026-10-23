@@ -308,6 +308,20 @@ router.post('/:id/preview', authenticateToken, requireCompany, async (req: AuthR
   res.json(result);
 });
 
+// POST /api/request-campaigns/:id/send-to  { user_ids }  募集のあとに連携した人などへ、最初と同じ案内カードを送る
+router.post('/:id/send-to', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!adminOnly(req, res)) return;
+  const companyId = req.companyId!;
+  const c = getCampaign(companyId, req.params.id);
+  if (!c || c.status !== 'open') { res.status(409).json({ error: 'この募集は受付中ではありません' }); return; }
+  const ids = Array.isArray(req.body?.user_ids) ? (req.body.user_ids as any[]).map(Number).filter(Number.isInteger) : [];
+  if (ids.length === 0) { res.status(400).json({ error: '送る人を選んでください' }); return; }
+  const staff = new Set(campaignStaff(companyId).filter(s => s.linked).map(s => s.id));
+  const result = await sendCampaignLinks(companyId, c, 'open', ids.filter(id => staff.has(id)));
+  logAudit({ userId: req.user!.id, companyId, action: 'update', entity: 'request_campaign', entityId: c.id, summary: `希望の募集「${c.title}」の案内を送信（LINE ${result.sent}/${result.targets}人）` });
+  res.json(result);
+});
+
 // POST /api/request-campaigns/:id/remind  まだ答えていない人（LINE 連携済み）にだけ送る
 router.post('/:id/remind', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!adminOnly(req, res)) return;
