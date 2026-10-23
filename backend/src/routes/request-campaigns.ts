@@ -315,7 +315,9 @@ router.post('/:id/remind', authenticateToken, requireCompany, async (req: AuthRe
   const c = getCampaign(companyId, req.params.id);
   if (!c || c.status !== 'open') { res.status(409).json({ error: 'この募集は受付中ではありません' }); return; }
   const answered = new Set((db.prepare('SELECT user_id FROM request_campaign_answers WHERE campaign_id = ? AND submitted_at IS NOT NULL').all(c.id) as any[]).map(r => r.user_id));
-  const pending = campaignStaff(companyId).filter(s => !answered.has(s.id));
+  // user_ids を渡すとその人だけ（あとから連携した人に1通だけ送る、など）
+  const only = Array.isArray(req.body?.user_ids) ? new Set((req.body.user_ids as any[]).map(Number)) : null;
+  const pending = campaignStaff(companyId).filter(s => !answered.has(s.id) && (!only || only.has(s.id)));
   const linked = pending.filter(s => s.linked).map(s => s.id);
   const result = linked.length ? await sendCampaignLinks(companyId, c, 'remind', linked) : { sent: 0, targets: 0, failed: [] as string[] };
   res.json({ ...result, unanswered: pending.length, not_linked: pending.filter(s => !s.linked).map(s => s.name) });
