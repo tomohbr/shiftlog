@@ -31,7 +31,7 @@ const ITEMS: ItemSeed[] = [
 type MenuSeed = { key: string; name: string; label: string; stores: 'both' | 'eki' | 'hanabata'; price?: number; parts: [string, number][]; base: Partial<Record<'eki' | 'hanabata', [number, number, number]>> };
 
 // base は [平日, 土曜, 日曜・祝日] の1日平均（2025年の実績。12/24・25は土曜扱い）
-// カレードッグは駅だけの新メニュー。仮に「ドッグの2割がカレードッグに移る」として、駅のドッグを8割にしてある
+// カレードッグは駅だけの新メニュー。去年の駅のドッグ（セット＋単品）を「ひばりドッグとカレードッグで半々」とみる（10/24 本人）
 const MENUS: MenuSeed[] = [
   { key: 'chicken', name: 'チキン単品', label: 'チキン', stores: 'both', price: 900, parts: [['chicken', 1], ['pack', 1], ['fork', 1]],
     base: { eki: [45.5, 206.0, 236.0], hanabata: [53.4, 89.4, 149.0] } },
@@ -40,13 +40,13 @@ const MENUS: MenuSeed[] = [
     base: { hanabata: [49.4, 143.6, 170.3] } },
   // スープのテイクアウト（蓋付きカップ）は駅が2割・花畑が1割（10/24 本人の感覚）。会場で割合が違うのでメニューを会場別に持つ
   { key: 'set', name: 'ドッグセット', label: 'ドッグセット', stores: 'eki', price: 1000, parts: [['sausage', 1], ['bun', 1], ['soup', 1], ['sleeve', 1], ['cup', 0.8], ['lid', 0.2], ['oshibori', 1]],
-    base: { eki: [36.6, 145.4, 158.6] } },
+    base: { eki: [22.9, 90.9, 99.1] } },
   { key: 'set_h', name: 'ドッグセット', label: 'ドッグセット', stores: 'hanabata', price: 1000, parts: [['sausage', 1], ['bun', 1], ['soup', 1], ['sleeve', 1], ['cup', 0.9], ['lid', 0.1], ['oshibori', 1]],
     base: { hanabata: [80.1, 165.8, 179.0] } },
   { key: 'dog', name: 'ドッグ単品', label: 'ドッグ単品', stores: 'both', price: 800, parts: [['sausage', 1], ['bun', 1], ['sleeve', 1], ['oshibori', 1]],
-    base: { eki: [6.6, 40.8, 42.2], hanabata: [17.6, 58.2, 51.3] } },
+    base: { eki: [4.2, 25.5, 26.4], hanabata: [17.6, 58.2, 51.3] } },
   { key: 'curry', name: 'カレードッグ', label: 'カレードッグ', stores: 'eki', parts: [['sausage', 1], ['bun', 1], ['curry', 1], ['sleeve', 1], ['oshibori', 1]],
-    base: { eki: [10.8, 46.5, 50.2] } },
+    base: { eki: [27.1, 116.4, 125.5] } },
   { key: 'soup', name: 'スープ単品', label: 'スープ', stores: 'eki', price: 300, parts: [['soup', 1], ['cup', 0.8], ['lid', 0.2], ['oshibori', 1]],
     base: { eki: [14.9, 36.0, 31.0] } },
   { key: 'soup_h', name: 'スープ単品', label: 'スープ', stores: 'hanabata', price: 300, parts: [['soup', 1], ['cup', 0.9], ['lid', 0.1], ['oshibori', 1]],
