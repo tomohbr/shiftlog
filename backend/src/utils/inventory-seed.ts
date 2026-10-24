@@ -31,7 +31,7 @@ const ITEMS: ItemSeed[] = [
 type MenuSeed = { key: string; name: string; label: string; stores: 'both' | 'eki' | 'hanabata'; price?: number; parts: [string, number][]; base: Partial<Record<'eki' | 'hanabata', [number, number, number]>> };
 
 // base は [平日, 土曜, 日曜・祝日] の1日平均（2025年の実績。12/24・25は土曜扱い）
-// カレードッグは駅だけの新メニュー。去年の駅のドッグ（セット＋単品）を「ひばりドッグとカレードッグで半々」とみる（10/24 本人）
+// カレードッグは駅だけの新メニュー。去年の駅のドッグ（セット＋単品）を「ひばりドッグとカレードッグで半々」とみる（10/24 本人）。カレードッグにもスープ付きのセットがある。セットと単品の比は去年のドッグと同じ
 const MENUS: MenuSeed[] = [
   { key: 'chicken', name: 'チキン単品', label: 'チキン', stores: 'both', price: 900, parts: [['chicken', 1], ['pack', 1], ['fork', 1]],
     base: { eki: [45.5, 206.0, 236.0], hanabata: [53.4, 89.4, 149.0] } },
@@ -46,7 +46,9 @@ const MENUS: MenuSeed[] = [
   { key: 'dog', name: 'ドッグ単品', label: 'ドッグ単品', stores: 'both', price: 800, parts: [['sausage', 1], ['bun', 1], ['sleeve', 1], ['oshibori', 1]],
     base: { eki: [4.2, 25.5, 26.4], hanabata: [17.6, 58.2, 51.3] } },
   { key: 'curry', name: 'カレードッグ', label: 'カレードッグ', stores: 'eki', parts: [['sausage', 1], ['bun', 1], ['curry', 1], ['sleeve', 1], ['oshibori', 1]],
-    base: { eki: [27.1, 116.4, 125.5] } },
+    base: { eki: [4.2, 25.5, 26.4] } },
+  { key: 'curry_set', name: 'カレードッグセット', label: 'カレードッグセット', stores: 'eki', parts: [['sausage', 1], ['bun', 1], ['curry', 1], ['soup', 1], ['sleeve', 1], ['cup', 0.8], ['lid', 0.2], ['oshibori', 1]],
+    base: { eki: [22.9, 90.9, 99.1] } },
   { key: 'soup', name: 'スープ単品', label: 'スープ', stores: 'eki', price: 300, parts: [['soup', 1], ['cup', 0.8], ['lid', 0.2], ['oshibori', 1]],
     base: { eki: [14.9, 36.0, 31.0] } },
   { key: 'soup_h', name: 'スープ単品', label: 'スープ', stores: 'hanabata', price: 300, parts: [['soup', 1], ['cup', 0.9], ['lid', 0.1], ['oshibori', 1]],
