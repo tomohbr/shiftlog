@@ -2,7 +2,7 @@ import db from '../db';
 
 // ひばり工房のクリスマスマーケット2026用の初期データ（2026-10-24 芝原と決めた内容）。
 // 品目・メニュー・1食あたりの使用数・去年の1日平均を入れる。画面からいつでも直せる。
-// 「仮」と書いたものは未確認（容器の割り当て、カレー・冷凍野菜の1袋あたり、カレードッグの割合）。
+// チキン単品は蓋付きパック（10/24 本人）。「仮」と書いたものは未確認（フォーク等の割り当て、カレー・冷凍野菜の1袋あたり、カレードッグの割合）。
 
 type ItemSeed = {
   key: string; name: string; category: 'food' | 'container'; count_unit: string; use_unit: string; per_count?: number;
@@ -32,7 +32,7 @@ type MenuSeed = { key: string; name: string; label: string; stores: 'both' | 'ek
 // base は [平日, 土曜, 日曜・祝日] の1日平均（2025年の実績。12/24・25は土曜扱い）
 // カレードッグは駅だけの新メニュー。仮に「ドッグの2割がカレードッグに移る」として、駅のドッグを8割にしてある
 const MENUS: MenuSeed[] = [
-  { key: 'chicken', name: 'チキン単品', label: 'チキン', stores: 'both', price: 900, parts: [['chicken', 1], ['tray', 1], ['fork', 1]],
+  { key: 'chicken', name: 'チキン単品', label: 'チキン', stores: 'both', price: 900, parts: [['chicken', 1], ['pack', 1], ['fork', 1]],
     base: { eki: [45.5, 206.0, 236.0], hanabata: [53.4, 89.4, 149.0] } },
   { key: 'plate', name: 'チキンプレート', label: 'チキンプレート', stores: 'hanabata',
     parts: [['chicken', 1], ['veg', 1], ['frank', 1], ['yamauchi', 2], ['bacon', 1], ['pack', 1], ['fork', 1]],
