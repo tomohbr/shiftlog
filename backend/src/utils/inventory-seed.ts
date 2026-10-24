@@ -47,7 +47,7 @@ const MENUS: MenuSeed[] = [
     base: { eki: [4.2, 25.5, 26.4], hanabata: [17.6, 58.2, 51.3] } },
   { key: 'curry', name: 'カレードッグ', label: 'カレードッグ', stores: 'eki', parts: [['sausage', 1], ['bun', 1], ['curry', 1], ['sleeve', 1], ['oshibori', 1]],
     base: { eki: [4.2, 25.5, 26.4] } },
-  { key: 'curry_set', name: 'カレードッグセット', label: 'カレードッグセット', stores: 'eki', parts: [['sausage', 1], ['bun', 1], ['curry', 1], ['soup', 1], ['sleeve', 1], ['cup', 0.8], ['lid', 0.2], ['oshibori', 1]],
+  { key: 'curry_set', name: 'カレードッグセット', label: 'カレードッグセット', stores: 'eki', price: 1000, parts: [['sausage', 1], ['bun', 1], ['curry', 1], ['soup', 1], ['sleeve', 1], ['cup', 0.8], ['lid', 0.2], ['oshibori', 1]],
     base: { eki: [22.9, 90.9, 99.1] } },
   { key: 'soup', name: 'スープ単品', label: 'スープ', stores: 'eki', price: 300, parts: [['soup', 1], ['cup', 0.8], ['lid', 0.2], ['oshibori', 1]],
     base: { eki: [14.9, 36.0, 31.0] } },
