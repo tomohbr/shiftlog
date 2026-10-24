@@ -12,7 +12,7 @@ type ItemSeed = {
 const ITEMS: ItemSeed[] = [
   { key: 'chicken', name: 'スモークチキン', category: 'food', count_unit: '本', use_unit: '本' },
   { key: 'sausage', name: 'ドッグ用ソーセージ', category: 'food', count_unit: '本', use_unit: '本' },
-  { key: 'bun', name: 'バンズ', category: 'food', count_unit: '個', use_unit: '個' },
+  { key: 'bun', name: 'バンズ', category: 'food', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 3, note: 'パン屋に発注。届くまでの日数は仮' },
   { key: 'soup', name: 'スープ', category: 'food', count_unit: '袋', use_unit: '食', per_count: 35, half_ok: true, note: '2袋で70食' },
   { key: 'curry', name: 'カレー', category: 'food', count_unit: '袋', use_unit: '食', per_count: 20, half_ok: true, note: '1袋の食数は仮（実績から直す）' },
   { key: 'frank', name: 'フランクフルト（プレート用）', category: 'food', count_unit: '本', use_unit: '本' },
