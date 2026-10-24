@@ -2,7 +2,7 @@ import db from '../db';
 
 // ひばり工房のクリスマスマーケット2026用の初期データ（2026-10-24 芝原と決めた内容）。
 // 品目・メニュー・1食あたりの使用数・去年の1日平均を入れる。画面からいつでも直せる。
-// チキン単品は蓋付きパック、フォークはチキン系に1本ずつ、ドッグ・スープはおしぼりだけ（10/24 本人）。「仮」と書いたものは未確認（フォーク等の割り当て、カレー・冷凍野菜の1袋あたり、カレードッグの割合）。
+// チキン単品は蓋付きパック、フォークはチキン系に1本ずつ、ドッグ・スープはおしぼりだけ、スープは基本蓋なしでテイクアウトだけ蓋付き（10/24 本人）。「仮」と書いたものは未確認（フォーク等の割り当て、カレー・冷凍野菜の1袋あたり、カレードッグの割合）。
 
 type ItemSeed = {
   key: string; name: string; category: 'food' | 'container'; count_unit: string; use_unit: string; per_count?: number;
@@ -22,8 +22,8 @@ const ITEMS: ItemSeed[] = [
   { key: 'tray', name: '黒トレー', category: 'container', count_unit: '枚', use_unit: '枚', source: 'purchase', lead_days: 5 },
   { key: 'pack', name: '蓋付きフードパック', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 5 },
   { key: 'sleeve', name: 'ホットドッグスリーブ', category: 'container', count_unit: '枚', use_unit: '枚', source: 'purchase', lead_days: 5 },
-  { key: 'cup', name: 'スープカップ', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 5 },
-  { key: 'lid', name: 'スープカップの蓋', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 5 },
+  { key: 'cup', name: 'スープカップ（蓋なし）', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 5, note: 'その場で飲むお客さん用' },
+  { key: 'lid', name: 'テイクアウト用スープカップ（蓋付き）', category: 'container', count_unit: 'セット', use_unit: 'セット', source: 'purchase', lead_days: 5, note: 'テイクアウトのお客さんだけ。割合は仮で2割（メニューの使用数で直す）' },
   { key: 'fork', name: 'フォーク', category: 'container', count_unit: '本', use_unit: '本', source: 'purchase', lead_days: 5 },
   { key: 'oshibori', name: 'おしぼり', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 5 },
 ];
@@ -38,13 +38,13 @@ const MENUS: MenuSeed[] = [
   { key: 'plate', name: 'チキンプレート', label: 'チキンプレート', stores: 'hanabata',
     parts: [['chicken', 1], ['veg', 1], ['frank', 1], ['yamauchi', 2], ['bacon', 1], ['pack', 1], ['fork', 1]],
     base: { hanabata: [49.4, 143.6, 170.3] } },
-  { key: 'set', name: 'ドッグセット', label: 'ドッグセット', stores: 'both', price: 1000, parts: [['sausage', 1], ['bun', 1], ['soup', 1], ['sleeve', 1], ['cup', 1], ['lid', 1], ['oshibori', 1]],
+  { key: 'set', name: 'ドッグセット', label: 'ドッグセット', stores: 'both', price: 1000, parts: [['sausage', 1], ['bun', 1], ['soup', 1], ['sleeve', 1], ['cup', 0.8], ['lid', 0.2], ['oshibori', 1]],
     base: { eki: [36.6, 145.4, 158.6], hanabata: [80.1, 165.8, 179.0] } },
   { key: 'dog', name: 'ドッグ単品', label: 'ドッグ単品', stores: 'both', price: 800, parts: [['sausage', 1], ['bun', 1], ['sleeve', 1], ['oshibori', 1]],
     base: { eki: [6.6, 40.8, 42.2], hanabata: [17.6, 58.2, 51.3] } },
   { key: 'curry', name: 'カレードッグ', label: 'カレードッグ', stores: 'eki', parts: [['sausage', 1], ['bun', 1], ['curry', 1], ['sleeve', 1], ['oshibori', 1]],
     base: { eki: [10.8, 46.5, 50.2] } },
-  { key: 'soup', name: 'スープ単品', label: 'スープ', stores: 'both', price: 300, parts: [['soup', 1], ['cup', 1], ['lid', 1], ['oshibori', 1]],
+  { key: 'soup', name: 'スープ単品', label: 'スープ', stores: 'both', price: 300, parts: [['soup', 1], ['cup', 0.8], ['lid', 0.2], ['oshibori', 1]],
     base: { eki: [14.9, 36.0, 31.0], hanabata: [10.1, 12.2, 53.3] } },
 ];
 
