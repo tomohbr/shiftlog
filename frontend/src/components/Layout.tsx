@@ -1,4 +1,5 @@
-import { ReactNode, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
+import { invApi } from '../api/client'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useKiosk } from '../contexts/KioskContext'
@@ -33,6 +34,7 @@ import {
   Sparkles,
   FileSpreadsheet,
   BookOpen,
+  Package,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -60,8 +62,16 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
   ]
 
+  // 催事の在庫は、その会社で有効にしたときだけ出す（運営者は有効にする前から出す）
+  const [invOn, setInvOn] = useState(false)
+  useEffect(() => {
+    if (!isAdminRole || !selectedCompany) { setInvOn(false); return }
+    invApi().me().then(r => setInvOn(r.data.enabled)).catch(() => setInvOn(false))
+  }, [isAdminRole, selectedCompany?.id])
+
   // 使い込むほど使う詳細機能（デフォルトは折りたたみ）
   const adminNavMore = [
+    ...(invOn || user?.role === 'super_admin' ? [{ path: '/inventory', label: '催事の在庫', icon: Package }] : []),
     { path: '/auto-schedule', label: '希望から自動作成', icon: Sparkles },
     { path: '/shift-requests', label: '希望シフト収集', icon: ClipboardList },
     { path: '/request-campaigns', label: '期間で希望を募集', icon: Megaphone },

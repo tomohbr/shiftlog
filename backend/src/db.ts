@@ -683,6 +683,182 @@ try {
   if (!rcaCols.includes('referral_note')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN referral_note TEXT');
 } catch (e) { console.error('[migration] 希望の募集テーブルの作成に失敗', e); }
 
+// ---- 催事の在庫・補充（2026-10。クリスマスマーケットの会場在庫と、工房からの毎日の積み込み） ----
+//   在庫の置き場所 loc は「0 = 会社（工房）」か、会場の store_id。在庫数はすべて inv_moves の合計で出す。
+//   inv_settings      会社ごとの設定。enabled=1 の会社だけ使える（販売用の他社には出さない）
+//   inv_items         数える品目。count_unit（袋・本…）で数え、use_unit（食・枚…）で使う。per_count = 1数え単位あたりの使う単位
+//   inv_menus         レジの部門（＝メニュー）。inv_menu_parts に「1つ売ると何をいくつ使うか」（use_unit で）
+//   inv_baselines     予想の土台（去年の同じ会場・同じ曜日区分の1日平均）。今年の実績が2日分たまると実績を使う
+//   inv_moves         在庫の動き。type = purchase（会社に入庫）/ load_out・load_in（積み込み＝会社→会場）/
+//                     local_buy（会場で買い足し）/ sale（レジの販売数から換算）/ adjust（数えた数との差）
+//   inv_counts        数えた記録。会場は「数え＋レジ締め」がそろったときに差を adjust にする。会社はすぐ adjust
+//   inv_sales         レジ締め（部門ごとの数）。締めレシートの写真から読み取るか手入力
+//   inv_loads         積み込みリスト（届ける日・会場ごと）。confirmed にすると移動の move を書く
+//   inv_requests      「足りない」の連絡。次の積み込みに上乗せし、確定したら done
+//   inv_notices       同じ通知を二度送らないための記録
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS inv_settings (
+      company_id INTEGER PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      store_ids TEXT,
+      notify_user_ids TEXT,
+      margin_pct INTEGER NOT NULL DEFAULT 15,
+      special_days TEXT,
+      active_from TEXT,
+      active_to TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (company_id) REFERENCES companies(id)
+    );
+    CREATE TABLE IF NOT EXISTS inv_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'food',
+      count_unit TEXT NOT NULL DEFAULT '個',
+      use_unit TEXT NOT NULL DEFAULT '個',
+      per_count REAL NOT NULL DEFAULT 1,
+      half_ok INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'kobo',
+      track_company INTEGER NOT NULL DEFAULT 0,
+      lead_days INTEGER,
+      cap_per_venue REAL,
+      tolerance REAL NOT NULL DEFAULT 0,
+      note TEXT,
+      sort INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (company_id) REFERENCES companies(id)
+    );
+    CREATE TABLE IF NOT EXISTS inv_menus (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      register_label TEXT,
+      store_ids TEXT,
+      price INTEGER,
+      sort INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (company_id) REFERENCES companies(id)
+    );
+    CREATE TABLE IF NOT EXISTS inv_menu_parts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      menu_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      qty REAL NOT NULL,
+      FOREIGN KEY (menu_id) REFERENCES inv_menus(id) ON DELETE CASCADE,
+      FOREIGN KEY (item_id) REFERENCES inv_items(id) ON DELETE CASCADE,
+      UNIQUE(menu_id, item_id)
+    );
+    CREATE TABLE IF NOT EXISTS inv_baselines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      store_id INTEGER NOT NULL,
+      menu_id INTEGER NOT NULL,
+      daytype TEXT NOT NULL,
+      qty REAL NOT NULL,
+      FOREIGN KEY (menu_id) REFERENCES inv_menus(id) ON DELETE CASCADE,
+      UNIQUE(store_id, menu_id, daytype)
+    );
+    CREATE TABLE IF NOT EXISTS inv_moves (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      loc INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      qty REAL NOT NULL,
+      type TEXT NOT NULL,
+      ref TEXT,
+      note TEXT,
+      user_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (item_id) REFERENCES inv_items(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_inv_moves_loc ON inv_moves(company_id, loc, item_id, date);
+    CREATE INDEX IF NOT EXISTS idx_inv_moves_ref ON inv_moves(ref);
+    CREATE TABLE IF NOT EXISTS inv_counts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      loc INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      user_id INTEGER,
+      finalized INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(company_id, loc, date)
+    );
+    CREATE TABLE IF NOT EXISTS inv_count_lines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      count_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      counted REAL NOT NULL,
+      expected REAL,
+      FOREIGN KEY (count_id) REFERENCES inv_counts(id) ON DELETE CASCADE,
+      UNIQUE(count_id, item_id)
+    );
+    CREATE TABLE IF NOT EXISTS inv_sales (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      store_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      user_id INTEGER,
+      source TEXT NOT NULL DEFAULT 'manual',
+      total_amount INTEGER,
+      photo TEXT,
+      ocr_raw TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(company_id, store_id, date)
+    );
+    CREATE TABLE IF NOT EXISTS inv_sales_lines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sales_id INTEGER NOT NULL,
+      menu_id INTEGER NOT NULL,
+      qty REAL NOT NULL,
+      amount INTEGER,
+      FOREIGN KEY (sales_id) REFERENCES inv_sales(id) ON DELETE CASCADE,
+      UNIQUE(sales_id, menu_id)
+    );
+    CREATE TABLE IF NOT EXISTS inv_loads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      store_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      confirmed_by INTEGER,
+      confirmed_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(company_id, store_id, date)
+    );
+    CREATE TABLE IF NOT EXISTS inv_load_lines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      load_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      suggested REAL NOT NULL DEFAULT 0,
+      qty REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (load_id) REFERENCES inv_loads(id) ON DELETE CASCADE,
+      UNIQUE(load_id, item_id)
+    );
+    CREATE TABLE IF NOT EXISTS inv_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      store_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      qty REAL NOT NULL,
+      note TEXT,
+      user_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'open',
+      load_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS inv_notices (
+      company_id INTEGER NOT NULL,
+      key TEXT NOT NULL,
+      sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (company_id, key)
+    );
+  `);
+} catch (e) { console.error('[migration] 在庫テーブルの作成に失敗', e); }
+
 export const SUPER_ADMIN_EMAIL = 'shibahara.724@gmail.com';
 
 // 一度だけ実行するマイグレーション管理

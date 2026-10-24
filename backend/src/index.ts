@@ -31,9 +31,11 @@ import pushRoutes from './routes/push';
 import telemetryRoutes from './routes/telemetry';
 import qrClockRoutes from './routes/qr-clock';
 import liffRoutes from './routes/liff';
+import inventoryRoutes from './routes/inventory';
 import { reportServerError } from './utils/ops-alerts';
 import { startDailyDigest } from './utils/daily-digest';
 import { startTrialNotifier } from './utils/trial-notify';
+import { startInventoryNotifier } from './utils/inventory-notify';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -63,6 +65,8 @@ app.use(cors({
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
 // LINE の Webhook も署名検証のため生の本文で受ける
 app.use('/api/line/webhook', express.raw({ type: '*/*' }));
+// 在庫の締めレシートの写真を送るので、ここだけ大きめに受ける（全体の express.json より先に読む）
+app.use('/api/inventory', express.json({ limit: '8mb' }));
 app.use(express.json());
 
 // 短縮URLはSPAのフォールバックより先に処理する。
@@ -100,6 +104,8 @@ app.use('/api/telemetry', telemetryRoutes);
 // 会場QRの打刻（ログイン不要。QRトークンで会場を特定する）
 app.use('/api/qr', qrClockRoutes);
 app.use('/api/liff', liffRoutes);
+// 催事の在庫・補充（LINE の画面と管理画面の両方から）
+app.use('/api/inventory', inventoryRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -164,5 +170,8 @@ startTrialNotifier();
 
 // 運営者向け日次レポート（毎朝 9:00 JST）
 startDailyDigest();
+
+// 催事の在庫の LINE 通知（締めの抜け・積み込みリスト・会社在庫を数える日）
+startInventoryNotifier();
 
 export default app;

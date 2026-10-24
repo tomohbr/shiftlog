@@ -20,7 +20,7 @@ function settings(companyId: number) {
   return db.prepare('SELECT liff_id, login_channel_id FROM line_settings WHERE company_id = ?').get(companyId) as { liff_id: string | null; login_channel_id: string | null } | undefined;
 }
 
-function verifyPunchKey(key: string): { uid: number; cid: number } | null {
+export function verifyPunchKey(key: string): { uid: number; cid: number } | null {
   try {
     const d = jwt.verify(key, PUNCH_SECRET) as any;
     return d?.pu && d?.pc ? { uid: Number(d.pu), cid: Number(d.pc) } : null;

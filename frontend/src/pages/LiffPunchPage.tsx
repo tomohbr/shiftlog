@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { QrCode, Play, Square, Coffee, CheckCircle2, Loader2, MapPin, CalendarClock, AlertTriangle } from 'lucide-react'
-import { liffApi, QrClockAction, QrClockStatus } from '../api/client'
+import { QrCode, Play, Square, Coffee, CheckCircle2, Loader2, MapPin, CalendarClock, AlertTriangle, Package } from 'lucide-react'
+import { invApi, liffApi, QrClockAction, QrClockStatus } from '../api/client'
 import { readPosition } from './QrClockPage'
 
 // LINE の中で開く、本人専用の打刻画面（LIFF）。/liff/punch/:companyId
@@ -37,6 +37,7 @@ export default function LiffPunchPage({ companyId }: { companyId: number }) {
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<{ action: QrClockAction; time: string; store: string } | null>(null)
   const [now, setNow] = useState(new Date())
+  const [stockOn, setStockOn] = useState(false)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 15000); return () => clearInterval(t) }, [])
 
@@ -55,6 +56,8 @@ export default function LiffPunchPage({ companyId }: { companyId: number }) {
         setKey(r.data.key); setName(r.data.user.name); setShifts(r.data.today_shifts)
         setStatus({ record: r.data.record, breaks: r.data.breaks, on_break: r.data.on_break })
         setPhase('ready')
+        // 催事の在庫が有効なら、退勤の前に閉店の締めへ行けるボタンを出す
+        invApi(r.data.key).me().then(m => setStockOn(m.data.enabled)).catch(() => {})
         readPosition(8000) // 位置の許可を先に聞いておく（押した瞬間に待たせないため）
       } catch (e: any) {
         setError(e.response?.data?.error || e.message || '開けませんでした')
@@ -188,6 +191,11 @@ export default function LiffPunchPage({ companyId }: { companyId: number }) {
             </button>
           ))}
         </div>
+      )}
+      {stockOn && (
+        <a href={`/liff/punch/${companyId}/stock`} className="w-full py-4 rounded-2xl border-2 border-gray-900 bg-white text-gray-900 text-lg font-bold flex items-center justify-center gap-2">
+          <Package className="w-6 h-6" />閉店の締め・在庫
+        </a>
       )}
       <p className="text-xs text-center text-gray-400">打刻のとき、不正防止のため位置情報を記録します（許可しなくても打刻できます）</p>
     </>

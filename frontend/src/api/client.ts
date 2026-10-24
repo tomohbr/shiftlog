@@ -901,3 +901,55 @@ export const pushApi = {
   unregisterDevice: (token: string) => api.delete('/push/device', { data: { token } }),
   test: () => api.post<{ ok: boolean; sent: number }>('/push/test'),
 }
+
+// ---- 催事の在庫・補充 ----
+// LINE の中（LIFF）では打刻と同じ鍵を x-inv-key で送る。管理画面ではいつものログインのまま使う。
+export type InvRole = 'admin' | 'full' | 'part'
+export interface InvItem {
+  id: number; name: string; category: 'food' | 'container'; count_unit: string; use_unit: string; per_count: number
+  half_ok: number; source: 'kobo' | 'purchase'; track_company: number; lead_days: number | null; cap_per_venue: number | null
+  tolerance: number; note: string | null; sort: number; active: number
+}
+export interface InvMenu { id: number; name: string; register_label: string | null; store_ids: number[] | null; price: number | null; sort: number; active: number; parts: { item_id: number; qty: number }[] }
+export interface InvMe {
+  enabled: boolean; role: InvRole; name: string; date?: string
+  stores?: { id: number; name: string }[]; my_store?: number | null; ocr?: boolean; items?: InvItem[]; menus?: InvMenu[]
+}
+export interface InvDiff { item_id: number; name: string; count_unit: string; counted: number; expected: number; diff: number }
+export interface InvClosing { store_id: number; date: string; name?: string; open_today?: boolean; counted: boolean; counted_at: string | null; sales_done: boolean; sales_at: string | null; complete: boolean; diffs: InvDiff[] }
+export interface InvLoadLine { item_id: number; name: string; count_unit: string; category: string; need: number; stock: number; request: number; suggested: number; qty: number; capped: boolean; company_stock: number | null }
+export interface InvLoad { store_id: number; name: string; date: string | null; status: string; confirmed_at: string | null; daytype?: string; forecast?: { menu_id: number; name: string; qty: number; basis: string }[]; stale?: { name: string; since: string; days: number }[]; lines: InvLoadLine[] }
+export interface InvReorder { item_id: number; name: string; count_unit: string; total: number; per_day: number; days_left: number; lead_days: number }
+export interface InvSettings { company_id: number; enabled: number; store_ids: number[]; notify_user_ids: number[]; margin_pct: number; special_days: Record<string, string>; active_from: string | null; active_to: string | null }
+export interface InvReceipt { lines: { menu_id: number; qty: number; amount: number | null }[]; total_amount: number | null; unmatched: { label: string; qty: number | null; amount: number | null }[]; receipt_date: string | null; note: string | null }
+
+export function invApi(key?: string) {
+  const h = key ? { headers: { 'x-inv-key': key } } : {}
+  return {
+    me: () => api.get<InvMe>('/inventory/me', h),
+    status: (date?: string) => api.get<{ date: string; stores: InvClosing[] }>('/inventory/status', { ...h, params: { date } }),
+    getCount: (loc: number, date?: string) => api.get<{ loc: number; date: string; items: InvItem[]; lines: { item_id: number; counted: number; expected?: number | null }[]; saved_at: string | null; finalized: boolean; previous: { date: string | null; lines: { item_id: number; counted: number }[] }; book?: { item_id: number; qty: number }[] }>('/inventory/count', { ...h, params: { loc, date } }),
+    saveCount: (loc: number, date: string, lines: { item_id: number; counted: number }[]) => api.post<{ ok: true; status: InvClosing | null }>('/inventory/count', { loc, date, lines }, h),
+    getSales: (store_id: number, date?: string) => api.get<{ store_id: number; date: string; menus: InvMenu[]; sales: { source: string; total_amount: number | null; updated_at: string; lines: { menu_id: number; qty: number; amount: number | null }[] } | null; ocr: boolean }>('/inventory/sales', { ...h, params: { store_id, date } }),
+    readReceipt: (store_id: number, image: string, media_type: string) => api.post<InvReceipt>('/inventory/sales/read', { store_id, image, media_type }, { ...h, timeout: 120000 }),
+    saveSales: (data: { store_id: number; date: string; lines: { menu_id: number; qty: number; amount: number | null }[]; total_amount: number | null; source: 'photo' | 'manual'; photo?: string | null; ocr_raw?: unknown }) => api.post<{ ok: true; status: InvClosing }>('/inventory/sales', data, h),
+    localBuy: (store_id: number, item_id: number, qty: number, note: string) => api.post('/inventory/local-buy', { store_id, item_id, qty, note }, h),
+    requests: () => api.get<{ id: number; store_id: number; store_name: string; item_id: number; item_name: string; count_unit: string; qty: number; note: string | null; user_id: number; user_name: string | null; status: string; created_at: string }[]>('/inventory/requests', h),
+    addRequest: (store_id: number, item_id: number, qty: number, note: string) => api.post('/inventory/requests', { store_id, item_id, qty, note }, h),
+    deleteRequest: (id: number) => api.delete(`/inventory/requests/${id}`, h),
+    load: (store_id?: number, date?: string) => api.get<{ margin_pct: number; loads: InvLoad[]; reorder: InvReorder[] }>('/inventory/load', { ...h, params: { store_id, date } }),
+    confirmLoad: (store_id: number, date: string, lines: { item_id: number; qty: number }[]) => api.post('/inventory/load/confirm', { store_id, date, lines }, h),
+    purchase: (item_id: number, qty: number, note: string) => api.post('/inventory/purchase', { item_id, qty, note }, h),
+    stock: () => api.get<{ locs: { id: number; name: string }[]; items: InvItem[]; stock: Record<string, Record<string, number>>; reorder: InvReorder[] }>('/inventory/stock', h),
+    history: (days = 14) => api.get<(InvClosing & { name: string; total_amount: number | null; lines: { menu_id: number; qty: number; amount: number | null }[] })[]>('/inventory/history', { ...h, params: { days } }),
+    master: () => api.get<{ settings: InvSettings | null; stores: { id: number; name: string }[]; users: { id: number; name: string; line_linked: number }[]; items: InvItem[]; menus: InvMenu[]; baselines: { store_id: number; menu_id: number; daytype: string; qty: number }[] }>('/inventory/master', h),
+    seed: () => api.post('/inventory/seed', {}, h),
+    saveSettings: (s: Partial<InvSettings>) => api.put('/inventory/settings', s, h),
+    addItem: (it: Partial<InvItem>) => api.post('/inventory/items', it, h),
+    saveItem: (it: InvItem) => api.put(`/inventory/items/${it.id}`, it, h),
+    addMenu: (m: Partial<InvMenu>) => api.post('/inventory/menus', m, h),
+    saveMenu: (m: InvMenu) => api.put(`/inventory/menus/${m.id}`, m, h),
+    saveBaselines: (rows: { store_id: number; menu_id: number; daytype: string; qty: number }[]) => api.put('/inventory/baselines', { rows }, h),
+  }
+}
+export type InvApi = ReturnType<typeof invApi>

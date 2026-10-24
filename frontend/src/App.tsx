@@ -39,6 +39,8 @@ import QrClockPage from './pages/QrClockPage'
 import StoreQrPosterPage from './pages/StoreQrPosterPage'
 import LineInvitePage from './pages/LineInvitePage'
 import LiffPunchPage from './pages/LiffPunchPage'
+import LiffStockPage from './pages/LiffStockPage'
+import InventoryPage from './pages/InventoryPage'
 import LineInvitePrintPage from './pages/LineInvitePrintPage'
 import StaffGuidePage from './pages/StaffGuidePage'
 import RequestCampaignPage from './pages/RequestCampaignPage'
@@ -75,6 +77,11 @@ function AppRoutes() {
 
   // LINE の中の本人専用の打刻画面（LIFF）。本人確認は LINE が行う
   const liffMatch = location.pathname.match(/^\/liff\/punch\/(\d+)/)
+  // 同じ LIFF の /stock は在庫の画面（LINE から開いた直後は ?liff.state=/stock… の形で来る）
+  const liffState = new URLSearchParams(location.search).get('liff.state') || ''
+  if (liffMatch && (/^\/liff\/punch\/\d+\/stock/.test(location.pathname) || liffState.startsWith('/stock'))) {
+    return <LiffStockPage companyId={Number(liffMatch[1])} />
+  }
   if (liffMatch) {
     return <LiffPunchPage companyId={Number(liffMatch[1])} />
   }
@@ -185,6 +192,7 @@ function AppRoutes() {
           <Route path="/swaps" element={<SwapsPage />} />
           <Route path="/payroll" element={<PayrollPage />} />
           <Route path="/auto-schedule" element={<VenueSchedulePage />} />
+          <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/admin-hub" element={<AdminHubPage />} />
           <Route path="/setup-guide" element={<SetupGuidePage />} />
           <Route path="/organization" element={<OrganizationPage />} />

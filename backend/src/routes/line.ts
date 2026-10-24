@@ -746,6 +746,11 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
   if (me) {
     const short = text.length <= 10;
     const what = !short ? '' : /希望/.test(text) ? 'requests' : /休み|欠勤|休む/.test(text) ? 'absent' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : /使い方|ヘルプ|help/i.test(text) ? 'help' : '';
+    // 催事の在庫（閉店の締め・積み込み）の画面を開くボタン
+    if (short && /在庫|締め|残り|積み込み|積込/.test(text) && stockLiffUrl(companyId)) {
+      await replyLine(token, replyToken, buttonsCard('在庫の画面', '在庫・閉店の締め', ['残りの数え・レジ締め・買い足し・足りない連絡はここから。'], [{ label: '在庫の画面を開く', uri: stockLiffUrl(companyId)!, primary: true, color: '#06C755' }]));
+      return;
+    }
     if (what === 'help') {
       await replyLine(token, replyToken, `【使い方】トーク画面の下のメニューを押してください。\n・シフトを見る … 自分とみんなの予定\n・希望を出す … 出られる日を提出\n・休みの連絡 … 休むシフトを${W(companyId)}に連絡\n・打刻する … ブースのQRを読んで出勤・退勤\n\nそのほかの質問は、このトークにそのまま書いて送ってください。${W(companyId)}に届きます。`);
       return;
@@ -896,6 +901,26 @@ function buttonsCard(altText: string, title: string, lines: string[], buttons: {
     },
   };
 }
+
+/** 在庫の画面（LINE の中で開く）の URL。在庫の機能が有効で、LINE の打刻（LIFF）が設定済みのときだけ */
+export function stockLiffUrl(companyId: number, query = ''): string | null {
+  const s = db.prepare('SELECT liff_id FROM line_settings WHERE company_id = ?').get(companyId) as { liff_id: string | null } | undefined;
+  const inv = db.prepare('SELECT enabled FROM inv_settings WHERE company_id = ?').get(companyId) as { enabled: number } | undefined;
+  if (!s?.liff_id || !inv?.enabled) return null;
+  return `https://liff.line.me/${s.liff_id}/stock${query ? `?${query}` : ''}`;
+}
+
+/** 指定したスタッフの LINE に送る（連携していない人は飛ばす）。送れた人数を返す */
+export async function pushToUsers(companyId: number, userIds: number[], message: LineMessage): Promise<number> {
+  const token = (db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any)?.channel_access_token;
+  if (!token || !userIds.length) return 0;
+  const rows = db.prepare(`SELECT line_user_id FROM user_line_ids WHERE user_id IN (${userIds.map(() => '?').join(',')})`).all(...userIds) as { line_user_id: string }[];
+  let sent = 0;
+  for (const r of rows) if (await sendLineMessage(token, r.line_user_id, message)) sent++;
+  return sent;
+}
+
+export { buttonsCard };
 
 function adminLineIds(companyId: number): string[] {
   return (db.prepare(`
