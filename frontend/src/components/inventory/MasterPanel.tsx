@@ -153,7 +153,7 @@ export default function MasterPanel({ api, onChanged }: { api: InvApi; onChanged
   if (err) return <Msg kind="err">{err}</Msg>
   if (!m) return <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 animate-spin text-gray-400" /></div>
   const seed = async () => {
-    if (!confirm('クリスマスマーケット用の初期データ（品目16・メニュー6・去年の1日平均）を入れます。よろしいですか？')) return
+    if (!confirm('クリスマスマーケット用の初期データ（品目16・メニュー8・去年の1日平均）を入れます。よろしいですか？')) return
     try { await api.seed(); reload() } catch (e) { alert(errText(e, '入れられませんでした')) }
   }
   return (
