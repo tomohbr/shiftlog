@@ -19,13 +19,13 @@ const ITEMS: ItemSeed[] = [
   { key: 'yamauchi', name: 'ヤマウチ（ハム）', category: 'food', count_unit: '袋', use_unit: '枚', per_count: 100, half_ok: true, note: '1袋100枚。催事専用で商品登録なし' },
   { key: 'bacon', name: 'ベーコンスライス', category: 'food', count_unit: 'パック', use_unit: '枚', per_count: 16, tolerance: 1, note: '1パック16〜17枚。1パック分のずれは差にしない' },
   { key: 'veg', name: '温野菜（冷凍）', category: 'food', count_unit: '袋', use_unit: '食', per_count: 20, half_ok: true, source: 'purchase', lead_days: 7, note: '発注は1週間前。1袋の食数は仮。足りなければ業務スーパー' },
-  { key: 'tray', name: '黒トレー', category: 'container', count_unit: '枚', use_unit: '枚', source: 'purchase', lead_days: 5 },
-  { key: 'pack', name: '蓋付きフードパック', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 5 },
-  { key: 'sleeve', name: 'ホットドッグスリーブ', category: 'container', count_unit: '枚', use_unit: '枚', source: 'purchase', lead_days: 5 },
-  { key: 'cup', name: 'スープカップ（蓋なし）', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 5, note: 'その場で飲むお客さん用' },
-  { key: 'lid', name: 'テイクアウト用スープカップ（蓋付き）', category: 'container', count_unit: 'セット', use_unit: 'セット', source: 'purchase', lead_days: 5, note: 'テイクアウトのお客さんだけ。駅2割・花畑1割（メニューの使用数で直せる）' },
-  { key: 'fork', name: 'フォーク', category: 'container', count_unit: '本', use_unit: '本', source: 'purchase', lead_days: 5 },
-  { key: 'oshibori', name: 'おしぼり', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 5 },
+  { key: 'tray', name: '黒トレー', category: 'container', count_unit: '枚', use_unit: '枚', source: 'purchase', lead_days: 7 },
+  { key: 'pack', name: '蓋付きフードパック', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 7 },
+  { key: 'sleeve', name: 'ホットドッグスリーブ', category: 'container', count_unit: '枚', use_unit: '枚', source: 'purchase', lead_days: 7 },
+  { key: 'cup', name: 'スープカップ（蓋なし）', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 7, note: 'その場で飲むお客さん用' },
+  { key: 'lid', name: 'テイクアウト用スープカップ（蓋付き）', category: 'container', count_unit: 'セット', use_unit: 'セット', source: 'purchase', lead_days: 7, note: 'テイクアウトのお客さんだけ。駅2割・花畑1割（メニューの使用数で直せる）' },
+  { key: 'fork', name: 'フォーク', category: 'container', count_unit: '本', use_unit: '本', source: 'purchase', lead_days: 7 },
+  { key: 'oshibori', name: 'おしぼり', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 7 },
 ];
 
 type MenuSeed = { key: string; name: string; label: string; stores: 'both' | 'eki' | 'hanabata'; price?: number; parts: [string, number][]; base: Partial<Record<'eki' | 'hanabata', [number, number, number]>> };
