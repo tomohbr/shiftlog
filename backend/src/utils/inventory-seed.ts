@@ -35,7 +35,7 @@ type MenuSeed = { key: string; name: string; label: string; stores: 'both' | 'ek
 const MENUS: MenuSeed[] = [
   { key: 'chicken', name: 'チキン単品', label: 'チキン', stores: 'both', price: 900, parts: [['chicken', 1], ['pack', 1], ['fork', 1]],
     base: { eki: [45.5, 206.0, 236.0], hanabata: [53.4, 89.4, 149.0] } },
-  { key: 'plate', name: 'チキンプレート', label: 'チキンプレート', stores: 'hanabata',
+  { key: 'plate', name: 'チキンプレート', label: 'チキンプレート', stores: 'hanabata', price: 1300,
     parts: [['chicken', 1], ['veg', 1], ['frank', 1], ['yamauchi', 2], ['bacon', 1], ['pack', 1], ['fork', 1]],
     base: { hanabata: [49.4, 143.6, 170.3] } },
   // スープのテイクアウト（蓋付きカップ）は駅が2割・花畑が1割（10/24 本人の感覚）。会場で割合が違うのでメニューを会場別に持つ
