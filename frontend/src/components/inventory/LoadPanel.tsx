@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Truck, AlertTriangle } from 'lucide-react'
-import { InvLoad, InvReorder } from '../../api/client'
+import { InvLoad, InvPerCount, InvReorder } from '../../api/client'
 import { Card, InvCtx, Msg, errText, fmt, hm, md } from './common'
 
 // 積み込みリスト（担当者）。会場ごとに「次に開く日」の案を出す。数を直して確定すると、会社→会場に移動する。
@@ -84,7 +84,7 @@ export function ReorderNote({ list }: { list: InvReorder[] }) {
 }
 
 export default function LoadPanel({ ctx }: { ctx: InvCtx }) {
-  const [res, setRes] = useState<{ loads: InvLoad[]; reorder: InvReorder[]; margin_pct: number } | null>(null)
+  const [res, setRes] = useState<{ loads: InvLoad[]; reorder: InvReorder[]; margin_pct: number; per_count: InvPerCount[] } | null>(null)
   const [err, setErr] = useState('')
   const load = async () => { try { setRes((await ctx.api.load()).data); setErr('') } catch (e) { setErr(errText(e, '読み込めませんでした')) } }
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -94,6 +94,12 @@ export default function LoadPanel({ ctx }: { ctx: InvCtx }) {
     <div className="space-y-4">
       <Msg kind="info">「使う見込み」は予想販売数（今年の同じ曜日の実績、なければ去年）に {res.margin_pct}% の余裕を足した数です。会場に残っている分を引いて「積む」の案を出しています。積んだ数に直してから確定してください。</Msg>
       <ReorderNote list={res.reorder} />
+      {res.per_count.map(p => (
+        <Msg key={p.item_id} kind="info">
+          <p><b>{p.name}</b>は、直近{p.days}日の実績で 1{p.count_unit}＝{fmt(p.suggested)}{p.use_unit} でした（今の設定は {fmt(p.current)}{p.use_unit}）。</p>
+          <button onClick={async () => { try { await ctx.api.setPerCount(p.item_id, p.suggested); await load() } catch (e) { alert(errText(e, '直せませんでした')) } }} className="mt-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-sm">{fmt(p.suggested)}{p.use_unit}に直す</button>
+        </Msg>
+      ))}
       {res.loads.map(l => <LoadCard key={`${l.store_id}-${l.date}`} ctx={ctx} load={l} onDone={() => ctx.onSaved()} />)}
     </div>
   )

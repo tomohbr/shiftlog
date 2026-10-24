@@ -446,3 +446,39 @@ export function invRole(companyId: number, userId: number): InvRole | null {
   if (r.employment_type === 'full_time') return 'full';
   return 'part';
 }
+
+// ---------- 1数え単位あたりの食数を実績から出す ----------
+
+/**
+ * 袋で数えて食数で使う品目（per_count が 1 でないもの）について、締めがそろった日の
+ * 「売れた食数 ÷ 実際に減った袋数」を出す。直近14日で3会場日以上たまり、今の設定と1割以上違うものだけ返す。
+ * 実際に減った袋数には捨てた分も入るので、「その品目が1袋で実際に何食分になったか」の数になる。
+ */
+export function perCountSuggestions(companyId: number, today: string) {
+  const its = items(companyId).filter(i => i.per_count !== 1);
+  if (!its.length) return [];
+  const ms = new Map(menus(companyId, true).map(m => [m.id, m]));
+  const days = db.prepare(`
+    SELECT c.loc, c.date FROM inv_counts c
+    WHERE c.company_id = ? AND c.loc != 0 AND c.finalized = 1 AND c.date >= ? AND c.date <= ?
+  `).all(companyId, addDays(today, -13), today) as { loc: number; date: string }[];
+  const out: { item_id: number; name: string; count_unit: string; use_unit: string; current: number; suggested: number; days: number }[] = [];
+  for (const it of its) {
+    let served = 0; let used = 0; let n = 0;
+    for (const d of days) {
+      const lines = db.prepare(`
+        SELECT l.menu_id, l.qty FROM inv_sales s JOIN inv_sales_lines l ON l.sales_id = s.id
+        WHERE s.company_id = ? AND s.store_id = ? AND s.date = ?
+      `).all(companyId, d.loc, d.date) as { menu_id: number; qty: number }[];
+      const sv = lines.reduce((a, l) => a + l.qty * (ms.get(l.menu_id)?.parts.find(p => p.item_id === it.id)?.qty || 0), 0);
+      const u = -((db.prepare(`SELECT SUM(qty) AS q FROM inv_moves WHERE company_id = ? AND loc = ? AND date = ? AND item_id = ? AND type IN ('sale', 'adjust')`).get(companyId, d.loc, d.date, it.id) as { q: number | null }).q || 0);
+      if (sv <= 0) continue;
+      served += sv; used += u; n++;
+    }
+    if (n < 3 || used < 1) continue;
+    const suggested = Math.round((served / used) * 10) / 10;
+    if (Math.abs(suggested - it.per_count) / it.per_count < 0.1) continue;
+    out.push({ item_id: it.id, name: it.name, count_unit: it.count_unit, use_unit: it.use_unit, current: it.per_count, suggested, days: n });
+  }
+  return out;
+}

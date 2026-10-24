@@ -3,7 +3,7 @@ import { buttonsCard, pushToUsers, stockLiffUrl } from '../routes/line';
 import { getJSTTime, jstNow } from './jst';
 import {
   COMPANY_LOC, InvSettings, addDays, buildLoad, businessDate, closingStatus, getSettings, nextOpenDay, openDays,
-  reorderAlerts, staleItems,
+  perCountSuggestions, reorderAlerts, staleItems,
 } from './inventory';
 import { toMinutes, weekdayOf } from './venueSchedule';
 
@@ -51,6 +51,8 @@ export function loadCard(companyId: number, s: InvSettings, today: string) {
   if (!lines.length) return null;
   const re = reorderAlerts(companyId, today);
   if (re.length) lines.push(`■ 発注の目安: ${re.map(r => `${r.name} 残り${fmt(r.total)}${r.count_unit}（約${fmt(r.days_left)}日分）`).join('、')}`);
+  const pc = perCountSuggestions(companyId, today);
+  if (pc.length) lines.push(`■ 実績では: ${pc.map(p => `${p.name} 1${p.count_unit}＝${fmt(p.suggested)}${p.use_unit}（今は${fmt(p.current)}）`).join('、')}。画面から直せます`);
   const url = stockLiffUrl(companyId, 'tab=load');
   return buttonsCard('積み込みリスト', '次の積み込み（案）', lines, url ? [{ label: '開いて数を確定する', uri: url, primary: true, color: '#06C755' }] : []);
 }

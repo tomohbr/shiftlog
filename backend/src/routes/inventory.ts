@@ -6,7 +6,7 @@ import { verifyPunchKey } from './liff';
 import { getJSTDate, getJSTTime } from '../utils/jst';
 import {
   COMPANY_LOC, InvRole, addDays, addMove, buildLoad, businessDate, closingStatus, confirmLoad, countOf, dayTypeOf,
-  DAYTYPE_LABEL, forecastMenus, getSettings, invRole, items, menus, menusForStore, nextOpenDay, openDays,
+  DAYTYPE_LABEL, forecastMenus, getSettings, invRole, items, menus, menusForStore, nextOpenDay, openDays, perCountSuggestions,
   reorderAlerts, salesOf, saveCount, saveSales, staleItems, stockAt,
 } from '../utils/inventory';
 import { seedHibariMarket } from '../utils/inventory-seed';
@@ -276,7 +276,7 @@ router.get('/load', enabled, need('admin'), (req: InvReq, res: Response): void =
       lines: plan.lines.map(l => ({ ...l, company_stock: its.get(l.item_id)?.track_company ? companyStock.get(l.item_id) || 0 : null })),
     });
   }
-  res.json({ margin_pct: s.margin_pct, loads: out, reorder: reorderAlerts(companyId, businessDate()) });
+  res.json({ margin_pct: s.margin_pct, loads: out, reorder: reorderAlerts(companyId, businessDate()), per_count: perCountSuggestions(companyId, businessDate()) });
 });
 
 // POST /api/inventory/load/confirm { store_id, date, lines: [{ item_id, qty }] }
@@ -334,6 +334,15 @@ router.get('/history', enabled, need('admin', 'full'), (req: InvReq, res: Respon
     }
   }
   res.json(rows);
+});
+
+// POST /api/inventory/items/:id/per-count { per_count } - 実績から出した「1袋＝◯食」に直す（担当者）
+router.post('/items/:id/per-count', enabled, need('admin'), (req: InvReq, res: Response): void => {
+  const v = Number(req.body?.per_count);
+  if (!(v > 0)) { res.status(400).json({ error: '数が正しくありません' }); return; }
+  const r = db.prepare('UPDATE inv_items SET per_count = ? WHERE id = ? AND company_id = ?').run(v, Number(req.params.id), req.inv!.companyId);
+  if (!r.changes) { res.status(404).json({ error: '品目がありません' }); return; }
+  res.json({ ok: true });
 });
 
 // ---------- マスタ・設定（担当者） ----------

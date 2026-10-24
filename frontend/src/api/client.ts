@@ -920,6 +920,7 @@ export interface InvClosing { store_id: number; date: string; name?: string; ope
 export interface InvLoadLine { item_id: number; name: string; count_unit: string; category: string; need: number; stock: number; request: number; suggested: number; qty: number; capped: boolean; company_stock: number | null }
 export interface InvLoad { store_id: number; name: string; date: string | null; status: string; confirmed_at: string | null; daytype?: string; forecast?: { menu_id: number; name: string; qty: number; basis: string }[]; stale?: { name: string; since: string; days: number }[]; lines: InvLoadLine[] }
 export interface InvReorder { item_id: number; name: string; count_unit: string; total: number; per_day: number; days_left: number; lead_days: number }
+export interface InvPerCount { item_id: number; name: string; count_unit: string; use_unit: string; current: number; suggested: number; days: number }
 export interface InvSettings { company_id: number; enabled: number; store_ids: number[]; notify_user_ids: number[]; margin_pct: number; special_days: Record<string, string>; active_from: string | null; active_to: string | null }
 export interface InvReceipt { lines: { menu_id: number; qty: number; amount: number | null }[]; total_amount: number | null; unmatched: { label: string; qty: number | null; amount: number | null }[]; receipt_date: string | null; note: string | null }
 
@@ -937,7 +938,8 @@ export function invApi(key?: string) {
     requests: () => api.get<{ id: number; store_id: number; store_name: string; item_id: number; item_name: string; count_unit: string; qty: number; note: string | null; user_id: number; user_name: string | null; status: string; created_at: string }[]>('/inventory/requests', h),
     addRequest: (store_id: number, item_id: number, qty: number, note: string) => api.post('/inventory/requests', { store_id, item_id, qty, note }, h),
     deleteRequest: (id: number) => api.delete(`/inventory/requests/${id}`, h),
-    load: (store_id?: number, date?: string) => api.get<{ margin_pct: number; loads: InvLoad[]; reorder: InvReorder[] }>('/inventory/load', { ...h, params: { store_id, date } }),
+    load: (store_id?: number, date?: string) => api.get<{ margin_pct: number; loads: InvLoad[]; reorder: InvReorder[]; per_count: InvPerCount[] }>('/inventory/load', { ...h, params: { store_id, date } }),
+    setPerCount: (item_id: number, per_count: number) => api.post(`/inventory/items/${item_id}/per-count`, { per_count }, h),
     confirmLoad: (store_id: number, date: string, lines: { item_id: number; qty: number }[]) => api.post('/inventory/load/confirm', { store_id, date, lines }, h),
     purchase: (item_id: number, qty: number, note: string) => api.post('/inventory/purchase', { item_id, qty, note }, h),
     stock: () => api.get<{ locs: { id: number; name: string }[]; items: InvItem[]; stock: Record<string, Record<string, number>>; reorder: InvReorder[] }>('/inventory/stock', h),
