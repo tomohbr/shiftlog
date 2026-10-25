@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Store, Users, Calendar, Send, Check, ArrowRight, Plus, X, Copy, Share2, QrCode } from 'lucide-react'
-import { storesApi, usersApi, shiftsApi, User } from '../api/client'
+import { storesApi, usersApi, shiftsApi, User, Store as StoreRecord } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import StaffLoginQR, { simpleInviteMessage } from '../components/StaffLoginQR'
 import LineShareButton from '../components/LineShareButton'
@@ -49,6 +49,17 @@ export default function OnboardingPage() {
   const [step, setStep] = useState<Step>(1)
   const companyPin = (selectedCompany as any)?.company_pin || ''
   const companyName = selectedCompany?.name || ''
+  // 登録時に店舗名で店舗ができている。二度同じ名前を聞かないよう、店舗があればスタッフから始める
+  const [existingStore, setExistingStore] = useState<StoreRecord | null | undefined>(undefined)
+  useEffect(() => {
+    storesApi.getAll()
+      .then(res => {
+        const first = res.data.stores[0] || null
+        setExistingStore(first)
+        if (first) setStep(2)
+      })
+      .catch(() => setExistingStore(null))
+  }, [])
 
   // 初期設定ウィザードはURLが変わらないので、どのステップで止まったかを明示的に記録する
   useEffect(() => { track('onboarding_view', { step: STEP_LABELS[step] }) }, [step])
@@ -73,11 +84,18 @@ export default function OnboardingPage() {
 
         <StepDots current={step} />
 
+        {existingStore && step === 2 && (
+          <p className="text-center text-xs text-gray-500 -mt-4 mb-4">
+            店舗「{existingStore.name}」は登録済みです（名前は「会社・店舗」で変えられます）
+          </p>
+        )}
+
         <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
-          {step === 1 && <StoreStep onNext={() => go(2, 'next')} onSkip={() => go(2, 'skip')} />}
-          {step === 2 && <StaffStep onNext={() => go(3, 'next')} onSkip={() => go(4, 'skip')} />}
-          {step === 3 && <ShiftStep onNext={() => go(4, 'next')} onSkip={() => go(4, 'skip')} />}
-          {step === 4 && <InviteStep companyPin={companyPin} companyName={companyName} onFinish={() => finish('complete')} />}
+          {existingStore === undefined && <div className="py-12 text-center text-gray-400 text-sm">読み込み中...</div>}
+          {existingStore !== undefined && step === 1 && <StoreStep onNext={() => go(2, 'next')} onSkip={() => go(2, 'skip')} />}
+          {existingStore !== undefined && step === 2 && <StaffStep onNext={() => go(3, 'next')} onSkip={() => go(4, 'skip')} />}
+          {existingStore !== undefined && step === 3 && <ShiftStep onNext={() => go(4, 'next')} onSkip={() => go(4, 'skip')} />}
+          {existingStore !== undefined && step === 4 && <InviteStep companyPin={companyPin} companyName={companyName} onFinish={() => finish('complete')} />}
         </div>
 
         <button
@@ -271,7 +289,11 @@ function ShiftStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void 
     setLoading(true)
     try {
       await shiftsApi.create({ user_id: parseInt(userId), date, start_time: startTime, end_time: endTime, break_minutes: 0 })
-      toast.success('シフトを作成しました')
+      // 未公開のままだとスタッフが招待リンクを開いても「まだ公開されていません」で空になる。
+      // 最初の1件は「作ったらスタッフに見える」を体験してもらう
+      const [y, m] = date.split('-').map(Number)
+      await shiftsApi.setPublication(y, m, true).catch(() => {})
+      toast.success('シフトを作成し、スタッフに公開しました')
       onNext()
     } catch (err: any) {
       toast.error(err.response?.data?.error || '作成に失敗しました')
@@ -314,7 +336,7 @@ function ShiftStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void 
         </div>
         <div>
           <h2 className="text-lg font-bold text-gray-900">シフトを1件作りましょう</h2>
-          <p className="text-xs text-gray-500">試しに1件作ると、画面の見え方がわかります</p>
+          <p className="text-xs text-gray-500">作った1件はそのままスタッフの画面に表示されます（次の招待で本人が確認できます）</p>
         </div>
       </div>
 

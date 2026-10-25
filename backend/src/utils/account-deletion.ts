@@ -1,4 +1,7 @@
 import db, { SUPER_ADMIN_EMAIL } from '../db';
+// shift_changes はこのモジュールの読み込み時に作られる。サーバー経由ならルートが先に読むが、
+// 検証スクリプトのように直接呼ぶと「no such table」になるので、ここでも読み込んでおく
+import './shiftChanges';
 
 // App Store ガイドライン 5.1.1(v) 対応：
 // アカウント作成ができるアプリは、アプリ内からアカウントを完全に削除できる必要がある。

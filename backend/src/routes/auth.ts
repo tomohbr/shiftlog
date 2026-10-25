@@ -308,6 +308,11 @@ router.post('/register', (req: Request, res: Response): void => {
     "INSERT INTO subscriptions (company_id, plan, max_stores, trial_ends_at) VALUES (?, ?, ?, datetime('now', '+30 days'))"
   ).run(companyId, 'free', 1);
 
+  // 登録画面で入れた「店舗名・会社名」をそのまま最初の店舗にする。
+  // 以前は登録直後の初期設定でもう一度「店舗名」を聞いていて、同じ名前を二度入れさせられた人の多くが
+  // 「あとで登録する」を押してそのまま店舗なしで止まっていた（25社中9社）。名前は店舗画面で直せる。
+  db.prepare('INSERT INTO stores (company_id, name) VALUES (?, ?)').run(companyId, companyName);
+
   logAudit({ userId: userId, companyId, action: 'create', entity: 'company', entityId: companyId, summary: `会社「${companyName}」を新規作成` });
 
   // 運営者へ新規登録の即時通知（送信失敗しても登録処理は成功させる。feedback.tsと同方式）

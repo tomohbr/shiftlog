@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import { storeColorMap } from '../lib/storeColors'
 import ShiftChangeNotice from '../components/ShiftChangeNotice'
+import PublicationBar from '../components/PublicationBar'
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -30,6 +31,8 @@ export default function ShiftEditPage() {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null)
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table')
   const [filterUserId, setFilterUserId] = useState<number | null>(null)
+  // この月がスタッフに公開されているか（未公開だとスタッフの画面には何も出ない）
+  const [isPublished, setIsPublished] = useState(false)
   // 会場（複数会場のお店だけ使う）。null = 全会場
   const [stores, setStores] = useState<Store[]>([])
   const [filterStoreId, setFilterStoreId] = useState<number | null>(null)
@@ -44,14 +47,16 @@ export default function ShiftEditPage() {
     try {
       const year = currentDate.getFullYear()
       const month = currentDate.getMonth() + 1
-      const [shiftsRes, usersRes, requestsRes, storesRes] = await Promise.all([
+      const [shiftsRes, usersRes, requestsRes, storesRes, pubRes] = await Promise.all([
         shiftsApi.getAll({ year, month }),
         usersApi.getAll(),
         shiftRequestsApi.getAll({ year, month }).catch(() => null),
         storesApi.getAll().catch(() => null),
+        shiftsApi.getPublication(year, month).catch(() => null),
       ])
       if (id !== reqId.current) return
       setShifts(shiftsRes.data.shifts)
+      setIsPublished((pubRes?.data as any)?.publication?.is_published === 1)
       setStores(storesRes?.data.stores || [])
       // 行に出すのはスタッフと、この月にシフトがある管理者（店長が自分でも入る場合）
       const withShift = new Set(shiftsRes.data.shifts.map((x: Shift) => x.user_id))
@@ -156,6 +161,11 @@ export default function ShiftEditPage() {
           </button>
         </div>
       </div>
+
+      {/* この月がスタッフに見えているか。組み終えたらここで公開する */}
+      {!loading && (
+        <PublicationBar year={year} month={month} shiftCount={shifts.length} isPublished={isPublished} onChange={setIsPublished} />
+      )}
 
       {/* 公開済みシフトの変更で、まだ本人に知らせていないもの */}
       <ShiftChangeNotice refreshKey={shifts} />

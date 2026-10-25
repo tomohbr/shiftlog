@@ -460,7 +460,7 @@ export default function LoginPage() {
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="mb-5 rounded-xl bg-emerald-50 border border-emerald-100 p-3">
               <p className="text-sm font-semibold text-emerald-900">30日間Proの全機能を無料でお試し・クレジットカード不要</p>
-              <p className="text-xs text-emerald-700 mt-1">終了後も1店舗の打刻・シフト管理はずっと無料。登録後すぐにデモ店舗で操作感を確認できます。</p>
+              <p className="text-xs text-emerald-700 mt-1">終了後も1店舗の打刻・シフト管理はずっと無料。登録するとその店舗名で店舗ができ、すぐスタッフ登録から始められます。</p>
             </div>
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div>

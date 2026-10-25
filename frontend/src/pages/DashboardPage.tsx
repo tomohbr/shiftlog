@@ -7,6 +7,7 @@ import TodayByVenue from '../components/TodayByVenue'
 import { storeColorMap } from '../lib/storeColors'
 import ShiftModal from '../components/ShiftModal'
 import MonthNavigator from '../components/MonthNavigator'
+import PublicationBar from '../components/PublicationBar'
 import StaffLoginQR from '../components/StaffLoginQR'
 import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, storesApi, timecardsApi, Shift, User, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
@@ -197,9 +198,9 @@ export default function DashboardPage() {
               <CheckCircle className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1">
-              <h3 className="text-base font-bold text-gray-900 mb-2">定着までの3ステップ</h3>
-              <p className="text-xs text-gray-600 mb-3">店舗・スタッフ・シフトがそろうと、毎日の打刻状況と出勤状況をダッシュボードで確認できます。</p>
-              <div className="grid sm:grid-cols-3 gap-2 text-sm">
+              <h3 className="text-base font-bold text-gray-900 mb-2">定着までの4ステップ</h3>
+              <p className="text-xs text-gray-600 mb-3">店舗・スタッフ・シフトをそろえて公開すると、スタッフのスマホにシフトが届き、毎日の打刻状況をここで確認できます。</p>
+              <div className="grid sm:grid-cols-4 gap-2 text-sm">
                 <Link to="/stores" className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${!noStore ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
                   <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${!noStore ? 'bg-green-600 text-white' : 'bg-blue-100 text-blue-700'}`}>{!noStore ? '✓' : '1'}</span>
                   <span>店舗を追加</span>
@@ -211,6 +212,10 @@ export default function DashboardPage() {
                 <Link to="/shifts" className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${shifts.length > 0 ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
                   <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${shifts.length > 0 ? 'bg-green-600 text-white' : 'bg-blue-100 text-blue-700'}`}>{shifts.length > 0 ? '✓' : '3'}</span>
                   <span>シフトを作成</span>
+                </Link>
+                <Link to="/shifts" className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isPublished ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:border-blue-400'}`}>
+                  <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${isPublished ? 'bg-green-600 text-white' : 'bg-blue-100 text-blue-700'}`}>{isPublished ? '✓' : '4'}</span>
+                  <span>スタッフに公開</span>
                 </Link>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -345,6 +350,17 @@ export default function DashboardPage() {
         })}
       </div>
 
+      {/* シフトはあるのに未公開＝スタッフには何も見えていない。カレンダーの上で言い切る */}
+      {!loading && shifts.length > 0 && !isPublished && (
+        <PublicationBar
+          year={currentDate.getFullYear()}
+          month={currentDate.getMonth() + 1}
+          shiftCount={shifts.length}
+          isPublished={isPublished}
+          onChange={setIsPublished}
+        />
+      )}
+
       {/* スマホではカレンダーを端から端まで使う（名前を読めるように） */}
       <div className="card p-0 overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl border-x-0 sm:border-x">
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
@@ -360,11 +376,14 @@ export default function DashboardPage() {
               className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                 isPublished
                   ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : shifts.length > 0
+                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
+              title={isPublished ? 'スタッフの画面に表示されています' : 'スタッフにはまだ見えていません'}
             >
               <CheckCircle className="w-4 h-4" />
-              {isPublished ? '公開中' : 'シフト公開'}
+              {isPublished ? '公開中' : shifts.length > 0 ? 'スタッフに公開' : '未公開'}
             </button>
           </div>
         </div>
