@@ -209,7 +209,7 @@ export default function CampaignAnswerPage() {
     try {
       const list = Object.entries(entries).map(([date, e]) => ({ date, availability: e.availability, part: e.part }))
       await campaignsApi.submit(c.id, { answer: hasStores ? answer : { ...answer, venues: 'any' }, entries: list })
-      toast.success('希望を提出しました。ありがとうございます！')
+      toast.success('希望を提出しました。ありがとうございます')
       setFocusDay(null)
       await load()
     } catch (e: any) {

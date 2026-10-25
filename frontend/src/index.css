@@ -11,6 +11,17 @@
   body {
     @apply bg-gray-50 text-gray-900;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    /* 日本語の字間を詰め、数字は等幅にして表で揃える（Stripe のダッシュボードと同じ考え方） */
+    font-feature-settings: 'palt' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  /* 時刻・金額・件数は桁が揺れないように等幅数字 */
+  .tabular-nums, table, .num { font-variant-numeric: tabular-nums; }
+  /* キーボード操作の焦点はどの部品でも同じ見た目にする */
+  :where(button, a, input, select, textarea):focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
   }
   .dark body {
     @apply bg-gray-950 text-gray-100;
@@ -75,20 +86,39 @@
 }
 
 @layer components {
+  /* ボタンは高さ・角丸・太さを揃える。主役は1画面に1つ（青）。それ以外は白か文字だけ */
   .btn-primary {
-    @apply bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium;
+    @apply inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-secondary {
-    @apply bg-white text-gray-700 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium;
+    @apply inline-flex items-center justify-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50;
   }
   .btn-danger {
-    @apply bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors font-medium;
+    @apply inline-flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors font-semibold text-sm disabled:opacity-50;
   }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 px-2 py-1 rounded-md;
+  }
+  /* 面は「白＋細い線」。影で浮かせるのはモーダルだけ */
   .card {
     @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
   }
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+  /* ログイン・初期設定など、サイドバーの無い全画面の土台 */
+  .auth-shell {
+    @apply min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 py-10;
+  }
+  .auth-card {
+    @apply bg-white rounded-2xl border border-gray-200 shadow-sm p-6 sm:p-8;
+  }
+  /* 小さな見出し（セクション名）。大文字化はせず、色と太さだけで区別する */
+  .eyebrow {
+    @apply text-xs font-semibold text-gray-500;
+  }
+  .page-title {
+    @apply text-xl font-bold text-gray-900 tracking-tight;
   }
   .badge-pending {
     @apply bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs font-medium;

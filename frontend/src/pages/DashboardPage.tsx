@@ -132,67 +132,35 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {criticalEmpty && (
-        <div className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-300 rounded-xl p-5">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-gray-900 mb-1">今日の店舗状況を見える状態にしましょう</h3>
-              <p className="text-sm text-gray-700 mb-3">
-                まだ店舗とシフトが未登録です。最初にサンプル店舗を入れると、出勤中の人数・本日のシフト・未打刻スタッフの見え方をすぐ確認できます。
-                <b className="text-red-700">3分で初回セットアップ</b>できます:
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-                <div className="rounded-lg bg-white/80 border border-red-100 px-3 py-2">
-                  <p className="text-xs text-gray-500">出勤中</p>
-                  <p className="text-lg font-bold text-gray-900">2人</p>
-                </div>
-                <div className="rounded-lg bg-white/80 border border-red-100 px-3 py-2">
-                  <p className="text-xs text-gray-500">本日のシフト</p>
-                  <p className="text-lg font-bold text-gray-900">5件</p>
-                </div>
-                <div className="rounded-lg bg-white/80 border border-red-100 px-3 py-2">
-                  <p className="text-xs text-gray-500">未打刻</p>
-                  <p className="text-lg font-bold text-gray-900">1件</p>
-                </div>
-                <div className="rounded-lg bg-white/80 border border-red-100 px-3 py-2">
-                  <p className="text-xs text-gray-500">明日の不足</p>
-                  <p className="text-lg font-bold text-gray-900">あり</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={async () => {
-                    if (!confirm('サンプル店舗1件、スタッフ4名、今週のシフトを一括投入します。動作確認後に削除できます。よろしいですか？')) return
-                    try {
-                      const r = await seedApi.demo()
-                      toast.success(`投入完了: 店舗${r.data.created.store} / スタッフ${r.data.created.staff} / シフト${r.data.created.shifts}`)
-                      loadData()
-                    } catch (e: any) { toast.error(e.response?.data?.error || '失敗') }
-                  }}
-                  className="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2 shadow-md"
-                >
-                  <Sparkles className="w-4 h-4" /> サンプル店舗で今すぐ試す
-                </button>
-                <Link to="/stores" className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-800 font-semibold px-4 py-2.5 rounded-lg text-sm flex items-center gap-1.5">
-                  <StoreIcon className="w-4 h-4" /> 手動で店舗を追加 <ArrowRight className="w-3 h-3" />
-                </Link>
-                <Link to="/staff" className="text-sm text-red-700 hover:underline font-medium">
-                  スタッフにログイン案内を送る →
-                </Link>
-              </div>
-              <p className="text-xs text-gray-600 mt-3 pt-3 border-t border-red-200">
-                まだスタッフが登録されていません。1人にログイン案内を送ると、出勤状況とシフトがここに表示されます。
-                セットアップにお困りの場合は<b className="text-pink-700">導入代行サービス</b>もご利用いただけます。
-                <Link to="/setup-guide" className="text-pink-700 hover:underline font-medium ml-1">詳しくはこちら →</Link>
-              </p>
-            </div>
+        <div className="card">
+          <p className="eyebrow mb-1">はじめに</p>
+          <h3 className="text-lg font-bold text-gray-900">店舗とシフトを入れると、今日の出勤状況がここに出ます</h3>
+          <p className="text-sm text-gray-600 mt-1">
+            3分で終わります。まず試してみたい場合は、サンプルの店舗・スタッフ・今週のシフトを一括で入れられます（あとで消せます）。
+          </p>
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            <Link to="/stores" className="btn-primary">
+              <StoreIcon className="w-4 h-4" /> 店舗を追加する
+            </Link>
+            <button
+              onClick={async () => {
+                if (!confirm('サンプル店舗1件、スタッフ4名、今週のシフトを一括投入します。動作確認後に削除できます。よろしいですか？')) return
+                try {
+                  const r = await seedApi.demo()
+                  toast.success(`投入完了: 店舗${r.data.created.store} / スタッフ${r.data.created.staff} / シフト${r.data.created.shifts}`)
+                  loadData()
+                } catch (e: any) { toast.error(e.response?.data?.error || '失敗しました') }
+              }}
+              className="btn-secondary"
+            >
+              <Sparkles className="w-4 h-4" /> サンプルで試す
+            </button>
+            <Link to="/setup-guide" className="btn-ghost">導入手順書 <ArrowRight className="w-3.5 h-3.5" /></Link>
           </div>
         </div>
       )}
       {!loading && !setupStepsDone && !criticalEmpty && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
               <CheckCircle className="w-5 h-5 text-white" />
@@ -228,9 +196,9 @@ export default function DashboardPage() {
                       loadData()
                     } catch (e: any) { toast.error(e.response?.data?.error || '失敗') }
                   }}
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5"
+                  className="btn-secondary text-xs"
                 >
-                  <CheckCircle className="w-3.5 h-3.5" /> サンプル店舗で試す
+                  <Sparkles className="w-3.5 h-3.5" /> サンプルで試す
                 </button>
                 <Link to="/setup-guide" className="text-xs text-blue-700 hover:underline">導入手順書を見る →</Link>
                 <Link to="/help" className="text-xs text-blue-700 hover:underline">使い方FAQ →</Link>
@@ -256,10 +224,10 @@ export default function DashboardPage() {
                 会社PINを入力する代わりに、QRコードを1回スキャンするだけでスタッフはログインできます。レジ横やバックヤードに貼っておくのがおすすめです。
               </p>
               <div className="flex flex-wrap gap-2 mt-4">
-                <Link to="/staff" className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
+                <Link to="/staff" className="btn-primary">
                   ログイン案内を送る
                 </Link>
-                <Link to="/timecards" className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700">
+                <Link to="/timecards" className="btn-secondary">
                   打刻画面を開く
                 </Link>
                 <button
@@ -272,7 +240,7 @@ export default function DashboardPage() {
                     navigator.clipboard.writeText(companyPin)
                     toast.success('会社PINをコピーしました')
                   }}
-                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  className="btn-secondary"
                 >
                   会社PINをコピー
                 </button>

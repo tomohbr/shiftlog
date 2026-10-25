@@ -66,7 +66,7 @@ export default function SetupGuidePage() {
     },
     {
       id: 'invite',
-      title: '3. スタッフに使い方を共有（最重要！）',
+      title: '3. スタッフに使い方を共有（いちばん大事）',
       icon: MessageCircle,
       owner: true,
       body: (
@@ -242,7 +242,7 @@ export default function SetupGuidePage() {
             <HeartHandshake className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            <h3 className="text-base font-bold text-gray-900">✨ 導入代行サービスもご用意しています</h3>
+            <h3 className="text-base font-bold text-gray-900">導入代行サービスもあります</h3>
             <p className="text-sm text-gray-700 mt-1">
               「セットアップが難しい」「スタッフへの共有をまとめて任せたい」という方向けに、
               <b className="text-pink-700">初期設定〜スタッフへのログイン案内までを代行</b>するサービスを行っています。
@@ -316,7 +316,7 @@ export default function SetupGuidePage() {
 
       {audience === 'staff' && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-gray-700 print:hidden">
-          <p className="font-semibold mb-1">📋 スタッフ用案内をPDFで配布</p>
+          <p className="font-semibold mb-1">スタッフ用案内をPDFで配布</p>
           <p>上の「印刷/PDF保存」ボタンで、A4 1〜2枚に収まる配布用の手順書を出せます。LINEでも配信できます。</p>
         </div>
       )}

@@ -78,7 +78,7 @@ export default function QrPosterPage() {
           {[
             { n: 1, title: 'スマホのカメラでQRを読み取る', sub: 'カメラを向けるだけでOKです' },
             { n: 2, title: '自分の名前をタップ', sub: 'PINやパスワードの入力は不要です' },
-            { n: 3, title: '完了！', sub: 'シフト確認・希望シフトの提出ができます' },
+            { n: 3, title: '完了', sub: 'シフト確認・希望シフトの提出ができます' },
           ].map(step => (
             <div key={step.n} className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-xl font-bold shrink-0">

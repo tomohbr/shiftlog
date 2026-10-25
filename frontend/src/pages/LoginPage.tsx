@@ -2,7 +2,7 @@ import { track } from '../lib/analytics'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Calendar, Eye, EyeOff, Clock, Coffee, LogOut, ArrowLeft, UserPlus, Fingerprint } from 'lucide-react'
+import { Calendar, Eye, EyeOff, Clock, Coffee, LogOut, ArrowLeft, UserPlus, Fingerprint, Users, ChevronRight } from 'lucide-react'
 import { api } from '../api/client'
 import toast from 'react-hot-toast'
 import { isNative } from '../native/platform'
@@ -308,17 +308,17 @@ export default function LoginPage() {
   // Kiosk: PIN entry
   if (mode === 'kiosk') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="auth-shell">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-2xl shadow-lg mb-4">
-              <Clock className="w-9 h-9 text-white" />
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
+              <Clock className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">出退勤</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">出退勤</h1>
             <p className="text-gray-500 mt-1">会社PINを入力してください</p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-8">
+          <div className="auth-card">
             <form onSubmit={handleKioskEnter} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">会社PIN</label>
@@ -354,17 +354,17 @@ export default function LoginPage() {
   // PIN login: step 1 - company PIN
   if (mode === 'pin-login' && pinLoginStep === 1) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="auth-shell">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600 rounded-2xl shadow-lg mb-4">
-              <Calendar className="w-9 h-9 text-white" />
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
+              <Calendar className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">スタッフログイン</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">スタッフログイン</h1>
             <p className="text-gray-500 mt-1">店長から共有されたPINコードを入力</p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-8">
+          <div className="auth-card">
             <form onSubmit={handlePinCompanyEnter} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">会社PIN</label>
@@ -400,7 +400,7 @@ export default function LoginPage() {
   // PIN login: step 2 - staff select
   if (mode === 'pin-login' && pinLoginStep === 2) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="auth-shell">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
             <h1 className="text-2xl font-bold text-gray-900">{pinLoginCompanyName}</h1>
@@ -447,20 +447,20 @@ export default function LoginPage() {
   // Register
   if (mode === 'register') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="auth-shell">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-600 rounded-2xl shadow-lg mb-4">
-              <UserPlus className="w-9 h-9 text-white" />
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
+              <UserPlus className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">まず1店舗を3分で作成</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">まず1店舗を3分で作成</h1>
             <p className="text-gray-500 mt-1">出退勤打刻・シフト・勤務集計をまとめて確認できます</p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-8">
-            <div className="mb-5 rounded-xl bg-emerald-50 border border-emerald-100 p-3">
-              <p className="text-sm font-semibold text-emerald-900">30日間Proの全機能を無料でお試し・クレジットカード不要</p>
-              <p className="text-xs text-emerald-700 mt-1">終了後も1店舗の打刻・シフト管理はずっと無料。登録するとその店舗名で店舗ができ、すぐスタッフ登録から始められます。</p>
+          <div className="auth-card">
+            <div className="mb-5 rounded-xl bg-blue-50 border border-blue-100 p-3">
+              <p className="text-sm font-semibold text-blue-900">30日間Proの全機能を無料でお試し・クレジットカード不要</p>
+              <p className="text-xs text-blue-800 mt-1">終了後も1店舗の打刻・シフト管理はずっと無料。登録するとその店舗名で店舗ができ、すぐスタッフ登録から始められます。</p>
             </div>
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div>
@@ -479,7 +479,7 @@ export default function LoginPage() {
                   <option value="retail">小売</option>
                   <option value="other">その他</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">業種に合わせて初期シフトの見方を案内します。</p>
+                
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
@@ -489,7 +489,7 @@ export default function LoginPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
                 <input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="input-field" required placeholder="4文字以上" minLength={4} />
               </div>
-              <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-xl text-base transition-colors">
+              <button type="submit" disabled={loading} className="w-full btn-primary py-3 rounded-xl text-base">
                 {loading ? '登録中...' : '無料で店舗を作成する'}
               </button>
             </form>
@@ -509,16 +509,16 @@ export default function LoginPage() {
   // Admin login
   if (mode === 'admin') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="auth-shell">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-lg mb-4">
-              <Calendar className="w-9 h-9 text-white" />
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
+              <Calendar className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">オーナー・店長ログイン</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">オーナー・店長ログイン</h1>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-8">
+          <div className="auth-card">
             <form onSubmit={handleAdminSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
@@ -579,95 +579,49 @@ export default function LoginPage() {
 
   // Mode selection
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="auth-shell">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-lg mb-4">
-            <Calendar className="w-9 h-9 text-white" />
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
+            <Calendar className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">シフトログ</h1>
-          <p className="text-gray-600 mt-2 font-medium leading-relaxed">打刻とシフトを、オーナーが毎日見える状態に</p>
-          <p className="text-sm text-gray-500 mt-2 leading-relaxed">飲食店・サロンの出退勤打刻、今日のシフト、勤務集計を1画面で確認。1店舗なら無料で始められます。</p>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-semibold text-gray-700">
-            <div className="rounded-lg bg-white/80 border border-blue-100 py-2">出退勤打刻</div>
-            <div className="rounded-lg bg-white/80 border border-blue-100 py-2">シフト管理</div>
-            <div className="rounded-lg bg-white/80 border border-blue-100 py-2">勤務集計</div>
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">シフトログ</h1>
+          <p className="text-gray-600 mt-2 leading-relaxed">打刻とシフトを、オーナーが毎日見える状態に</p>
+          <p className="text-sm text-gray-500 mt-1 leading-relaxed">出退勤打刻・今日のシフト・勤務集計を1画面で。1店舗なら無料で始められます。</p>
         </div>
 
-        <div className="space-y-4">
-          {/* 初めての方向け：一番目立つ位置 */}
-          <button
-            onClick={() => setMode('register')}
-            className="w-full bg-emerald-600 rounded-2xl shadow-xl p-6 text-left hover:bg-emerald-700 transition-colors"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center">
-                <UserPlus className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-white">無料で店舗を作成する</h2>
-                <p className="text-sm text-emerald-100">まずは打刻とシフトの動きを確認できます</p>
-              </div>
-            </div>
-          </button>
+        {/* 初めての方: 画面で唯一の青いボタン */}
+        <button
+          onClick={() => setMode('register')}
+          className="w-full btn-primary py-3.5 text-base rounded-xl"
+        >
+          <UserPlus className="w-5 h-5" />
+          無料で店舗を作成する
+        </button>
+        <p className="text-center text-xs text-gray-500 mt-2">30日間Proを無料でお試し。クレジットカードは不要です</p>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-gradient-to-br from-blue-50 to-indigo-100 px-3 text-sm text-gray-500">アカウントをお持ちの方</span>
-            </div>
-          </div>
-
-          {/* オーナー・店長向け */}
-          <button
-            onClick={() => setMode('admin')}
-            className="w-full bg-white rounded-2xl shadow-xl p-6 text-left hover:shadow-2xl transition-shadow"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-blue-600" />
+        <p className="eyebrow mt-8 mb-2">アカウントをお持ちの方</p>
+        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200 overflow-hidden">
+          {([
+            ['admin', Calendar, 'オーナー・店長ログイン', 'メールアドレスとパスワード'],
+            ['pin-login', Users, 'スタッフログイン', '店長から共有された会社PIN'],
+            ['kiosk', Clock, '出退勤タイムレコーダー', '店舗に置くタブレットで打刻する'],
+          ] as const).map(([m, Icon, title, sub]) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className="w-full flex items-center gap-4 px-4 py-4 text-left hover:bg-gray-50 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                <Icon className="w-5 h-5 text-gray-600" />
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">オーナー・店長ログイン</h2>
-                <p className="text-sm text-gray-500">メールアドレスとパスワードでログイン</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900">{title}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{sub}</p>
               </div>
-            </div>
-          </button>
-
-          {/* スタッフ向け */}
-          <button
-            onClick={() => setMode('pin-login')}
-            className="w-full bg-white rounded-2xl shadow-xl p-6 text-left hover:shadow-2xl transition-shadow"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-indigo-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">スタッフログイン</h2>
-                <p className="text-sm text-gray-500">店長から共有されたPINコードでログイン</p>
-              </div>
-            </div>
-          </button>
-
-          {/* 出退勤タブレット用 */}
-          <button
-            onClick={() => setMode('kiosk')}
-            className="w-full bg-white rounded-2xl shadow-xl p-6 text-left hover:shadow-2xl transition-shadow"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                <Clock className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">出退勤タイムレコーダー</h2>
-                <p className="text-sm text-gray-500">店舗に置くタブレットで打刻する方はこちら</p>
-              </div>
-            </div>
-          </button>
+              <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+            </button>
+          ))}
         </div>
 
         <div className="mt-8 flex items-center justify-center gap-5 text-xs text-gray-400">

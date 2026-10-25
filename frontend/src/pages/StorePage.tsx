@@ -256,10 +256,10 @@ export default function StorePage() {
     // Check for checkout result
     const params = new URLSearchParams(window.location.search)
     if (params.get('checkout') === 'success') {
-      toast.success('プランのアップグレードが完了しました！')
+      toast.success('プランのアップグレードが完了しました')
       window.history.replaceState({}, '', '/stores')
     } else if (params.get('checkout') === 'cancel') {
-      toast('決済がキャンセルされました', { icon: '⚠️' })
+      toast('決済はキャンセルされました')
       window.history.replaceState({}, '', '/stores')
     }
   }, [])

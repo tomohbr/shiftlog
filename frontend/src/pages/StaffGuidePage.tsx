@@ -116,7 +116,7 @@ export default function StaffGuidePage() {
           {phoneWhen && phone && (
             <section className="mt-6 rounded-2xl bg-red-50 border-2 border-red-300 p-5">
               <p className="text-lg font-bold text-red-700">{phoneWhen}のお休みは、必ず{who}に電話で</p>
-              <p className="text-[32px] font-bold tabular-nums mt-1">📞 {phone}{contact && <span className="text-xl ml-3">（{contact}）</span>}</p>
+              <p className="text-[32px] font-bold tabular-nums mt-1">{phone}{contact && <span className="text-xl ml-3">（{contact}）</span>}</p>
             </section>
           )}
 

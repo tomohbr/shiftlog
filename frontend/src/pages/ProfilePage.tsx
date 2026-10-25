@@ -30,7 +30,7 @@ export default function ProfilePage() {
         checkoutTracked.current = true
         track('pro_upgrade_success', { platform: 'stripe' })
       }
-      toast.success('お支払いありがとうございます！Proプランが有効になりました', { duration: 6000 })
+      toast.success('お支払いありがとうございます。Proプランが有効になりました', { duration: 6000 })
       let attempts = 0
       const poll = setInterval(async () => {
         attempts++

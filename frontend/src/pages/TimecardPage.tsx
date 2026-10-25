@@ -165,7 +165,7 @@ export default function TimecardPage() {
       applyOptimistic(action, result.queued!.recorded_at)
       toast.success(
         `${ACTION_LABELS[action]}を端末に記録しました（${result.queued!.recorded_at.slice(11)}）。通信が戻ると自動で同期されます。`,
-        { icon: '📴', duration: 5000 }
+        { duration: 5000 }
       )
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'エラー')
@@ -247,7 +247,7 @@ export default function TimecardPage() {
   const fmtDistance = (m: number) => m >= 1000 ? `約${(m / 1000).toFixed(1)}km` : `約${Math.round(m / 10) * 10}m`
   // 会場から離れた場所での打刻（位置が取れて、会場の位置が設定されているときだけ判定される）
   const farWarnings = (rec: TimeRecord) => (rec.locations || []).filter(l => l.far).map(l =>
-    `⚠ ${ACTION_NAMES[l.action] || ''}が${l.store_name ? `「${l.store_name}」` : '会場'}から${fmtDistance(l.distance_m)}`
+    `${ACTION_NAMES[l.action] || ''}が${l.store_name ? `「${l.store_name}」` : '会場'}から${fmtDistance(l.distance_m)}`
   )
   const breakLabel = (rec: TimeRecord) => {
     const count = rec.breaks?.length || 0
@@ -582,7 +582,7 @@ export default function TimecardPage() {
                       {isAdmin && farWarnings(rec).length > 0 && (
                         <div className="mt-0.5 flex items-start gap-1 text-xs text-amber-700" title={farWarnings(rec).join('\n')}>
                           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-                          <span>{farWarnings(rec).map(w => w.replace(/^⚠ /, '')).join('、')}</span>
+                          <span>{farWarnings(rec).join('、')}</span>
                         </div>
                       )}
                     </td>
@@ -675,7 +675,7 @@ export default function TimecardPage() {
                     <div key={h.id} className="text-xs bg-gray-50 rounded-lg p-2">
                       <div className="flex items-center justify-between text-gray-500 mb-0.5">
                         <span>
-                          {h.action === 'update' ? '✏️ 編集' : h.action === 'create' ? '➕ 追加' : '🗑 削除'}
+                          {h.action === 'update' ? '編集' : h.action === 'create' ? '追加' : '削除'}
                           {h.edited_by_name ? `（${h.edited_by_name}）` : ''}
                         </span>
                         <span>{h.created_at}</span>

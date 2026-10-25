@@ -75,7 +75,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-4 py-10">
+    <div className="auth-shell">
       <div className="w-full max-w-lg">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">ようこそ、{companyName}さん</h1>
@@ -90,7 +90,7 @@ export default function OnboardingPage() {
           </p>
         )}
 
-        <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
+        <div className="auth-card">
           {existingStore === undefined && <div className="py-12 text-center text-gray-400 text-sm">読み込み中...</div>}
           {existingStore !== undefined && step === 1 && <StoreStep onNext={() => go(2, 'next')} onSkip={() => go(2, 'skip')} />}
           {existingStore !== undefined && step === 2 && <StaffStep onNext={() => go(3, 'next')} onSkip={() => go(4, 'skip')} />}
@@ -201,8 +201,8 @@ function StaffStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void 
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center shrink-0">
-          <Users className="w-5 h-5 text-purple-600" />
+        <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
+          <Users className="w-5 h-5 text-blue-600" />
         </div>
         <div>
           <h2 className="text-lg font-bold text-gray-900">スタッフを追加しましょう</h2>
@@ -310,8 +310,8 @@ function ShiftStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void 
     return (
       <div className="space-y-5">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
-            <Calendar className="w-5 h-5 text-green-600" />
+          <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
+            <Calendar className="w-5 h-5 text-blue-600" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">シフトを作成しましょう</h2>
@@ -331,8 +331,8 @@ function ShiftStep({ onNext, onSkip }: { onNext: () => void; onSkip: () => void 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
-          <Calendar className="w-5 h-5 text-green-600" />
+        <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
+          <Calendar className="w-5 h-5 text-blue-600" />
         </div>
         <div>
           <h2 className="text-lg font-bold text-gray-900">シフトを1件作りましょう</h2>
@@ -394,8 +394,8 @@ function InviteStep({ companyPin, companyName, onFinish }: { companyPin: string;
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
-          <Send className="w-5 h-5 text-amber-600" />
+        <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
+          <Send className="w-5 h-5 text-blue-600" />
         </div>
         <div>
           <h2 className="text-lg font-bold text-gray-900">最後に、スタッフを招待しましょう</h2>

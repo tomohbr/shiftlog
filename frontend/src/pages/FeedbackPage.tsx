@@ -29,7 +29,7 @@ export default function FeedbackPage() {
     setSubmitting(true)
     try {
       await feedbackApi.submit({ category, message: message.trim(), email: email.trim() || undefined, platform: isNative ? 'ios' : 'web', path: window.location.pathname })
-      toast.success('フィードバックを送信しました。ありがとうございました！')
+      toast.success('フィードバックを送信しました。ありがとうございます')
       setSubmitted(true)
       setMessage('')
     } catch (err: any) {
@@ -79,7 +79,7 @@ export default function FeedbackPage() {
       </div>
 
       <div className="bg-pink-50 border border-pink-200 rounded-xl p-4 text-sm">
-        <p className="font-semibold text-pink-900">💡 セットアップにお困りですか？</p>
+        <p className="font-semibold text-pink-900">セットアップにお困りですか</p>
         <p className="text-gray-700 mt-1">
           <b>導入代行サービス</b>で初期設定〜スタッフへのログイン案内までまとめてお任せいただけます。
           「質問」カテゴリで希望を書いてお送りいただくか、直接 <a className="text-pink-700 underline" href="mailto:shibahara.724@gmail.com?subject=導入代行のご相談">shibahara.724@gmail.com</a> へご連絡ください。

@@ -643,7 +643,7 @@ export default function StaffPage() {
               </div>
               {isNeverLoggedIn(inviteUser) && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
-                  <p className="font-semibold mb-1">⚠️ この方はまだ一度もログインしていません</p>
+                  <p className="font-semibold mb-1">この方はまだ一度もログインしていません</p>
                   <p>登録から24時間以上経過しています。上のメッセージを再度送ってアクセスを促してください。</p>
                 </div>
               )}
