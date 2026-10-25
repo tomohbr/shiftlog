@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { venueWord } from '../lib/terms'
 import { MessageCircle, Save, Send, ExternalLink, Check, Copy } from 'lucide-react'
 import { lineApi, liffApi } from '../api/client'
 import LineLinkCard from '../components/LineLinkCard'
@@ -16,6 +18,8 @@ type Toggle = 'notify_shift_published' | 'notify_request_open'
 interface Member { id: number; name: string; role: string; linked: boolean }
 
 export default function LineSettingsPage() {
+  const { selectedCompany } = useAuth()
+  const vw = venueWord(selectedCompany)
   const [settings, setSettings] = useState<LineSettings>({
     channel_access_token: '',
     channel_secret: '',
@@ -198,7 +202,7 @@ export default function LineSettingsPage() {
       <div className="card p-6 space-y-3">
         <h3 className="text-base font-semibold text-gray-900">LINEで打刻（本人専用）</h3>
         <p className="text-sm text-gray-600">
-          LINEのメニュー「打刻する」から、本人だけが打刻できる画面を開けます（タイミーのように、ブースのQRを読んで打刻）。
+          LINEのメニュー「打刻する」から、本人だけが打刻できる画面を開けます（タイミーのように、{vw}のQRを読んで打刻）。
           LINE Developers で「LINEログイン」チャネルを同じプロバイダーに作り、LIFFアプリ（サイズ Full・Scope openid/profile・Scan QR オン）を追加してください。
           エンドポイントURLは <code className="text-xs bg-gray-100 px-1 rounded">{`${window.location.origin}/liff/punch/`}{'{会社ID}'}</code> です。
         </p>
@@ -214,7 +218,7 @@ export default function LineSettingsPage() {
         </div>
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" checked={lineOnly} onChange={e => setLineOnly(e.target.checked)} />
-          <span><b>打刻は本人のLINEからだけにする</b><br /><span className="text-gray-500">ブースのQRをカメラで読んで名前を選ぶ打刻はできなくなります（ほかの人の打刻を防ぐ）</span></span>
+          <span><b>打刻は本人のLINEからだけにする</b><br /><span className="text-gray-500">{vw}のQRをカメラで読んで名前を選ぶ打刻はできなくなります（ほかの人の打刻を防ぐ）</span></span>
         </label>
         <button
           onClick={async () => {

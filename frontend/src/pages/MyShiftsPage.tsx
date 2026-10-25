@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { venueWord } from '../lib/terms'
 import { ChevronLeft, ChevronRight, EyeOff, MapPin, Users, List, CalendarDays } from 'lucide-react'
 import { shiftsApi, storesApi, Shift, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
@@ -63,7 +64,8 @@ function VenuePill({ name, color, size = 'md' }: { name?: string | null; color: 
 }
 
 export default function MyShiftsPage() {
-  const { user } = useAuth()
+  const { user, selectedCompany } = useAuth()
+  const vw = venueWord(selectedCompany)
   const now = new Date()
   const todayStr = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate())
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
@@ -425,7 +427,7 @@ export default function MyShiftsPage() {
             className="text-sm font-bold border border-gray-200 rounded-lg pl-2 pr-7 py-1.5 bg-white"
             style={storeFilter ? { color: colorOf(storeFilter).text, borderColor: colorOf(storeFilter).solid } : undefined}
           >
-            <option value="">全会場</option>
+            <option value="">全{vw}</option>
             {sortedStores.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
           </select>
         )}

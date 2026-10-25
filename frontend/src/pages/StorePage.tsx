@@ -1,4 +1,6 @@
 import { isNative } from '../native/platform'
+import { useAuth } from '../contexts/AuthContext'
+import { venueWord } from '../lib/terms'
 import { startProUpgrade } from '../lib/proUpgrade'
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, X, Store, Crown, AlertTriangle, QrCode, MapPin, LocateFixed } from 'lucide-react'
@@ -12,6 +14,8 @@ interface StoreModalProps {
 }
 
 function StoreModal({ store, onClose, onSave }: StoreModalProps) {
+  const { selectedCompany } = useAuth()
+  const vw = venueWord(selectedCompany)
   const [name, setName] = useState(store?.name || '')
   const [address, setAddress] = useState(store?.address || '')
   const [phone, setPhone] = useState(store?.phone || '')
@@ -98,7 +102,7 @@ function StoreModal({ store, onClose, onSave }: StoreModalProps) {
             <div className="flex items-center justify-between gap-2 mb-1">
               <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
                 <MapPin className="w-4 h-4 text-gray-400" />
-                会場の位置（任意）
+                {vw}の位置（任意）
               </label>
               <button
                 type="button"
@@ -107,7 +111,7 @@ function StoreModal({ store, onClose, onSave }: StoreModalProps) {
                 className="flex items-center gap-1 text-xs text-blue-600 hover:underline disabled:opacity-50"
               >
                 <LocateFixed className="w-3.5 h-3.5" />
-                {locating ? '取得中…' : '今いる場所を会場にする'}
+                {locating ? '取得中…' : `今いる場所を${vw}にする`}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -115,7 +119,7 @@ function StoreModal({ store, onClose, onSave }: StoreModalProps) {
               <input value={lng} onChange={e => setLng(e.target.value)} className="input-field" placeholder="経度 例: 130.6886" inputMode="decimal" />
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-xs text-gray-500 shrink-0">会場とみなす範囲</span>
+              <span className="text-xs text-gray-500 shrink-0">{vw}とみなす範囲</span>
               <input value={geofence} onChange={e => setGeofence(e.target.value)} className="input-field w-24" placeholder="300" inputMode="numeric" />
               <span className="text-xs text-gray-500">m</span>
             </div>
@@ -229,6 +233,8 @@ function UpgradeModal({ planInfo, onClose }: UpgradeModalProps) {
 }
 
 export default function StorePage() {
+  const { selectedCompany } = useAuth()
+  const vw = venueWord(selectedCompany)
   const [stores, setStores] = useState<StoreType[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -372,8 +378,8 @@ export default function StorePage() {
               <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5 shrink-0" />
                 {store.lat != null && store.lng != null
-                  ? `会場の位置: 設定済み（半径${store.geofence_m || 300}m）`
-                  : '会場の位置: 未設定（離れた打刻の印は出ません）'}
+                  ? `${vw}の位置: 設定済み（半径${store.geofence_m || 300}m）`
+                  : `${vw}の位置: 未設定（離れた打刻の印は出ません）`}
               </p>
               <button
                 onClick={() => window.open(`/qr-poster/store/${store.id}`, '_blank')}

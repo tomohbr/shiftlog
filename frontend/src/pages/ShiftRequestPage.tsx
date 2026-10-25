@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { isEventMode } from '../lib/terms'
 import { Calendar, Check, X as XIcon, Clock, Send, Settings, Megaphone, Copy, Printer, Share2, AlertCircle } from 'lucide-react'
 import { shiftRequestsApi, usersApi, User, campaignsApi, Campaign } from '../api/client'
 import { Link } from 'react-router-dom'
@@ -745,7 +746,7 @@ function OpenCampaigns() {
 // ===================== Main Page =====================
 
 export default function ShiftRequestPage() {
-  const { user } = useAuth()
+  const { user , selectedCompany } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
   // LINE のリンクから来たときは ?year=&month= の月を開く
@@ -826,10 +827,12 @@ export default function ShiftRequestPage() {
       {/* Conditional view */}
       {isAdmin ? (
         <>
-          <Link to="/request-campaigns" className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-900 hover:bg-green-100">
-            <Megaphone className="w-4 h-4 flex-shrink-0" />
-            <span><b>マーケットなど、月をまたぐ期間</b>の希望は「期間で希望を募集」から1回で集められます（会場・週の日数などの質問つき）</span>
-          </Link>
+          {isEventMode(selectedCompany) && (
+            <Link to="/request-campaigns" className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-50">
+              <Megaphone className="w-4 h-4 flex-shrink-0 text-gray-500" />
+              <span><b>マーケットなど、月をまたぐ期間</b>の希望は「期間で希望を募集」から1回で集められます（会場・週の日数などの質問つき）</span>
+            </Link>
+          )}
           <AdminView year={year} month={month} days={days} />
         </>
       ) : (

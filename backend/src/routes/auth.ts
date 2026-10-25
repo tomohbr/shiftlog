@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { isEventModeCompany } from '../utils/billing';
 import db, { SUPER_ADMIN_EMAIL } from '../db';
 import { JWT_SECRET, authenticateToken, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
@@ -41,7 +42,7 @@ router.post('/login', (req: Request, res: Response): void => {
     FROM user_companies uc
     JOIN companies c ON uc.company_id = c.id
     WHERE uc.user_id = ?
-  `).all(user.id);
+  `).all(user.id).map((c: any) => ({ ...c, event_mode: isEventModeCompany(c.id) }));
 
   const token = jwt.sign(
     { id: user.id, email: user.email, role: user.role, name: user.name },
@@ -202,7 +203,7 @@ router.post('/pin-login', (req: Request, res: Response): void => {
     FROM user_companies uc
     JOIN companies c ON uc.company_id = c.id
     WHERE uc.user_id = ?
-  `).all(userRow.id);
+  `).all(userRow.id).map((c: any) => ({ ...c, event_mode: isEventModeCompany(c.id) }));
 
   const token = jwt.sign(
     { id: userRow.id, email: userRow.email, role: userRow.role, name: userRow.name },
@@ -244,7 +245,7 @@ router.post('/line-link', (req: Request, res: Response): void => {
     SELECT c.id, c.name, c.company_pin, c.staff_home, uc.role as company_role
     FROM user_companies uc JOIN companies c ON uc.company_id = c.id
     WHERE uc.user_id = ?
-  `).all(userRow.id);
+  `).all(userRow.id).map((c: any) => ({ ...c, event_mode: isEventModeCompany(c.id) }));
   const token = jwt.sign(
     { id: userRow.id, email: userRow.email, role: userRow.role, name: userRow.name },
     JWT_SECRET,
@@ -332,7 +333,7 @@ router.post('/register', (req: Request, res: Response): void => {
   res.status(201).json({
     token,
     user: { id: userId, email, name, role: assignedRole },
-    companies: [{ id: companyId, name: companyName, company_pin: companyPin, company_role: 'admin' }],
+    companies: [{ id: companyId, name: companyName, company_pin: companyPin, company_role: 'admin', event_mode: false }],
   });
 });
 
@@ -352,7 +353,7 @@ router.get('/me', authenticateToken, (req: AuthRequest, res: Response): void => 
     FROM user_companies uc
     JOIN companies c ON uc.company_id = c.id
     WHERE uc.user_id = ?
-  `).all(user.id);
+  `).all(user.id).map((c: any) => ({ ...c, event_mode: isEventModeCompany(c.id) }));
 
   res.json({ user, companies });
 });

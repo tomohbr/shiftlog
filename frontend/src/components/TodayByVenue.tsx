@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { venueWord } from '../lib/terms'
 import { MapPin, RefreshCw } from 'lucide-react'
 import { shiftsApi, timecardsApi, Shift, Store, TimeRecord } from '../api/client'
 import { storeColorMap } from '../lib/storeColors'
@@ -12,6 +14,8 @@ const toMin = (t?: string | null) => { if (!t) return 0; const [h, m] = t.split(
 type State = { key: 'before' | 'late' | 'working' | 'break' | 'done'; label: string; cls: string; order: number }
 
 export default function TodayByVenue({ stores, onlyStoreId = null }: { stores: Store[]; onlyStoreId?: number | null }) {
+  const { selectedCompany } = useAuth()
+  const vw = venueWord(selectedCompany)
   const [shifts, setShifts] = useState<Shift[]>([])
   const [records, setRecords] = useState<TimeRecord[]>([])
   const [now, setNow] = useState(new Date())
@@ -46,7 +50,7 @@ export default function TodayByVenue({ stores, onlyStoreId = null }: { stores: S
     return { key: 'before', label: '出勤前', cls: 'bg-blue-50 text-blue-700', order: 3 }
   }
 
-  const groups = [...sorted.map(st => ({ id: st.id as number | null, name: st.name })), { id: null, name: '会場なし' }]
+  const groups = [...sorted.map(st => ({ id: st.id as number | null, name: st.name })), { id: null, name: `${vw}なし` }]
     .map(g => ({ ...g, rows: shifts.filter(s => (s.store_id ?? null) === g.id).sort((a, b) => a.start_time.localeCompare(b.start_time)) }))
     .filter(g => g.rows.length > 0 && (onlyStoreId === null || g.id === onlyStoreId))
   const lateCount = groups.flatMap(g => g.rows).filter(s => stateOf(s).key === 'late').length
@@ -54,7 +58,7 @@ export default function TodayByVenue({ stores, onlyStoreId = null }: { stores: S
   return (
     <div className="card p-0 overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 sm:px-5 py-3 border-b border-gray-200">
-        <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">今日の会場</h3>
+        <h3 className="text-base font-bold text-gray-900 whitespace-nowrap">今日の{vw}</h3>
         <span className="text-sm text-gray-500 whitespace-nowrap">{m}/{Number(today.slice(8))}（{'日月火水木金土'[now.getDay()]}）</span>
         <button onClick={load} className="ml-auto text-xs text-gray-500 flex items-center gap-1 hover:text-gray-700 whitespace-nowrap"><RefreshCw className="w-3.5 h-3.5" />{now.toTimeString().slice(0, 5)} 更新</button>
         {lateCount > 0 && <span className="w-full sm:w-auto sm:order-none text-sm font-bold px-2.5 py-1 rounded-full bg-red-500 text-white text-center whitespace-nowrap">まだ来ていない {lateCount}人</span>}

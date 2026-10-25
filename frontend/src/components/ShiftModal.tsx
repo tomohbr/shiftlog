@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { venueWord } from '../lib/terms'
 import { X, Trash2, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -43,6 +45,7 @@ export default function ShiftModal({
   stores = [],
   defaultStoreId = null,
 }: ShiftModalProps) {
+  const { selectedCompany } = useAuth()
   const [userId, setUserId] = useState('')
   const [storeId, setStoreId] = useState('')
   const [startTime, setStartTime] = useState('09:00')
@@ -269,7 +272,7 @@ export default function ShiftModal({
           {/* Store（会場が登録されているお店だけ） */}
           {stores.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">会場</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{venueWord(selectedCompany)}</label>
               <select
                 value={storeId}
                 onChange={e => setStoreId(e.target.value)}

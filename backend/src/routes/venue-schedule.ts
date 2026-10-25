@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
+import { requireEventMode } from '../utils/billing';
 import { logAudit } from '../utils/audit';
 import { recordShiftChange, snapOf } from '../utils/shiftChanges';
 import {
@@ -61,7 +62,7 @@ function parseRule(companyId: number, body: any): Omit<SlotRule, 'id'> | string 
 }
 
 // GET /api/venue-schedule/rules
-router.get('/rules', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/rules', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const rules = db.prepare(`
     SELECT * FROM venue_slot_rules WHERE company_id = ?
@@ -71,7 +72,7 @@ router.get('/rules', authenticateToken, requireCompany, (req: AuthRequest, res: 
 });
 
 // POST /api/venue-schedule/rules
-router.post('/rules', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.post('/rules', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const r = parseRule(companyId, req.body);
@@ -85,7 +86,7 @@ router.post('/rules', authenticateToken, requireCompany, (req: AuthRequest, res:
 });
 
 // PUT /api/venue-schedule/rules/:id
-router.put('/rules/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.put('/rules/:id', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const cur = db.prepare('SELECT * FROM venue_slot_rules WHERE id = ? AND company_id = ?').get(req.params.id, companyId) as any;
@@ -101,7 +102,7 @@ router.put('/rules/:id', authenticateToken, requireCompany, (req: AuthRequest, r
 });
 
 // DELETE /api/venue-schedule/rules/:id
-router.delete('/rules/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.delete('/rules/:id', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   db.prepare('DELETE FROM venue_slot_rules WHERE id = ? AND company_id = ?').run(req.params.id, req.companyId!);
   res.json({ ok: true });
@@ -321,7 +322,7 @@ function getDraft(companyId: number, id: unknown) {
 // ---------------------------------------------------------------- 下書きの作成
 
 // POST /api/venue-schedule/drafts  { start_date, end_date, include_unsubmitted? }
-router.post('/drafts', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.post('/drafts', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const { start_date, end_date } = req.body || {};
@@ -395,7 +396,7 @@ router.post('/drafts', authenticateToken, requireCompany, (req: AuthRequest, res
 });
 
 // GET /api/venue-schedule/drafts  作りかけの下書き一覧（新しい順）
-router.get('/drafts', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/drafts', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const drafts = db.prepare(`
     SELECT d.*, (SELECT COUNT(*) FROM schedule_draft_assignments a WHERE a.draft_id = d.id) AS assignment_count
@@ -406,7 +407,7 @@ router.get('/drafts', authenticateToken, requireCompany, (req: AuthRequest, res:
 });
 
 // GET /api/venue-schedule/drafts/:id
-router.get('/drafts/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/drafts/:id', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const view = buildView(req.companyId!, Number(req.params.id));
   if (!view) { res.status(404).json({ error: '下書きが見つかりません' }); return; }
@@ -414,7 +415,7 @@ router.get('/drafts/:id', authenticateToken, requireCompany, (req: AuthRequest, 
 });
 
 // GET /api/venue-schedule/drafts/:id/slots/:slotId/candidates  その枠に入れられる人・入れられない人と理由
-router.get('/drafts/:id/slots/:slotId/candidates', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/drafts/:id/slots/:slotId/candidates', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const draft = getDraft(companyId, req.params.id);
@@ -464,7 +465,7 @@ function busyMapWithDraft(draftId: number, date: string, shifts: LiveShift[], ex
 
 // POST /api/venue-schedule/drafts/:id/assign  { slot_id, user_id, replace_assignment_id? }
 // 足す・差し替える。出勤不可の日と、同じ時間の二重勤務は入れられない。
-router.post('/drafts/:id/assign', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.post('/drafts/:id/assign', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const draft = getDraft(companyId, req.params.id);
@@ -501,7 +502,7 @@ router.post('/drafts/:id/assign', authenticateToken, requireCompany, (req: AuthR
 });
 
 // DELETE /api/venue-schedule/drafts/:id/assignments/:aid  外す
-router.delete('/drafts/:id/assignments/:aid', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.delete('/drafts/:id/assignments/:aid', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const draft = getDraft(companyId, req.params.id);
@@ -512,7 +513,7 @@ router.delete('/drafts/:id/assignments/:aid', authenticateToken, requireCompany,
 });
 
 // DELETE /api/venue-schedule/drafts/:id  下書きを捨てる
-router.delete('/drafts/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.delete('/drafts/:id', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const draft = getDraft(companyId, req.params.id);
@@ -525,7 +526,7 @@ router.delete('/drafts/:id', authenticateToken, requireCompany, (req: AuthReques
 
 // POST /api/venue-schedule/drafts/:id/commit  下書きを shifts に入れる（会場付き）。
 // 確定の瞬間にもう一度、確定シフトとの重なりを確かめる（下書き中に手でシフトを入れた場合に備える）。
-router.post('/drafts/:id/commit', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.post('/drafts/:id/commit', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const draft = getDraft(companyId, req.params.id);

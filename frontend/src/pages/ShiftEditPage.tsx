@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { venueWord, isEventMode } from '../lib/terms'
 import { format, addMonths, subMonths, getDaysInMonth, startOfMonth, getDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Plus, Trash2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
@@ -15,7 +16,8 @@ import PublicationBar from '../components/PublicationBar'
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
 export default function ShiftEditPage() {
-  const { user } = useAuth()
+  const { user, selectedCompany } = useAuth()
+  const vw = venueWord(selectedCompany)
   // ?month=2026-11 で開いたらその月から（自動作成の画面から戻ってきたとき用）
   const [searchParams] = useSearchParams()
   const [currentDate, setCurrentDate] = useState(() => {
@@ -144,13 +146,13 @@ export default function ShiftEditPage() {
           </select>
 
           {/* 1マスずつ入れる代わりに、会場ごとの必要人数と希望から下書きを作る */}
-          <Link
+          {isEventMode(selectedCompany) && <Link
             to={`/auto-schedule?month=${format(currentDate, 'yyyy-MM')}`}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100"
           >
             <Sparkles className="w-4 h-4" />
             希望から自動で作る
-          </Link>
+          </Link>}
 
           <button
             onClick={() => { setSelectedDate(new Date()); setSelectedShift(null); setModalOpen(true) }}
@@ -173,7 +175,7 @@ export default function ShiftEditPage() {
       {/* 会場の切り替え（会場が2つ以上あるお店だけ） */}
       {multiStore && (
         <div className="flex flex-wrap items-center gap-1.5">
-          {[{ id: null as number | null, name: '全会場' }, ...sortedStores].map(st => {
+          {[{ id: null as number | null, name: `全${vw}` }, ...sortedStores].map(st => {
             const active = filterStoreId === st.id
             const c = st.id ? colorOf(st.id) : null
             return (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { venueWord, isEventMode } from '../lib/terms'
 import { format, addMonths, subMonths } from 'date-fns'
 import { Users, Calendar, Clock, CheckCircle, AlertTriangle, DollarSign, Repeat, Store as StoreIcon, ArrowRight, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -15,6 +16,7 @@ import toast from 'react-hot-toast'
 
 export default function DashboardPage() {
   const { user, selectedCompany } = useAuth()
+  const vw = venueWord(selectedCompany)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [shifts, setShifts] = useState<Shift[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -275,7 +277,7 @@ export default function DashboardPage() {
         const colorOf = storeColorMap(stores)
         return (
           <div className="flex gap-2 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-            {[{ id: null as number | null, name: '全会場' }, ...[...stores].sort((a, b) => a.id - b.id)].map(st => {
+            {[{ id: null as number | null, name: `全${vw}` }, ...[...stores].sort((a, b) => a.id - b.id)].map(st => {
               const active = venue === st.id
               const c = st.id ? colorOf(st.id) : null
               return (
@@ -364,9 +366,9 @@ export default function DashboardPage() {
           <>
           {shifts.length === 0 && (
             <div className="mx-4 mt-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 flex flex-wrap items-center gap-3">
-              <p className="text-sm text-blue-900 flex-1 min-w-[200px]"><b>{currentDate.getMonth() + 1}月のシフトはまだありません。</b>スタッフの希望から下書きを作るか、シフト管理で入れてください。</p>
-              <Link to="/auto-schedule" className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold">希望から自動で作る</Link>
-              <Link to="/shifts" className="px-3 py-2 rounded-lg border border-blue-300 text-blue-700 text-sm font-bold bg-white">シフト管理で作る</Link>
+              <p className="text-sm text-blue-900 flex-1 min-w-[200px]"><b>{currentDate.getMonth() + 1}月のシフトはまだありません。</b>シフト管理で入れると、ここに出ます。</p>
+              {isEventMode(selectedCompany) && <Link to="/auto-schedule" className="btn-secondary">希望から自動で作る</Link>}
+              <Link to="/shifts" className="btn-primary">シフト管理で作る</Link>
             </div>
           )}
           <TeamCalendar
@@ -386,7 +388,7 @@ export default function DashboardPage() {
         const colorOf = storeColorMap(stores)
         const sorted = [...stores].sort((a, b) => a.id - b.id)
         const day = shifts.filter(x => x.date === dayOpen && (!venue || x.store_id === venue))
-        const groups = [...sorted.map(st => ({ id: st.id as number | null, name: st.name })), { id: null, name: '会場なし' }]
+        const groups = [...sorted.map(st => ({ id: st.id as number | null, name: st.name })), { id: null, name: `${vw}なし` }]
           .map(g => ({ ...g, rows: day.filter(x => (x.store_id ?? null) === g.id).sort((a, b) => a.start_time.localeCompare(b.start_time)) }))
           .filter(g => g.rows.length > 0)
         const [y, m, d] = dayOpen.split('-').map(Number)

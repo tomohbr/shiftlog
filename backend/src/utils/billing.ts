@@ -37,6 +37,22 @@ export function isOperatorCompany(companyId: number): boolean {
   `).get(companyId);
 }
 
+// 催事モード（クリスマスマーケットなど複数ブースの運用）。
+// 会場ごとの必要人数からの自動下書き・期間で希望を募集・催事の在庫は、運営者の自社だけで使う。
+// 販売用のお客様には出さない（2026-10-25 本人指示）。画面側は companies[].event_mode で出し分ける。
+export function isEventModeCompany(companyId: number): boolean {
+  return isOperatorCompany(companyId);
+}
+
+export function requireEventMode(req: any, res: any, next: any): void {
+  const companyId = Number(req.companyId || req.inv?.companyId || req.headers?.['x-company-id']);
+  if (!companyId || !isEventModeCompany(companyId)) {
+    res.status(403).json({ error: 'この機能は催事モードの会社だけで使えます' });
+    return;
+  }
+  next();
+}
+
 // Pro機能を使えるか（有料Pro or トライアル中 or 運営者の自社）
 export function hasProAccess(companyId: number): boolean {
   return isProCompany(companyId) || isInTrial(companyId) || isOperatorCompany(companyId);

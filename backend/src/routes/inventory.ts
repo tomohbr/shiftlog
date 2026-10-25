@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { requireEventMode } from '../utils/billing';
 import jwt from 'jsonwebtoken';
 import db from '../db';
 import { JWT_SECRET } from '../middleware/auth';
@@ -53,6 +54,8 @@ function enabled(req: InvReq, res: Response, next: NextFunction): void {
 }
 
 router.use(auth);
+// 催事の在庫は催事モードの会社だけ（お客様の会社では 403）
+router.use(requireEventMode);
 
 const storeName = (companyId: number) => {
   const rows = db.prepare('SELECT id, name FROM stores WHERE company_id = ?').all(companyId) as { id: number; name: string }[];

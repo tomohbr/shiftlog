@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { venueWord } from '../lib/terms'
 import { QRCodeSVG } from 'qrcode.react'
 import { Printer, X, Copy, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -21,6 +22,7 @@ export default function StaffGuidePage() {
   }, [])
 
   const company = selectedCompany?.name || ''
+  const vw = venueWord(selectedCompany)
   const bot = line?.bot_name || 'お店のLINE'
   const addFriend = line?.bot_basic_id ? `https://line.me/R/ti/p/${encodeURIComponent(line.bot_basic_id)}` : ''
   const phone = line?.absence_phone || ''
@@ -45,7 +47,7 @@ export default function StaffGuidePage() {
     '・シフトを見る … 自分とみんなの予定',
     '・希望を出す … 出られる日を ◎○× で提出',
     `・休みの連絡 … 休むシフトを選んで${who}に連絡${phoneWhen && phone ? `（${phoneWhen}は必ず${who}に電話 ${phone}）` : ''}`,
-    hasLiff ? '・打刻する … ブースのQRを読んで 出勤／休憩／退勤' : '・打刻 … ブースのQRを読んで 出勤／休憩／退勤',
+    hasLiff ? `・打刻する … ${vw}のQRを読んで 出勤／休憩／退勤` : `・打刻 … ${vw}のQRを読んで 出勤／休憩／退勤`,
     '',
     `わからないことは、そのトークに書いて送れば${who}に届きます。`,
     'ログインやアプリのインストールは要りません。',
@@ -99,10 +101,10 @@ export default function StaffGuidePage() {
             <img src="/guide-menu.png" alt="LINEのメニュー（シフトを見る・希望を出す・休みの連絡・打刻する）" className="w-full mt-3 rounded-xl border border-gray-200" />
             <div className="grid grid-cols-2 gap-3 mt-4">
               {[
-                ['#1C7ED6', 'シフトを見る', '自分の予定と、みんなの予定（どの会場に誰がいるか）がカレンダーで見られます。'],
+                ['#1C7ED6', 'シフトを見る', `自分の予定と、みんなの予定（どの${vw}に誰がいるか）がカレンダーで見られます。`],
                 ['#2F9E44', '希望を出す', '受付中の月に、出られる日を ◎入りたい ○入れる ×入れない で出します。締切まで直せます。'],
                 ['#E03131', '休みの連絡', `休むシフトを選んで理由を押すと、${who}に届きます。${phoneWhen ? `\n${phoneWhen}のお休みは、必ず電話してください。` : ''}`],
-                ['#E8590C', hasLiff ? '打刻する' : '打刻', '出勤・休憩・退勤のときに押して、ブースに貼ってあるQRを読みます。自分の分しか打刻できません。'],
+                ['#E8590C', hasLiff ? '打刻する' : '打刻', `出勤・休憩・退勤のときに押して、${vw}に貼ってあるQRを読みます。自分の分しか打刻できません。`],
               ].map(([color, title, body]) => (
                 <div key={title} className="rounded-xl border border-gray-200 p-4">
                   <p className="text-lg font-bold" style={{ color }}>{title}</p>
@@ -123,7 +125,7 @@ export default function StaffGuidePage() {
           {/* 4. 会場 */}
           {sorted.length > 0 && (
             <section className="mt-6">
-              <p className="text-sm font-bold text-gray-500">会場（シフトやLINEでは、この色で表示されます）</p>
+              <p className="text-sm font-bold text-gray-500">{vw}（シフトやLINEでは、この色で表示されます）</p>
               <div className="flex flex-wrap gap-2 mt-2">
                 {sorted.map(st => (
                   <span key={st.id} className="px-4 py-1.5 rounded-full text-white text-base font-bold" style={{ backgroundColor: colorOf(st.id).solid }}>{st.name}</span>

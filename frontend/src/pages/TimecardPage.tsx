@@ -1,4 +1,5 @@
 import { startProUpgrade } from '../lib/proUpgrade'
+import { venueWord } from '../lib/terms'
 import { useState, useEffect, useCallback } from 'react'
 import { billingApi, timecardsApi, usersApi, storesApi, TimeRecord, TimeRecordEdit, User, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
@@ -18,6 +19,7 @@ import {
 
 export default function TimecardPage() {
   const { user, selectedCompany } = useAuth()
+  const vw = venueWord(selectedCompany)
   const { selectedStaff, refreshStaffStatus } = useKiosk()
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
@@ -247,7 +249,7 @@ export default function TimecardPage() {
   const fmtDistance = (m: number) => m >= 1000 ? `約${(m / 1000).toFixed(1)}km` : `約${Math.round(m / 10) * 10}m`
   // 会場から離れた場所での打刻（位置が取れて、会場の位置が設定されているときだけ判定される）
   const farWarnings = (rec: TimeRecord) => (rec.locations || []).filter(l => l.far).map(l =>
-    `${ACTION_NAMES[l.action] || ''}が${l.store_name ? `「${l.store_name}」` : '会場'}から${fmtDistance(l.distance_m)}`
+    `${ACTION_NAMES[l.action] || ''}が${l.store_name ? `「${l.store_name}」` : vw}から${fmtDistance(l.distance_m)}`
   )
   const breakLabel = (rec: TimeRecord) => {
     const count = rec.breaks?.length || 0
@@ -283,7 +285,7 @@ export default function TimecardPage() {
       return
     }
 
-    const header = '日付,氏名,出勤,退勤,休憩(分),実労働時間,会場\n'
+    const header = `日付,氏名,出勤,退勤,休憩(分),実労働時間,${vw}\n`
     const rows = records.map(r => {
       const hours = r.clock_in && r.clock_out
         ? (() => {
@@ -496,7 +498,7 @@ export default function TimecardPage() {
         {isAdmin && multiStore && (
           <div className="px-4 pt-3 space-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
-              {[{ id: null as number | null, name: '全会場' }, ...stores].map(st => (
+              {[{ id: null as number | null, name: `全${vw}` }, ...stores].map(st => (
                 <button
                   key={st.id ?? 'all'}
                   onClick={() => setFilterStoreId(st.id)}
@@ -512,7 +514,7 @@ export default function TimecardPage() {
             </div>
             {venueTotals.length > 0 && (
               <p className="text-xs text-gray-500">
-                会場別（出勤した会場）: {venueTotals.map(v => `${v.name} ${v.count}件・${Math.floor(v.minutes / 60)}時間${v.minutes % 60 ? `${v.minutes % 60}分` : ''}`).join(' ／ ')}
+                {vw}別（出勤した{vw}）: {venueTotals.map(v => `${v.name} ${v.count}件・${Math.floor(v.minutes / 60)}時間${v.minutes % 60 ? `${v.minutes % 60}分` : ''}`).join(' ／ ')}
               </p>
             )}
           </div>
@@ -551,7 +553,7 @@ export default function TimecardPage() {
                 <th className="text-left px-4 py-3 font-medium">出勤</th>
                 <th className="text-left px-4 py-3 font-medium">退勤</th>
                 <th className="text-left px-4 py-3 font-medium">休憩</th>
-                <th className="text-left px-4 py-3 font-medium">会場</th>
+                <th className="text-left px-4 py-3 font-medium">{vw}</th>
                 <th className="text-left px-4 py-3 font-medium">実労働</th>
                 <th className="text-left px-4 py-3 font-medium">メモ</th>
                 {isAdmin && <th className="text-right px-4 py-3 font-medium"></th>}

@@ -53,6 +53,8 @@ export interface Company {
   address?: string
   phone?: string
   staff_home?: string
+  /** 催事モード（運営者の自社だけ）。会場ごとの自動下書き・期間募集・催事在庫が使える */
+  event_mode?: boolean
   my_role?: string
   company_role?: string
   created_at: string

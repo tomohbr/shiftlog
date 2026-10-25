@@ -50,6 +50,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { KioskProvider } from './contexts/KioskContext'
 import NativeShell from './native/NativeShell'
 import { isNative } from './native/platform'
+import { isEventMode } from './lib/terms'
 
 function AppRoutes() {
   const { user, selectedCompany, loading, justRegistered } = useAuth()
@@ -178,7 +179,7 @@ function AppRoutes() {
           <Route path="/companies" element={<CompanyPage />} />
           <Route path="/timecards" element={<TimecardPage />} />
           <Route path="/shift-requests" element={<ShiftRequestPage />} />
-          <Route path="/request-campaigns" element={<RequestCampaignPage />} />
+          <Route path="/request-campaigns" element={isEventMode(selectedCompany) ? <RequestCampaignPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/campaign/:id" element={<CampaignAnswerPage />} />
           <Route path="/labor" element={<LaborPage />} />
           <Route path="/absence" element={<AbsencePage />} />
@@ -191,8 +192,8 @@ function AppRoutes() {
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/swaps" element={<SwapsPage />} />
           <Route path="/payroll" element={<PayrollPage />} />
-          <Route path="/auto-schedule" element={<VenueSchedulePage />} />
-          <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/auto-schedule" element={isEventMode(selectedCompany) ? <VenueSchedulePage /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/inventory" element={isEventMode(selectedCompany) ? <InventoryPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/admin-hub" element={<AdminHubPage />} />
           <Route path="/setup-guide" element={<SetupGuidePage />} />
           <Route path="/organization" element={<OrganizationPage />} />
