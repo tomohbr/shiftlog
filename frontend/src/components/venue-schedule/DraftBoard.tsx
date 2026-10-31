@@ -254,6 +254,7 @@ function PersonChip({ p, dim, focus }: { p: DraftPerson; dim: boolean; focus: bo
       title={`${p.user_name}${p.source === 'existing' ? '（確定済み）' : p.source === 'manual' ? '（手で入れた）' : ''}${p.warning ? ` / ${p.warning}` : ''}`}>
       {p.source === 'existing' ? <Lock className="w-2.5 h-2.5 flex-shrink-0" /> : <span className="text-[10px] w-2.5 flex-shrink-0">{mark}</span>}
       <span className={`truncate font-medium ${p.source === 'manual' && !focus ? 'text-blue-700' : ''}`}>{p.user_name}</span>
+      {(p.start_time || p.end_time) && <span className="text-[10px] tabular-nums flex-shrink-0 opacity-80">{p.start_time ? `${p.start_time}〜` : `〜${p.end_time}`}</span>}
       {warn && <AlertTriangle className="w-2.5 h-2.5 text-amber-500 flex-shrink-0" />}
     </div>
   )
@@ -361,6 +362,7 @@ function SlotModal({ view, slot, color, storeName, editable, onClose, onChange }
                       {p.source === 'existing' ? '確定済み' : p.source === 'manual' ? '・手で入れた' : ''}
                     </span>
                   </p>
+                  {(p.start_time || p.end_time) && <p className="text-xs text-blue-700 tabular-nums">この人だけ {p.start_time || slot.start_time.slice(0, 5)}〜{p.end_time || slot.end_time.slice(0, 5)}</p>}
                   {p.warning && <p className="text-xs text-amber-700 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{p.warning}</p>}
                 </div>
                 {editable && p.source !== 'existing' && (

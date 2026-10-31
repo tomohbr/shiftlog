@@ -487,6 +487,9 @@ export interface DraftPerson {
   availability: 'preferred' | 'available' | 'unavailable' | null
   partial: boolean
   warning?: string | null
+  /** 枠と違う時間で入るとき（例: 18:00〜）。null なら枠の時間 */
+  start_time?: string | null
+  end_time?: string | null
 }
 export interface DraftSlot {
   id: number

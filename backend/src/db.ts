@@ -630,6 +630,10 @@ try {
     );
     CREATE INDEX IF NOT EXISTS idx_schedule_draft_assignments_draft ON schedule_draft_assignments(draft_id);
   `);
+  // 人ごとに時間をずらす（例：平日は学校で18時から）。NULL なら枠の時間のまま
+  const sdaCols = db.prepare('PRAGMA table_info(schedule_draft_assignments)').all().map((c: any) => c.name);
+  if (!sdaCols.includes('start_time')) db.exec('ALTER TABLE schedule_draft_assignments ADD COLUMN start_time TEXT');
+  if (!sdaCols.includes('end_time')) db.exec('ALTER TABLE schedule_draft_assignments ADD COLUMN end_time TEXT');
 } catch (e) { console.error('[migration] 会場の枠・下書きテーブルの作成に失敗', e); }
 
 // ---- 期間をまたぐ希望の募集（2026-10。クリスマスマーケットのように月をまたぐ期間を1回で集める） ----

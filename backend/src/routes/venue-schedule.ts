@@ -240,12 +240,15 @@ function buildView(companyId: number, draftId: number) {
         const req = requests.get(`${a.user_id}:${s.date}`);
         const j = judge(range as Slot, req, [], true);
         const x = ensure(a.user_id);
-        x.draftMin += range.end - range.start - (s.break_minutes || 0);
+        const st = (a as any).start_time || null, et = (a as any).end_time || null;
+        x.draftMin += toMinutes(et || s.end_time) - toMinutes(st || s.start_time) - (s.break_minutes || 0);
         x.dates.add(s.date);
         x.draftCount++;
         return {
           assignment_id: a.id, shift_id: null as number | null, user_id: a.user_id,
           user_name: nameOf.get(a.user_id) || '?', source: a.source,
+          // 枠と違う時間で入る人（NULL なら枠の時間のまま）
+          start_time: st, end_time: et,
           availability: req?.availability || null,
           partial: j.ok ? j.partial : false,
           // 手で入れた人が「出勤不可」や「希望時間外」なら画面で警告する
@@ -414,6 +417,26 @@ router.get('/drafts/:id', authenticateToken, requireCompany, requireEventMode, (
   res.json(view);
 });
 
+// PUT /api/venue-schedule/drafts/:id/assignments/:aid/time  { start_time, end_time }  その人だけ時間をずらす（null で枠の時間に戻す）
+router.put('/drafts/:id/assignments/:aid/time', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+  if (!adminOnly(req, res)) return;
+  const companyId = req.companyId!;
+  const draft = getDraft(companyId, req.params.id);
+  if (!draft || draft.status !== 'draft') { res.status(404).json({ error: '下書きが見つかりません' }); return; }
+  const a = db.prepare(`
+    SELECT a.id, s.start_time, s.end_time FROM schedule_draft_assignments a JOIN schedule_draft_slots s ON s.id = a.slot_id
+    WHERE a.id = ? AND a.draft_id = ?
+  `).get(req.params.aid, draft.id) as any;
+  if (!a) { res.status(404).json({ error: '割り当てが見つかりません' }); return; }
+  const t = (v: unknown) => (v == null || v === '' ? null : /^\d{2}:\d{2}$/.test(String(v)) ? String(v) : undefined);
+  const st = t(req.body?.start_time), et = t(req.body?.end_time);
+  if (st === undefined || et === undefined) { res.status(400).json({ error: '時刻は HH:MM で入れてください' }); return; }
+  const s = toMinutes(st || a.start_time), e = toMinutes(et || a.end_time);
+  if (!(s < e) || s < toMinutes(a.start_time) || e > toMinutes(a.end_time)) { res.status(400).json({ error: '枠の時間の中で、終わりを始まりより後にしてください' }); return; }
+  db.prepare('UPDATE schedule_draft_assignments SET start_time = ?, end_time = ? WHERE id = ?').run(st, et, a.id);
+  res.json(buildView(companyId, draft.id));
+});
+
 // GET /api/venue-schedule/drafts/:id/slots/:slotId/candidates  その枠に入れられる人・入れられない人と理由
 router.get('/drafts/:id/slots/:slotId/candidates', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
@@ -533,7 +556,7 @@ router.post('/drafts/:id/commit', authenticateToken, requireCompany, requireEven
   if (!draft || draft.status !== 'draft') { res.status(404).json({ error: '確定できる下書きが見つかりません' }); return; }
 
   const rows = db.prepare(`
-    SELECT a.id, a.user_id, s.store_id, s.date, s.start_time, s.end_time, s.break_minutes, u.name AS user_name
+    SELECT a.id, a.user_id, s.store_id, s.date, COALESCE(a.start_time, s.start_time) AS start_time, COALESCE(a.end_time, s.end_time) AS end_time, s.break_minutes, u.name AS user_name
     FROM schedule_draft_assignments a
     JOIN schedule_draft_slots s ON s.id = a.slot_id
     JOIN users u ON u.id = a.user_id
