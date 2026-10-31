@@ -369,7 +369,7 @@ router.post('/drafts', authenticateToken, requireCompany, requireEventMode, (req
   const result = plan({
     slots, staffIds: staff.map(s => s.id), requests, busy: busyMap(shifts),
     existingInSlot, existingMinutes, existingDays, includeUnsubmitted,
-    venueOk: prefs.venueOk, weeklyCap: prefs.weeklyCap,
+    venueOk: prefs.venueOk, weeklyCap: prefs.weeklyCap, apart: loadApart(companyId),
   });
 
   let draftId = 0;
@@ -396,6 +396,41 @@ router.post('/drafts', authenticateToken, requireCompany, requireEventMode, (req
 
   logAudit({ userId: req.user!.id, companyId, action: 'create', entity: 'schedule_draft', entityId: draftId, summary: `${start_date}〜${end_date} のシフト下書きを自動作成（${result.assignments.length} 件）` });
   res.status(201).json(buildView(companyId, draftId));
+});
+
+// 一緒に入れない2人。自動作成はこの2人を同じ会場・重なる時間に入れない
+function loadApart(companyId: number): (a: number, b: number) => boolean {
+  const set = new Set((db.prepare('SELECT user_a, user_b FROM staff_apart_pairs WHERE company_id = ?').all(companyId) as any[])
+    .flatMap(r => [`${r.user_a}:${r.user_b}`, `${r.user_b}:${r.user_a}`]));
+  return (a, b) => set.has(`${a}:${b}`);
+}
+
+// GET /api/venue-schedule/apart  一緒に入れない2人の一覧
+router.get('/apart', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+  if (!adminOnly(req, res)) return;
+  const pairs = db.prepare(`
+    SELECT p.id, p.user_a, p.user_b, a.name AS name_a, b.name AS name_b FROM staff_apart_pairs p
+    JOIN users a ON a.id = p.user_a JOIN users b ON b.id = p.user_b WHERE p.company_id = ? ORDER BY p.id
+  `).all(req.companyId!);
+  res.json({ pairs });
+});
+
+// POST /api/venue-schedule/apart  { user_a, user_b }
+router.post('/apart', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+  if (!adminOnly(req, res)) return;
+  const companyId = req.companyId!;
+  const [a, b] = [Number(req.body?.user_a), Number(req.body?.user_b)].sort((x, y) => x - y);
+  const inCompany = db.prepare('SELECT 1 FROM user_companies WHERE user_id = ? AND company_id = ?');
+  if (!a || !b || a === b || !inCompany.get(a, companyId) || !inCompany.get(b, companyId)) { res.status(400).json({ error: '2人を選んでください' }); return; }
+  db.prepare('INSERT OR IGNORE INTO staff_apart_pairs (company_id, user_a, user_b) VALUES (?, ?, ?)').run(companyId, a, b);
+  res.status(201).json({ ok: true });
+});
+
+// DELETE /api/venue-schedule/apart/:id
+router.delete('/apart/:id', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+  if (!adminOnly(req, res)) return;
+  db.prepare('DELETE FROM staff_apart_pairs WHERE id = ? AND company_id = ?').run(req.params.id, req.companyId!);
+  res.json({ ok: true });
 });
 
 // GET /api/venue-schedule/drafts  作りかけの下書き一覧（新しい順）

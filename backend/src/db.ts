@@ -634,6 +634,17 @@ try {
   const sdaCols = db.prepare('PRAGMA table_info(schedule_draft_assignments)').all().map((c: any) => c.name);
   if (!sdaCols.includes('start_time')) db.exec('ALTER TABLE schedule_draft_assignments ADD COLUMN start_time TEXT');
   if (!sdaCols.includes('end_time')) db.exec('ALTER TABLE schedule_draft_assignments ADD COLUMN end_time TEXT');
+  // 同じ会場・同じ時間に一緒に入れない2人（自動作成で組まない）
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS staff_apart_pairs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      user_a INTEGER NOT NULL,
+      user_b INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(company_id, user_a, user_b)
+    );
+  `);
 } catch (e) { console.error('[migration] 会場の枠・下書きテーブルの作成に失敗', e); }
 
 // ---- 期間をまたぐ希望の募集（2026-10。クリスマスマーケットのように月をまたぐ期間を1回で集める） ----

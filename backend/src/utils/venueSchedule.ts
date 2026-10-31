@@ -142,6 +142,8 @@ export interface PlanInput {
   //               （足りない枠は下書きに「あと○人」と出るので、管理者が本人と話して手で入れる）
   venueOk?: (userId: number, date: string, storeId: number | null) => boolean;
   weeklyCap?: (userId: number, date: string) => number | null;
+  // 一緒に入れない2人（同じ会場・時間が重なる枠に同時に入れない）
+  apart?: (a: number, b: number) => boolean;
 }
 
 /** その日を含む週（月曜はじまり）の月曜の日付 */
@@ -210,6 +212,17 @@ export function plan(input: PlanInput): PlanResult {
     for (const d of dm.keys()) if (weekOf(d) === wk) n++;
     return Math.max(0, n + 1 - cap);
   };
+  // 同じ会場で時間が重なる枠に、一緒に入れない相手がもういるか
+  const clashes = (s: Slot, id: number) => {
+    if (!input.apart) return false;
+    for (const o of slots) {
+      if (o.date !== s.date || o.store_id !== s.store_id || !(o.start < s.end && s.start < o.end)) continue;
+      for (const other of [...assigned.get(o.key)!, ...(existingInSlot.get(o.key) || [])]) {
+        if (other !== id && input.apart(id, other)) return true;
+      }
+    }
+    return false;
+  };
   const isIn = (s: Slot, id: number) =>
     assigned.get(s.key)!.includes(id) || (existingInSlot.get(s.key) || []).includes(id);
 
@@ -239,7 +252,7 @@ export function plan(input: PlanInput): PlanResult {
     const out: Array<{ id: number; score: number }> = [];
     for (const id of staffIds) {
       if (isIn(s, id)) continue;
-      if (!venueOk(s, id) || overCap(s, id) > 0) continue;
+      if (!venueOk(s, id) || overCap(s, id) > 0 || clashes(s, id)) continue;
       const j = judge(s, requests.get(keyOf(id, s.date)), busy.get(keyOf(id, s.date)) || [], includeUnsubmitted);
       if (!j.ok) continue;
       if (j.partial && !allowPartial) continue;
@@ -283,7 +296,7 @@ export function plan(input: PlanInput): PlanResult {
         const fromPref = fromFit.ok ? PREF_SCORE[fromFit.fit] : 0;
         for (const to of [...staffIds].sort((a, b) => minutes.get(a)! - minutes.get(b)!)) {
           if (to === from || isIn(s, to)) continue;
-          if (!venueOk(s, to) || overCap(s, to) > 0) continue;
+          if (!venueOk(s, to) || overCap(s, to) > 0 || clashes(s, to)) continue;
           if (days.get(to)!.has(s.date) && requests.get(keyOf(to, s.date))?.part !== 'all') continue;
           const gap = minutes.get(from)! - minutes.get(to)!;
           if (gap <= len(s)) break; // ここから先は差が縮まらない
