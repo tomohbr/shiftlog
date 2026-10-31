@@ -8,7 +8,7 @@ import {
   SlotRule, Slot, RequestInfo, Interval, Availability,
   expandRules, plan, judge, toMinutes, toHHMM, datesBetween,
 } from '../utils/venueSchedule';
-import { campaignPreferences } from '../utils/requestCampaign';
+import { campaignPreferences, referralBuddies } from '../utils/requestCampaign';
 
 // 会場ごとの必要人数（枠）と、希望からのシフト下書き。
 //   /rules         枠のルール（会場 × 曜日 or 日付 × 時間帯 × 人数）
@@ -369,7 +369,7 @@ router.post('/drafts', authenticateToken, requireCompany, requireEventMode, (req
   const result = plan({
     slots, staffIds: staff.map(s => s.id), requests, busy: busyMap(shifts),
     existingInSlot, existingMinutes, existingDays, includeUnsubmitted,
-    venueOk: prefs.venueOk, weeklyCap: prefs.weeklyCap, apart: loadApart(companyId),
+    venueOk: prefs.venueOk, weeklyCap: prefs.weeklyCap, apart: loadApart(companyId), buddies: referralBuddies(companyId),
   });
 
   let draftId = 0;

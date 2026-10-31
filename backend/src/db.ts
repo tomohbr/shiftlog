@@ -696,6 +696,8 @@ try {
   if (!rcaCols.includes('long_day')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN long_day TEXT');
   if (!rcaCols.includes('referral')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN referral TEXT');
   if (!rcaCols.includes('referral_note')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN referral_note TEXT');
+  // 紹介で来た人の「紹介してくれた人」（自動作成で同じ会場・時間に入れる）
+  if (!rcaCols.includes('referred_by')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN referred_by INTEGER');
 } catch (e) { console.error('[migration] 希望の募集テーブルの作成に失敗', e); }
 
 // ---- 催事の在庫・補充（2026-10。クリスマスマーケットの会場在庫と、工房からの毎日の積み込み） ----

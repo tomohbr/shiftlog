@@ -690,6 +690,7 @@ export interface CampaignAnswerInput {
   long_day: 'yes' | 'half' | 'depends' | null
   referral: 'yes' | 'ask' | 'no' | null
   referral_note: string
+  referred_by: number | null
   comment: string
 }
 export interface CampaignAnswerView {
@@ -709,6 +710,7 @@ export interface CampaignAnswerView {
   referral: 'yes' | 'ask' | 'no' | null
   referral_label: string | null
   referral_note: string
+  referred_by: number | null
   comment: string
   submitted_at: string | null
 }
@@ -721,6 +723,7 @@ export interface CampaignMine {
   answer: CampaignAnswerView | null
   entries: Record<string, { availability: CampaignAvailability; part: CampaignPart | null }>
   transports: string[]
+  colleagues?: { id: number; name: string }[]
 }
 export interface CampaignPerson { user_id: number; name: string; availability: CampaignAvailability; part: CampaignPart | null; part_label: string | null }
 export interface CampaignSummary {

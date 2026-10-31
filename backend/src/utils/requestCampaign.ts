@@ -131,6 +131,18 @@ export function campaignPreferences(companyId: number, start: string, end: strin
   };
 }
 
+/** 紹介した人・された人の組（どちらから見ても相手が返る）。自動作成で同じ会場・時間に寄せる */
+export function referralBuddies(companyId: number): (userId: number) => number[] {
+  const rows = db.prepare(`
+    SELECT DISTINCT a.user_id, a.referred_by FROM request_campaign_answers a
+    WHERE a.company_id = ? AND a.referred_by IS NOT NULL AND a.submitted_at IS NOT NULL
+  `).all(companyId) as { user_id: number; referred_by: number }[];
+  const m = new Map<number, Set<number>>();
+  const link = (a: number, b: number) => { if (!m.has(a)) m.set(a, new Set()); m.get(a)!.add(b); };
+  for (const r of rows) { link(r.user_id, r.referred_by); link(r.referred_by, r.user_id); }
+  return (userId: number) => [...(m.get(userId) || [])];
+}
+
 /** 長い日の昼夜通しを preferred_start/end に直す（通し・短い日は時間なし） */
 export function partTimes(day: CampaignDay | undefined, part: Part | null): { start: string | null; end: string | null } {
   if (!day || !day.long || !part || part === 'full' || part === 'all') return { start: null, end: null };

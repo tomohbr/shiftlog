@@ -56,7 +56,7 @@ function partRange(day: CampaignDay, part: 'a' | 'b' | 'all') {
 
 const emptyAnswer: CampaignAnswerInput = {
   venues: [], days_per_week: null, ng_weekdays: [], transport: [], transport_note: '',
-  other_job: null, other_job_note: '', long_day: null, referral: null, referral_note: '', comment: '',
+  other_job: null, other_job_note: '', long_day: null, referral: null, referral_note: '', referred_by: null, comment: '',
 }
 
 export default function CampaignAnswerPage() {
@@ -80,7 +80,7 @@ export default function CampaignAnswerPage() {
       const ans: CampaignAnswerInput = a ? {
         venues: a.venues_any ? 'any' : a.venue_ids,
         days_per_week: a.days_per_week, ng_weekdays: a.ng_weekdays, transport: a.transport,
-        transport_note: a.transport_note, other_job: a.other_job, other_job_note: a.other_job_note, long_day: a.long_day, referral: a.referral, referral_note: a.referral_note, comment: a.comment,
+        transport_note: a.transport_note, other_job: a.other_job, other_job_note: a.other_job_note, long_day: a.long_day, referral: a.referral, referral_note: a.referral_note, referred_by: a.referred_by, comment: a.comment,
       } : emptyAnswer
       setAnswer(ans)
       setEntries(r.data.entries)
@@ -367,7 +367,18 @@ export default function CampaignAnswerPage() {
         </div>
 
         <div>
-          <p className="text-sm font-bold text-gray-800 mb-1.5">⑧ ひとこと</p>
+          <p className="text-sm font-bold text-gray-800">⑧ だれかの紹介で来ましたか？</p>
+          <p className="text-xs text-gray-500 mb-1.5">紹介してくれた人と、なるべく同じ日・同じ会場にします</p>
+          <select value={answer.referred_by ?? ''} disabled={!open}
+            onChange={e => setA('referred_by', e.target.value ? Number(e.target.value) : null)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base bg-white disabled:bg-gray-50">
+            <option value="">紹介ではない</option>
+            {(data.colleagues || []).map(c => <option key={c.id} value={c.id}>{c.name}さんの紹介</option>)}
+          </select>
+        </div>
+
+        <div>
+          <p className="text-sm font-bold text-gray-800 mb-1.5">⑨ ひとこと</p>
           <textarea value={answer.comment} onChange={e => setA('comment', e.target.value)} disabled={!open} maxLength={300} rows={2}
             placeholder="例：12/24は早めに上がりたいです" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base disabled:bg-gray-50" />
         </div>

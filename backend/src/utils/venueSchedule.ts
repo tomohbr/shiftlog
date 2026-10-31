@@ -144,6 +144,8 @@ export interface PlanInput {
   weeklyCap?: (userId: number, date: string) => number | null;
   // 一緒に入れない2人（同じ会場・時間が重なる枠に同時に入れない）
   apart?: (a: number, b: number) => boolean;
+  // 一緒に入れたい相手（紹介した人・された人）。同じ会場・重なる時間にいれば優先する
+  buddies?: (userId: number) => number[];
 }
 
 /** その日を含む週（月曜はじまり）の月曜の日付 */
@@ -231,6 +233,19 @@ export function plan(input: PlanInput): PlanResult {
     }
     return false;
   };
+  const buddyNear = (s: Slot, id: number) => {
+    const bs = input.buddies?.(id);
+    if (!bs || bs.length === 0) return false;
+    return slots.some(o => o.date === s.date && o.store_id === s.store_id && o.start < s.end && s.start < o.end
+      && [...assigned.get(o.key)!, ...(existingInSlot.get(o.key) || [])].some(x => bs.includes(x)));
+  };
+  // 一緒に入れたい相手が、その日ほかの会場にいる（ここに入れると離ればなれになる）
+  const buddyElsewhere = (s: Slot, id: number) => {
+    const bs = input.buddies?.(id);
+    if (!bs || bs.length === 0) return false;
+    return slots.some(o => o.date === s.date && o.store_id !== s.store_id
+      && [...assigned.get(o.key)!, ...(existingInSlot.get(o.key) || [])].some(x => bs.includes(x)));
+  };
   const isIn = (s: Slot, id: number) =>
     assigned.get(s.key)!.includes(id) || (existingInSlot.get(s.key) || []).includes(id);
 
@@ -269,7 +284,8 @@ export function plan(input: PlanInput): PlanResult {
       const already = days.get(id)!.has(s.date);
       if (already && (part === 'a' || part === 'b' || part === 'full')) continue;
       const sameDay = already ? (part === 'all' ? -0.3 : 0.3) : 0;
-      out.push({ id, score: PREF_SCORE[j.fit] * 0.5 - load(id) - sameDay - (j.partial ? 0.5 : 0) });
+      const withBuddy = buddyNear(s, id) ? 0.6 : buddyElsewhere(s, id) ? -0.6 : 0;
+      out.push({ id, score: PREF_SCORE[j.fit] * 0.5 - load(id) - sameDay - (j.partial ? 0.5 : 0) + withBuddy });
     }
     // 同点は日付と人で決まる順（毎回同じ人が先に来ないように）
     out.sort((a, b) => b.score - a.score || ((a.id * 7919 + s.start) % 97) - ((b.id * 7919 + s.start) % 97));
