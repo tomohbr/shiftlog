@@ -223,6 +223,14 @@ export function plan(input: PlanInput): PlanResult {
     }
     return false;
   };
+  // 同じ日に別の会場へは入れない（会場の行き来はしない）
+  const otherVenueSameDay = (s: Slot, id: number) => {
+    for (const o of slots) {
+      if (o.date !== s.date || o.store_id === s.store_id) continue;
+      if (assigned.get(o.key)!.includes(id) || (existingInSlot.get(o.key) || []).includes(id)) return true;
+    }
+    return false;
+  };
   const isIn = (s: Slot, id: number) =>
     assigned.get(s.key)!.includes(id) || (existingInSlot.get(s.key) || []).includes(id);
 
@@ -252,7 +260,7 @@ export function plan(input: PlanInput): PlanResult {
     const out: Array<{ id: number; score: number }> = [];
     for (const id of staffIds) {
       if (isIn(s, id)) continue;
-      if (!venueOk(s, id) || overCap(s, id) > 0 || clashes(s, id)) continue;
+      if (!venueOk(s, id) || overCap(s, id) > 0 || clashes(s, id) || otherVenueSameDay(s, id)) continue;
       const j = judge(s, requests.get(keyOf(id, s.date)), busy.get(keyOf(id, s.date)) || [], includeUnsubmitted);
       if (!j.ok) continue;
       if (j.partial && !allowPartial) continue;
@@ -296,7 +304,7 @@ export function plan(input: PlanInput): PlanResult {
         const fromPref = fromFit.ok ? PREF_SCORE[fromFit.fit] : 0;
         for (const to of [...staffIds].sort((a, b) => minutes.get(a)! - minutes.get(b)!)) {
           if (to === from || isIn(s, to)) continue;
-          if (!venueOk(s, to) || overCap(s, to) > 0 || clashes(s, to)) continue;
+          if (!venueOk(s, to) || overCap(s, to) > 0 || clashes(s, to) || otherVenueSameDay(s, to)) continue;
           if (days.get(to)!.has(s.date) && requests.get(keyOf(to, s.date))?.part !== 'all') continue;
           const gap = minutes.get(from)! - minutes.get(to)!;
           if (gap <= len(s)) break; // ここから先は差が縮まらない
