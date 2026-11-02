@@ -7,7 +7,7 @@ import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../middleware/auth';
 import { absenceRule, phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
 import { canAddStaff } from '../utils/billing';
-import { daysLeft, isAccepting } from '../utils/requestCampaign';
+import { daysLeft, forUser, isAccepting } from '../utils/requestCampaign';
 
 // LINE 連携（お店ごとの LINE 公式アカウント → スタッフへの通知）
 //
@@ -290,7 +290,7 @@ export async function sendRequestLinks(
 
 // ---- 期間の募集（request_campaigns）の案内カード ----
 // 「【クリスマスマーケット】シフトの希望を教えてください」「期間 11/20〜12/25」「締切 11/10（あと7日）」「担当の○○」＋「希望を出す」
-export type CampaignCard = { id: number; title: string; start_date: string; end_date: string; deadline: string | null };
+export type CampaignCard = { id: number; title: string; start_date: string; end_date: string; deadline: string | null; sent_at?: string | null };
 
 export function campaignHeading(c: CampaignCard, kind: 'open' | 'remind' | 'reply') {
   return kind === 'remind' ? `【${c.title}】シフトの希望がまだ届いていません` : `【${c.title}】シフトの希望を教えてください`;
@@ -352,7 +352,8 @@ export async function sendCampaignLinks(
   let sent = 0;
   const failed: string[] = [];
   for (const r of rows) {
-    if (await sendLineMessage(settings.channel_access_token, r.line_user_id, campaignCard(companyId, r.user_id, r.name, c, kind))) sent++;
+    // 締切は本人の締切（あとから入った人は延びている）で出す
+    if (await sendLineMessage(settings.channel_access_token, r.line_user_id, campaignCard(companyId, r.user_id, r.name, forUser(companyId, c, r.user_id), kind))) sent++;
     else failed.push(r.name);
   }
   return { sent, targets: rows.length, failed };
@@ -1164,9 +1165,9 @@ async function replyRequestLink(companyId: number, lineUserId: string, token: st
   `).all(companyId) as any[];
   // 期間の募集（マーケットなど）が受付中なら、そのリンクを先に出す
   const campaigns = (db.prepare(`
-    SELECT id, title, start_date, end_date, deadline, status FROM request_campaigns
+    SELECT id, title, start_date, end_date, deadline, status, sent_at FROM request_campaigns
     WHERE company_id = ? AND status = 'open' ORDER BY start_date
-  `).all(companyId) as any[]).filter(isAccepting);
+  `).all(companyId) as any[]).map(c => forUser(companyId, c, who.id)).filter(isAccepting);
   if (campaigns.length > 0) {
     const bubbles = [
       ...campaigns.slice(0, 5).map(c => campaignCard(companyId, who.id, who.name, c, 'reply').contents),

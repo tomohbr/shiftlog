@@ -6,7 +6,7 @@ import { logAudit } from '../utils/audit';
 import { sendCampaignLinks, W } from './line';
 import {
   CampaignDay, Part, PARTS, PART_LABEL, LONG_DAY, LONG_DAY_LABEL, REFERRAL, REFERRAL_LABEL, DAYS_PER_WEEK, DAYS_PER_WEEK_LABEL, TRANSPORTS,
-  campaignDays, daysLeft, isAccepting, parseVenues, partTimes,
+  campaignDays, daysLeft, forUser, isAccepting, parseVenues, partTimes,
 } from '../utils/requestCampaign';
 
 // 期間をまたぐ希望の募集（マーケットなど）。
@@ -108,7 +108,7 @@ function answerView(a: any, storeNames: Map<number, string>) {
 router.get('/open', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const rows = (db.prepare("SELECT * FROM request_campaigns WHERE company_id = ? AND status = 'open' ORDER BY start_date").all(companyId) as CampaignRow[])
-    .filter(isAccepting);
+    .map(c => forUser(companyId, c, req.user!.id)).filter(isAccepting);
   const mine = db.prepare('SELECT submitted_at FROM request_campaign_answers WHERE campaign_id = ? AND user_id = ?');
   res.json({
     campaigns: rows.map(c => ({ ...view(c), submitted: !!(mine.get(c.id, req.user!.id) as any)?.submitted_at })),
@@ -136,7 +136,7 @@ router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const entries: Record<string, { availability: string; part: Part | null }> = {};
   for (const r of reqs) if (dayset.has(r.date)) entries[r.date] = { availability: r.availability, part: PARTS.includes(r.part) ? r.part : null };
   res.json({
-    campaign: view(c),
+    campaign: view(forUser(companyId, c, userId)),
     contact: W(companyId),
     me: { name: req.user!.name },
     stores: st,
@@ -156,7 +156,7 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const userId = req.user!.id;
   const c = getCampaign(companyId, req.params.id);
   if (!c || c.status === 'draft') { res.status(404).json({ error: 'この募集は見つかりません' }); return; }
-  if (!isAccepting(c)) { res.status(409).json({ error: `締め切りました。変更したいときは${W(companyId)}に連絡してください` }); return; }
+  if (!isAccepting(forUser(companyId, c, userId))) { res.status(409).json({ error: `締め切りました。変更したいときは${W(companyId)}に連絡してください` }); return; }
 
   const a = req.body?.answer || {};
   const storeIds = new Set(stores(companyId).map(s => s.id));

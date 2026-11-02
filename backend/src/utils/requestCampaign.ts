@@ -87,6 +87,24 @@ export function daysLeft(deadline: string | null | undefined): number | null {
   return Math.round((Date.parse(`${deadline}T00:00:00Z`) - Date.parse(`${jstToday()}T00:00:00Z`)) / 86400000);
 }
 
+// 募集を送ったあとに入った人は、締切を過ぎていても入った日から7日間は出せる・直せる
+export const LATE_JOIN_DAYS = 7;
+
+/** その人にとっての締切。募集を送る前からいる人は募集の締切のまま */
+export function deadlineFor(companyId: number, c: { deadline: string | null; sent_at?: string | null; end_date?: string }, userId: number): string | null {
+  if (!c.deadline || !c.sent_at) return c.deadline;
+  const j = db.prepare('SELECT created_at FROM user_companies WHERE user_id = ? AND company_id = ?').get(userId, companyId) as { created_at: string | null } | undefined;
+  if (!j?.created_at || j.created_at <= c.sent_at) return c.deadline;
+  let until = new Date(Date.parse(`${j.created_at.replace(' ', 'T')}Z`) + 9 * 3600 * 1000 + LATE_JOIN_DAYS * 86400 * 1000).toISOString().slice(0, 10);
+  if (c.end_date && until > c.end_date) until = c.end_date;
+  return until > c.deadline ? until : c.deadline;
+}
+
+/** 締切をその人の締切に置き換えた募集 */
+export function forUser<T extends { deadline: string | null; sent_at?: string | null; end_date?: string }>(companyId: number, c: T, userId: number): T {
+  return { ...c, deadline: deadlineFor(companyId, c, userId) };
+}
+
 /** スタッフが今この募集に答えられるか（受付中で、締切日を過ぎていない） */
 export function isAccepting(c: { status: string; deadline: string | null }): boolean {
   if (c.status !== 'open') return false;
