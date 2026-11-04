@@ -51,7 +51,7 @@ export default function TodayByVenue({ stores, onlyStoreId = null }: { stores: S
   }
 
   const groups = [...sorted.map(st => ({ id: st.id as number | null, name: st.name })), { id: null, name: `${vw}なし` }]
-    .map(g => ({ ...g, rows: shifts.filter(s => (s.store_id ?? null) === g.id).sort((a, b) => a.start_time.localeCompare(b.start_time)) }))
+    .map(g => ({ ...g, rows: shifts.filter(s => (s.store_id ?? null) === g.id).sort((a, b) => (a.user_order ?? 9999) - (b.user_order ?? 9999) || a.start_time.localeCompare(b.start_time)) }))
     .filter(g => g.rows.length > 0 && (onlyStoreId === null || g.id === onlyStoreId))
   const lateCount = groups.flatMap(g => g.rows).filter(s => stateOf(s).key === 'late').length
 
@@ -80,7 +80,7 @@ export default function TodayByVenue({ stores, onlyStoreId = null }: { stores: S
                   <span className="ml-auto text-sm font-semibold">いま {working}人 / 予定 {g.rows.length}人</span>
                 </div>
                 <div className="divide-y divide-gray-100">
-                  {[...g.rows].sort((a, b) => stateOf(a).order - stateOf(b).order || a.start_time.localeCompare(b.start_time)).map(s => {
+                  {[...g.rows].sort((a, b) => stateOf(a).order - stateOf(b).order || (a.user_order ?? 9999) - (b.user_order ?? 9999) || a.start_time.localeCompare(b.start_time)).map(s => {
                     const st = stateOf(s)
                     return (
                       <div key={s.id} className="flex items-center gap-2 px-3 py-2">

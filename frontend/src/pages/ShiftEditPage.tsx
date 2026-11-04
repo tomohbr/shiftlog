@@ -141,7 +141,7 @@ export default function ShiftEditPage() {
           >
             <option value="">全スタッフ</option>
             {users.map(u => (
-              <option key={u.id} value={u.id}>{u.name}</option>
+              <option key={u.id} value={u.id}>{u.display_name || u.name}</option>
             ))}
           </select>
 
@@ -263,7 +263,7 @@ export default function ShiftEditPage() {
                         >
                           {u.name.charAt(0)}
                         </div>
-                        <span className="text-sm font-medium text-gray-800 truncate max-w-[90px]">{u.name}</span>
+                        <span className="text-sm font-medium text-gray-800 truncate max-w-[90px]" title={u.name}>{u.display_name || u.name}</span>
                       </div>
                     </td>
                     {days.map(day => {
@@ -359,7 +359,7 @@ export default function ShiftEditPage() {
               <div key={u.id} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: u.color }} />
                 <div className="min-w-0">
-                  <p className="text-xs text-gray-500 truncate">{u.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{u.display_name || u.name}</p>
                   <p className="text-sm font-semibold text-gray-800">
                     {Math.floor(totalMins / 60)}h{totalMins % 60 > 0 ? `${totalMins % 60}m` : ''}
                   </p>

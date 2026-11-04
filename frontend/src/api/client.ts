@@ -65,6 +65,9 @@ export interface Shift {
   company_id: number
   user_id: number
   user_name: string
+  user_full_name?: string
+  // 表の並び順（小さいほど上。null はバイトで後ろ）
+  user_order?: number | null
   user_color: string
   date: string
   start_time: string
@@ -91,6 +94,8 @@ export interface User {
   created_at: string
   last_timecard_at?: string | null
   timecard_count?: number
+  display_name?: string | null
+  sort_order?: number | null
 }
 
 export interface Store {

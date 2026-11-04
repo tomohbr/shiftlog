@@ -126,7 +126,9 @@ export default function MyShiftsPage() {
   const colorOf = storeColorMap(stores)
   const sortedStores = [...stores].sort((a, b) => a.id - b.id)
   const inStore = (s: Shift) => !storeFilter || s.store_id === storeFilter
-  const byTime = (a: Shift, b: Shift) => a.date.localeCompare(b.date) || hm(a.start_time).localeCompare(hm(b.start_time))
+  // 同じ日の中は、並び順を決めた人（社長・社員）を上に、そのあと時間順
+  const ord = (s: Shift) => s.user_order ?? 9999
+  const byTime = (a: Shift, b: Shift) => a.date.localeCompare(b.date) || ord(a) - ord(b) || hm(a.start_time).localeCompare(hm(b.start_time))
   const barColor = (s: Shift) => (s.store_id ? colorOf(s.store_id) : { solid: '#2563EB', soft: '#EFF6FF', text: '#1D4ED8' })
 
   // 公開済みの月だけ見せる（下書きを見せると混乱するため）
@@ -294,7 +296,7 @@ export default function MyShiftsPage() {
             const numColor = !inMonth ? 'text-gray-300' : di === 5 ? 'text-blue-500' : di === 6 ? 'text-red-500' : 'text-gray-800'
             const items = inMonth ? (who === 'me' ? myVisible : allVisible).filter(x => x.date === date) : []
             // みんな: 会場順→時間順に並べる
-            if (who === 'all') items.sort((a, b) => sortedStores.findIndex(st => st.id === a.store_id) - sortedStores.findIndex(st => st.id === b.store_id) || hm(a.start_time).localeCompare(hm(b.start_time)))
+            if (who === 'all') items.sort((a, b) => sortedStores.findIndex(st => st.id === a.store_id) - sortedStores.findIndex(st => st.id === b.store_id) || ord(a) - ord(b) || hm(a.start_time).localeCompare(hm(b.start_time)))
             return (
               <button
                 key={date}

@@ -55,7 +55,7 @@ export default function TeamCalendar({ year, month, shifts, stores, today, onPic
         {cells.map(({ date, inMonth }, i) => {
           const col = i % 7
           const day = inMonth ? shifts.filter(s => s.date === date)
-            .sort((a, b) => storeIdx(a.store_id) - storeIdx(b.store_id) || a.start_time.localeCompare(b.start_time)) : []
+            .sort((a, b) => storeIdx(a.store_id) - storeIdx(b.store_id) || (a.user_order ?? 9999) - (b.user_order ?? 9999) || a.start_time.localeCompare(b.start_time)) : []
           const people = new Set(day.map(s => s.user_id)).size
           return (
             <button

@@ -430,6 +430,9 @@ try {
     db.exec("ALTER TABLE companies ADD COLUMN staff_home TEXT NOT NULL DEFAULT 'timecards'");
   }
   const ucCols = db.prepare("PRAGMA table_info(user_companies)").all().map((c: any) => c.name);
+  // シフト表で使う呼び名（「凜咲」「社長」など。空なら氏名）と、表の並び順（小さいほど上。空ならバイトとして後ろ）
+  if (!ucCols.includes('display_name')) db.exec('ALTER TABLE user_companies ADD COLUMN display_name TEXT');
+  if (!ucCols.includes('sort_order')) db.exec('ALTER TABLE user_companies ADD COLUMN sort_order INTEGER');
   if (!ucCols.includes('employment_type')) {
     db.exec("ALTER TABLE user_companies ADD COLUMN employment_type TEXT NOT NULL DEFAULT 'part_time'");
   }

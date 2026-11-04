@@ -33,6 +33,8 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
   const [phone, setPhone] = useState(user?.phone || '')
   const [role, setRole] = useState(user?.role || 'staff')
   const [employmentType, setEmploymentType] = useState((user as any)?.employment_type || 'part_time')
+  const [displayName, setDisplayName] = useState(user?.display_name || '')
+  const [sortOrder, setSortOrder] = useState(user?.sort_order != null ? String(user.sort_order) : '')
   const [loading, setLoading] = useState(false)
 
   const isAdmin = role === 'admin'
@@ -50,7 +52,7 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
     setLoading(true)
     try {
       if (user) {
-        await usersApi.update(user.id, { name, email: email || undefined, password: password || undefined, pin, color, hourly_wage: hourlyWage, phone, role, employment_type: employmentType })
+        await usersApi.update(user.id, { name, email: email || undefined, password: password || undefined, pin, color, hourly_wage: hourlyWage, phone, role, employment_type: employmentType, display_name: displayName, sort_order: sortOrder === '' ? null : Number(sortOrder) } as any)
         toast.success('スタッフ情報を更新しました')
       } else {
         await usersApi.create({ name, email: email || undefined, password: password || undefined, pin, color, hourly_wage: hourlyWage, phone, role, employment_type: employmentType })
@@ -79,6 +81,20 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
             <label className="block text-sm font-medium text-gray-700 mb-1">氏名</label>
             <input value={name} onChange={e => setName(e.target.value)} className="input-field" required />
           </div>
+
+          {user && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">シフト表の呼び名</label>
+                <input value={displayName} onChange={e => setDisplayName(e.target.value)} className="input-field" placeholder="例：凜咲・社長（空なら氏名）" maxLength={20} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">表の順番</label>
+                <input type="number" inputMode="numeric" min={1} value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="input-field" placeholder="空=後ろ" />
+              </div>
+              <p className="col-span-3 text-xs text-gray-500 -mt-1">順番に数字を入れた人がシフト表の上に並びます（1が一番上）。社長・社員に入れておくと便利です。</p>
+            </div>
+          )}
 
           {isPro && (
             <div>

@@ -95,20 +95,20 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   const users = db.prepare(`
     SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
-           uc.employment_type,
+           uc.employment_type, uc.display_name, uc.sort_order,
            (SELECT MAX(tr.updated_at) FROM time_records tr WHERE tr.user_id = u.id AND tr.company_id = ?) as last_timecard_at,
            (SELECT COUNT(*) FROM time_records tr WHERE tr.user_id = u.id AND tr.company_id = ?) as timecard_count
     FROM users u
     JOIN user_companies uc ON u.id = uc.user_id AND uc.company_id = ?
     WHERE u.is_active = 1
-    ORDER BY u.role DESC, u.name ASC
+    ORDER BY uc.sort_order IS NULL, uc.sort_order, u.role DESC, u.name ASC
   `).all(companyId, companyId, companyId) as any[];
 
   // スタッフには名前と色だけ返す（時給・電話・メール・打刻用PINなどは管理者だけ）
   const isAdmin = ['admin', 'super_admin'].includes(req.user!.role) ||
     (db.prepare('SELECT role FROM user_companies WHERE user_id = ? AND company_id = ?').get(req.user!.id, companyId) as any)?.role === 'admin';
   if (!isAdmin) {
-    res.json({ users: users.map(u => ({ id: u.id, name: u.name, role: u.role, company_role: u.company_role, color: u.color, is_active: u.is_active })) });
+    res.json({ users: users.map(u => ({ id: u.id, name: u.name, role: u.role, company_role: u.company_role, color: u.color, is_active: u.is_active, display_name: u.display_name, sort_order: u.sort_order })) });
     return;
   }
 
@@ -230,7 +230,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     return;
   }
 
-  const { name, email, password, pin, color, hourly_wage, phone, role, employment_type, furigana } = req.body;
+  const { name, email, password, pin, color, hourly_wage, phone, role, employment_type, furigana, display_name, sort_order } = req.body;
   if (furigana !== undefined) db.prepare('UPDATE users SET furigana = ? WHERE id = ?').run(String(furigana || '').trim() || null, parseInt(req.params.id));
   const staffPin = hasProAccess(companyId) ? pin : undefined;
 
@@ -263,11 +263,19 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     newEmploymentType,
     userId, companyId
   );
+  // 呼び名と並び順も管理者だけ（空にすると氏名・並び順なしに戻る）
+  if (canManage && display_name !== undefined) {
+    db.prepare('UPDATE user_companies SET display_name = ? WHERE user_id = ? AND company_id = ?').run(String(display_name || '').trim().slice(0, 20) || null, userId, companyId);
+  }
+  if (canManage && sort_order !== undefined) {
+    const n = sort_order === null || sort_order === '' ? null : Math.trunc(Number(sort_order));
+    db.prepare('UPDATE user_companies SET sort_order = ? WHERE user_id = ? AND company_id = ?').run(n !== null && Number.isFinite(n) ? n : null, userId, companyId);
+  }
 
   const updated = db.prepare(`
     SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
-           uc.employment_type
+           uc.employment_type, uc.display_name, uc.sort_order
     FROM users u
     JOIN user_companies uc ON u.id = uc.user_id AND uc.company_id = ?
     WHERE u.id = ?

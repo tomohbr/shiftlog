@@ -24,7 +24,7 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   const { year, month, user_id, start_date, end_date, store_id, scope } = req.query;
 
   let query = `
-    SELECT s.*, u.name as user_name, uc.color as user_color, st.name as store_name
+    SELECT s.*, COALESCE(NULLIF(uc.display_name, ''), u.name) as user_name, u.name as user_full_name, uc.sort_order as user_order, uc.color as user_color, st.name as store_name
     FROM shifts s
     JOIN users u ON s.user_id = u.id
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
@@ -97,7 +97,7 @@ router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   const companyId = req.companyId!;
 
   const shift = db.prepare(`
-    SELECT s.*, u.name as user_name, uc.color as user_color, st.name as store_name
+    SELECT s.*, COALESCE(NULLIF(uc.display_name, ''), u.name) as user_name, u.name as user_full_name, uc.sort_order as user_order, uc.color as user_color, st.name as store_name
     FROM shifts s
     JOIN users u ON s.user_id = u.id
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
@@ -164,7 +164,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   ).run(companyId, user_id, date, start_time, end_time, break_minutes || 0, notes || null, 'confirmed', storeId);
 
   const shift = db.prepare(`
-    SELECT s.*, u.name as user_name, uc.color as user_color, st.name as store_name
+    SELECT s.*, COALESCE(NULLIF(uc.display_name, ''), u.name) as user_name, u.name as user_full_name, uc.sort_order as user_order, uc.color as user_color, st.name as store_name
     FROM shifts s
     JOIN users u ON s.user_id = u.id
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
@@ -224,7 +224,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   );
 
   const updated = db.prepare(`
-    SELECT s.*, u.name as user_name, uc.color as user_color, st.name as store_name
+    SELECT s.*, COALESCE(NULLIF(uc.display_name, ''), u.name) as user_name, u.name as user_full_name, uc.sort_order as user_order, uc.color as user_color, st.name as store_name
     FROM shifts s
     JOIN users u ON s.user_id = u.id
     LEFT JOIN user_companies uc ON s.user_id = uc.user_id AND s.company_id = uc.company_id
