@@ -602,6 +602,33 @@ router.post('/test', authenticateToken, requireCompany, async (req: AuthRequest,
   res.json({ message: `テスト通知を${sent}人に送信しました`, sent });
 });
 
+// スタッフから公式LINEに届いた文字のメッセージ（店長への転送は残らないので、ここに控える）
+db.exec(`
+  CREATE TABLE IF NOT EXISTS line_inbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    line_user_id TEXT NOT NULL,
+    user_id INTEGER,
+    name TEXT,
+    text TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_line_inbox_company ON line_inbox(company_id, created_at);
+`);
+
+// GET /api/line/inbox?days=14  届いたメッセージ（新しい順・最大200件）
+router.get('/inbox', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 120);
+  const rows = db.prepare(`
+    SELECT i.id, i.user_id, COALESCE(u.name, i.name) AS name, i.text, i.created_at FROM line_inbox i
+    LEFT JOIN users u ON u.id = i.user_id
+    WHERE i.company_id = ? AND i.created_at >= datetime('now', ?)
+    ORDER BY i.id DESC LIMIT 200
+  `).all(req.companyId!, `-${days} days`);
+  res.json({ messages: rows });
+});
+
 // POST /api/line/message  { user_ids, texts }  管理者から選んだ人へ、文章を1人ずつ送る（最大5通。{名前} はその人の名前に置き換える）
 router.post('/message', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
@@ -660,6 +687,9 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
         db.prepare('DELETE FROM user_line_ids WHERE line_user_id = ?').run(lineUserId);
       } else if (event.type === 'message' && event.message?.type === 'text' && event.replyToken) {
         const text = String(event.message.text);
+        const who = lineMember(companyId, lineUserId);
+        db.prepare('INSERT INTO line_inbox (company_id, line_user_id, user_id, name, text) VALUES (?, ?, ?, ?, ?)')
+          .run(companyId, lineUserId, who?.id ?? null, who?.name ?? null, text.slice(0, 2000));
         const m = text.match(/\d{6}/);
         if (!m) {
           await handleText(text.trim(), companyId, lineUserId, s.channel_access_token, event.replyToken);
