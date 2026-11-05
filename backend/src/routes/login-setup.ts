@@ -5,6 +5,7 @@ import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { canSeeWages } from '../utils/wages';
 import { logAudit } from '../utils/audit';
+import { pushToUsers } from './line';
 
 // ログインの新規登録リンク。メール・パスワードがまだない人（社長など）に送り、本人が自分で決めて登録する。
 //   - 発行できるのは時給を見られる人（芝原・社長など）だけ。管理者のログインを他人に作られないように
@@ -70,6 +71,8 @@ router.post('/:token', (req: Request, res: Response): void => {
   db.prepare('UPDATE users SET email = ?, password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(email, bcrypt.hashSync(password, 10), l.user_id);
   db.prepare('UPDATE login_setup_links SET used_at = CURRENT_TIMESTAMP WHERE id = ?').run(l.id);
   logAudit({ userId: l.user_id, companyId: l.company_id, action: 'update', entity: 'login_setup', entityId: l.user_id, summary: `${l.name}さんがログインを登録` });
+  // リンクを出した人に「登録できた」を LINE で知らせる（返事を待たない）
+  if (l.created_by) pushToUsers(l.company_id, [l.created_by], `${l.name}さんが管理画面のログインを登録しました。\nメール: ${email}\nこれでダッシュボード（人件費・時給も）を見られます。`).catch(() => null);
   res.json({ ok: true, email });
 });
 
