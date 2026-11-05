@@ -7,7 +7,9 @@ import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../middleware/auth';
 import { absenceRule, phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
 import { canAddStaff } from '../utils/billing';
-import { daysLeft, forUser, isAccepting } from '../utils/requestCampaign';
+import { daysLeft, forUser, isAccepting, campaignPreferences } from '../utils/requestCampaign';
+import { computeShortages } from '../utils/shortages';
+import { recordShiftChange, snapOf, pendingChanges, markNotified } from '../utils/shiftChanges';
 import { mergeBlocks, partNameOf, PART_NAME, ShiftBlock } from '../utils/shiftParts';
 
 // LINE 連携（お店ごとの LINE 公式アカウント → スタッフへの通知）
@@ -1211,6 +1213,53 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     return;
   }
 
+  // スタッフ: 人が足りない日に「入れます」
+  if (a === 'fill') {
+    const date = String(q.get('d') || '');
+    const storeId = Number(q.get('s')) || null;
+    const from = String(q.get('f') || ''), to = String(q.get('t') || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to) || date <= jstToday()) {
+      await replyLine(token, replyToken, 'この日はもう募集が終わっています。ありがとうございます！'); return;
+    }
+    if (db.prepare('SELECT 1 FROM shifts WHERE company_id = ? AND user_id = ? AND date = ?').get(companyId, me.id, date)) {
+      await replyLine(token, replyToken, `${md2(date)} はもうシフトに入っています。ありがとうございます！`); return;
+    }
+    const st = storeId ? (db.prepare('SELECT name FROM stores WHERE id = ? AND company_id = ?').get(storeId, companyId) as any) : null;
+    const label = `${md2(date)} ${st?.name ? st.name + ' ' : ''}${from}–${to}`;
+    db.prepare(`INSERT OR IGNORE INTO fill_offers (company_id, user_id, date, store_id, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)`).run(companyId, me.id, date, storeId, from, to);
+    const o = db.prepare('SELECT id, status FROM fill_offers WHERE company_id = ? AND user_id = ? AND date = ? AND COALESCE(store_id, 0) = COALESCE(?, 0) AND start_time = ?').get(companyId, me.id, date, storeId, from) as any;
+    if (o.status !== 'pending') { await replyLine(token, replyToken, `${label} はもう返事済みです。`); return; }
+    await replyLine(token, replyToken, `ありがとう！\n${label} に入れることを、${W(companyId)}に伝えました。決まったらこのLINEでお知らせします。`);
+    const card = buttonsCard(`${me.name}さんが入れます`, `${me.name}さんが入れます`, [label, '押すとシフトに入れて、本人に知らせます。'],
+      [{ label: `${me.name}さんに決める`.slice(0, 40), data: `a=fdecide&o=${o.id}`, primary: true, color: '#2F9E44' }]);
+    for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
+    return;
+  }
+
+  // 管理者: 「入れます」の人に決める → シフトに入れて本人に知らせる
+  if (a === 'fdecide') {
+    if (!isAdminMember(me)) { await replyLine(token, replyToken, 'この操作は担当者（管理者）だけができます。'); return; }
+    const o = db.prepare(`SELECT f.*, u.name FROM fill_offers f JOIN users u ON u.id = f.user_id WHERE f.id = ? AND f.company_id = ?`).get(Number(q.get('o')), companyId) as any;
+    if (!o) { await replyLine(token, replyToken, '見つかりませんでした。'); return; }
+    if (o.status !== 'pending') { await replyLine(token, replyToken, 'もう決めてあります。'); return; }
+    if (db.prepare('SELECT 1 FROM shifts WHERE company_id = ? AND user_id = ? AND date = ?').get(companyId, o.user_id, o.date)) {
+      db.prepare("UPDATE fill_offers SET status = 'skipped' WHERE id = ?").run(o.id);
+      await replyLine(token, replyToken, `${o.name}さんは ${md2(o.date)} にもう別のシフトが入っています。シフト画面で確かめてください。`); return;
+    }
+    const r = db.prepare("INSERT INTO shifts (company_id, user_id, date, start_time, end_time, break_minutes, status, store_id) VALUES (?, ?, ?, ?, ?, 0, 'confirmed', ?)")
+      .run(companyId, o.user_id, o.date, o.start_time, o.end_time, o.store_id);
+    const shiftId = Number(r.lastInsertRowid);
+    recordShiftChange(companyId, o.user_id, shiftId, null, snapOf(shiftId));
+    db.prepare("UPDATE fill_offers SET status = 'accepted' WHERE id = ?").run(o.id);
+    const p = pendingChanges(companyId).find(x => x.user_id === o.user_id);
+    const mine = p ? p.changes.filter(c => c.shift_id === shiftId) : [];
+    const sent = mine.length ? await sendShiftChangeCard(companyId, o.user_id, o.name, mine) : false;
+    if (sent) markNotified(mine.flatMap(c => c.ids));
+    const sh = shiftWithStore(shiftId);
+    await replyLine(token, replyToken, `${shiftLabel(sh)} に ${o.name}さんを入れました。${sent ? '本人にLINEで知らせました。' : '（本人はLINE未連携なので、直接伝えてください）'}`);
+    return;
+  }
+
   // 電話でしか受けない日（番号が未設定のとき）
   if (a === 'phone') {
     const sh = shiftWithStore(Number(q.get('s')));
@@ -1407,6 +1456,87 @@ async function replyRequestLink(companyId: number, lineUserId: string, token: st
   }
   await replyLine(token, replyToken, requestCard('希望の提出はこちら', who.name, open.slice(0, 10), p => requestLinkUrl(who.id, companyId, p.year, p.month)));
 }
+
+// ---- 人が足りない日の打診 ----
+// バイトの人それぞれに、入れそうな足りない日（その日にシフトがない・希望で×にしていない・行ける会場・昼だけ／夜だけに合う）を
+// ボタンで送る。「入れます」→ 担当者に届く →「この人に決める」でシフトに入り、本人に知らせる。
+db.exec(`
+  CREATE TABLE IF NOT EXISTS fill_offers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    store_id INTEGER,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(company_id, user_id, date, store_id, start_time)
+  );
+`);
+const MAX_OFFERS = 10;
+interface FillOffer { date: string; store_id: number | null; store_name: string; from: string; to: string; rank: number }
+function fillOffersFor(companyId: number) {
+  const from = plusDays(1), to = plusDays(60);
+  const shorts = computeShortages(companyId, from, to);
+  const staff = db.prepare(`
+    SELECT u.id, u.name, COALESCE(NULLIF(uc.display_name, ''), u.name) AS dn, uli.line_user_id FROM users u
+    JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ?
+    LEFT JOIN user_line_ids uli ON uli.user_id = u.id
+    WHERE u.is_active = 1 AND uc.role = 'staff' AND u.role NOT IN ('admin', 'super_admin')
+    ORDER BY uc.sort_order IS NULL, uc.sort_order, u.id
+  `).all(companyId) as { id: number; name: string; dn: string; line_user_id: string | null }[];
+  const busy = new Set((db.prepare('SELECT user_id, date FROM shifts WHERE company_id = ? AND date >= ? AND date <= ?').all(companyId, from, to) as any[]).map(r => `${r.user_id}|${r.date}`));
+  const reqs = new Map((db.prepare('SELECT user_id, date, availability, part FROM shift_requests WHERE company_id = ? AND date >= ? AND date <= ?').all(companyId, from, to) as any[]).map(r => [`${r.user_id}|${r.date}`, r]));
+  const prefs = campaignPreferences(companyId, from, to);
+  const RANK: Record<string, number> = { preferred: 0, available: 1 };
+  return staff.map(u => {
+    const offers: FillOffer[] = [];
+    for (const sh of shorts) {
+      const k = `${u.id}|${sh.date}`;
+      if (busy.has(k)) continue;
+      const rq = reqs.get(k);
+      if (rq?.availability === 'unavailable') continue;
+      if (!prefs.venueOk(u.id, sh.date, sh.store_id)) continue;
+      const windows = sh.kind === 'full' ? [{ from: sh.start_time, to: sh.end_time }] : sh.gaps.map(g => ({ from: g.from, to: g.to }));
+      for (const w of windows) {
+        const part = w.from < '15:00' ? 'a' : 'b';
+        if ((rq?.part === 'a' || rq?.part === 'b') && rq.part !== part) continue;
+        offers.push({ date: sh.date, store_id: sh.store_id, store_name: sh.store_name, from: w.from, to: w.to, rank: rq ? (RANK[rq.availability] ?? 2) : 2 });
+      }
+    }
+    // 希望で◎○を付けた日を先に、そのあと日付順。最後は日付順に並べ直す
+    const picked = offers.sort((a, b) => a.rank - b.rank || a.date.localeCompare(b.date) || a.from.localeCompare(b.from)).slice(0, MAX_OFFERS)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.from.localeCompare(b.from));
+    return { user_id: u.id, name: u.name, display_name: u.dn, linked: !!u.line_user_id, line_user_id: u.line_user_id, total: offers.length, offers: picked };
+  });
+}
+const fillLabel = (o: FillOffer) => `${md2(o.date)} ${o.store_name ? o.store_name + ' ' : ''}${o.from}–${o.to}`;
+function fillCard(companyId: number, dn: string, offers: FillOffer[]) {
+  return buttonsCard('人が足りない日があります', `${dn}さん、入れる日はありますか？`,
+    ['クリスマスマーケットで人が足りない日です。入れる日があれば押してください（いくつ押してもOK）。', `押すと${W(companyId)}に届きます。決まったら、このLINEでお知らせします。`],
+    offers.map(o => ({ label: fillLabel(o), data: `a=fill&d=${o.date}&s=${o.store_id ?? 0}&f=${o.from}&t=${o.to}` })));
+}
+
+// POST /api/line/fill-offers { send?: boolean, user_ids?: number[] } - 打診の中身（send で送る）。管理者
+router.post('/fill-offers', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  const companyId = req.companyId!;
+  const only: number[] | null = Array.isArray(req.body?.user_ids) ? req.body.user_ids.map(Number) : null;
+  const list = fillOffersFor(companyId).filter(x => !only || only.includes(x.user_id));
+  if (!req.body?.send) {
+    res.json({ people: list.map(x => ({ user_id: x.user_id, name: x.display_name, linked: x.linked, total: x.total, offers: x.offers.map(fillLabel) })) });
+    return;
+  }
+  const token = (db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any)?.channel_access_token;
+  if (!token) { res.status(409).json({ error: 'LINEの設定がまだです' }); return; }
+  const sent: string[] = [], skipped: string[] = [];
+  for (const x of list) {
+    if (!x.line_user_id || x.offers.length === 0) { skipped.push(x.display_name); continue; }
+    if (await sendLineMessage(token, x.line_user_id, fillCard(companyId, x.display_name, x.offers))) sent.push(x.display_name); else skipped.push(x.display_name);
+  }
+  res.json({ sent, skipped });
+});
 
 // POST /api/line/webhook - 旧URL（会社IDなし）。何もしない
 router.post('/webhook', (_req, res) => { res.json({ status: 'ok' }); });
