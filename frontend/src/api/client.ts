@@ -214,7 +214,7 @@ export const storesApi = {
   update: (id: number, data: Partial<Store>) => api.put<{ store: Store }>(`/stores/${id}`, data),
   delete: (id: number) => api.delete(`/stores/${id}`),
   /** 会場の打刻用QR（未発行ならサーバー側で発行される） */
-  getQr: (id: number) => api.get<{ token: string; store: { id: number; name: string }; company_name: string }>(`/stores/${id}/qr`),
+  getQr: (id: number) => api.get<{ token: string; store: { id: number; name: string }; company_name: string; line_only?: boolean; line_name?: string | null }>(`/stores/${id}/qr`),
   /** 打刻用QRの再発行。古いポスターのQRは使えなくなる */
   reissueQr: (id: number) => api.post<{ token: string }>(`/stores/${id}/qr/reissue`),
 }

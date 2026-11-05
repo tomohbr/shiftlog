@@ -3,7 +3,7 @@ import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 import { isOperatorCompany } from '../utils/billing';
-import { generateQrToken } from './qr-clock';
+import { generateQrToken, lineOnlyInfo } from './qr-clock';
 
 const router = Router();
 
@@ -200,7 +200,9 @@ router.get('/:id/qr', authenticateToken, requireCompany, (req: AuthRequest, res:
     db.prepare('UPDATE stores SET qr_token = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(token, store.id);
     logAudit({ userId: req.user!.id, companyId, action: 'create', entity: 'store', entityId: store.id, summary: `「${store.name}」の打刻用QRを発行` });
   }
-  res.json({ token, store: { id: store.id, name: store.name }, company_name: store.company_name });
+  // 「打刻はLINEからだけ」のお店は、ポスターの手順を LINE のメニューから読む形にする
+  const line = db.prepare('SELECT bot_name FROM line_settings WHERE company_id = ?').get(companyId) as { bot_name: string | null } | undefined;
+  res.json({ token, store: { id: store.id, name: store.name }, company_name: store.company_name, line_only: !!lineOnlyInfo(companyId), line_name: line?.bot_name || null });
 });
 
 // POST /api/stores/:id/qr/reissue - 打刻用QRの再発行（管理者）。古いポスターのQRは使えなくなる

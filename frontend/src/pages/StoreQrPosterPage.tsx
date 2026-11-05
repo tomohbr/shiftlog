@@ -18,6 +18,7 @@ export default function StoreQrPosterPage({ storeId }: { storeId: number }) {
   const [token, setToken] = useState('')
   const [storeName, setStoreName] = useState('')
   const [companyName, setCompanyName] = useState('')
+  const [lineOnly, setLineOnly] = useState<{ on: boolean; name: string | null }>({ on: false, name: null })
   const [error, setError] = useState('')
   const [reissuing, setReissuing] = useState(false)
 
@@ -27,6 +28,7 @@ export default function StoreQrPosterPage({ storeId }: { storeId: number }) {
         setToken(res.data.token)
         setStoreName(res.data.store.name)
         setCompanyName(res.data.company_name)
+        setLineOnly({ on: !!res.data.line_only, name: res.data.line_name || null })
       })
       .catch((e: any) => setError(e.response?.data?.error || 'QRを読み込めませんでした。もう一度開き直してください。'))
   }, [storeId])
@@ -90,7 +92,7 @@ export default function StoreQrPosterPage({ storeId }: { storeId: number }) {
         </div>
       </div>
 
-      <PosterSheet companyName={companyName} storeName={storeName} url={url} />
+      <PosterSheet companyName={companyName} storeName={storeName} url={url} lineOnly={lineOnly.on} lineName={lineOnly.name} />
     </div>
   )
 }
@@ -114,7 +116,19 @@ export const POSTER_PRINT_CSS = `
   }
 `
 
-export function PosterSheet({ companyName, storeName, url }: { companyName: string; storeName: string; url: string }) {
+export function PosterSheet({ companyName, storeName, url, lineOnly = false, lineName = null }: { companyName: string; storeName: string; url: string; lineOnly?: boolean; lineName?: string | null }) {
+  // 「打刻はLINEからだけ」のお店は、カメラではなく LINE のメニュー「打刻する」から読む
+  const steps = lineOnly
+    ? [
+        { n: 1, title: `LINEの「${lineName || 'お店の公式アカウント'}」を開く`, sub: 'トーク画面の下のメニュー「打刻する」を押します' },
+        { n: 2, title: '「ブースのQRを読む」でこのQRを読む', sub: 'スマホのカメラではなく、LINEの画面から読んでください' },
+        { n: 3, title: '「出勤」「休憩」「退勤」を押す', sub: '時刻と会場名が大きく出たら完了です' },
+      ]
+    : [
+        { n: 1, title: 'スマホのカメラでQRを読み取る', sub: 'アプリのインストールやログインは不要です' },
+        { n: 2, title: '初回だけ、自分の名前をタップ', sub: '次回からは名前選びなしで打刻画面が開きます' },
+        { n: 3, title: '「出勤」「休憩」「退勤」を押す', sub: '時刻と会場名が大きく出たら完了です' },
+      ]
   return (
       <div className="qr-poster-sheet bg-white shadow-lg mx-auto my-6 max-w-[210mm] min-h-[280mm] px-12 py-14 flex flex-col items-center text-center">
         <p className="text-lg font-semibold text-gray-500 tracking-widest break-words">{companyName}</p>
@@ -124,18 +138,14 @@ export function PosterSheet({ companyName, storeName, url }: { companyName: stri
         <p className="text-2xl font-bold text-gray-700 mt-6">
           出勤・休憩・退勤はここで打刻
         </p>
-        <p className="text-base text-gray-500 mt-1">スタッフ専用｜スマホで読み取ってください</p>
+        <p className="text-base text-gray-500 mt-1">{lineOnly ? 'スタッフ専用｜LINEのメニュー「打刻する」から読み取ってください' : 'スタッフ専用｜スマホで読み取ってください'}</p>
 
         <div className="mt-10 border-4 border-gray-900 rounded-2xl p-6 bg-white">
           <QRCodeSVG value={url} size={340} />
         </div>
 
         <div className="mt-12 w-full max-w-md text-left space-y-5">
-          {[
-            { n: 1, title: 'スマホのカメラでQRを読み取る', sub: 'アプリのインストールやログインは不要です' },
-            { n: 2, title: '初回だけ、自分の名前をタップ', sub: '次回からは名前選びなしで打刻画面が開きます' },
-            { n: 3, title: '「出勤」「休憩」「退勤」を押す', sub: '時刻と会場名が大きく出たら完了です' },
-          ].map(step => (
+          {steps.map(step => (
             <div key={step.n} className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-xl font-bold shrink-0">
                 {step.n}

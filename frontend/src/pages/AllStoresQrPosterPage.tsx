@@ -6,7 +6,7 @@ import { PosterSheet, POSTER_PRINT_CSS, storeClockUrl } from './StoreQrPosterPag
 // 全会場の打刻用QRポスターを、1回の印刷でまとめて出す（A4縦・1会場1枚）。
 // 店舗管理の「全会場のQRをまとめて印刷」から新しいタブで開く。
 export default function AllStoresQrPosterPage() {
-  const [sheets, setSheets] = useState<{ id: number; storeName: string; companyName: string; url: string }[]>([])
+  const [sheets, setSheets] = useState<{ id: number; storeName: string; companyName: string; url: string; lineOnly: boolean; lineName: string | null }[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -17,7 +17,7 @@ export default function AllStoresQrPosterPage() {
         const out = []
         for (const st of [...stores].sort((a, b) => a.id - b.id)) {
           const res = await storesApi.getQr(st.id)
-          out.push({ id: st.id, storeName: res.data.store.name, companyName: res.data.company_name, url: storeClockUrl(res.data.token) })
+          out.push({ id: st.id, storeName: res.data.store.name, companyName: res.data.company_name, url: storeClockUrl(res.data.token), lineOnly: !!res.data.line_only, lineName: res.data.line_name || null })
         }
         setSheets(out)
       } catch (e: any) {
@@ -60,7 +60,7 @@ export default function AllStoresQrPosterPage() {
           </button>
         </div>
       </div>
-      {sheets.map(s => <PosterSheet key={s.id} companyName={s.companyName} storeName={s.storeName} url={s.url} />)}
+      {sheets.map(s => <PosterSheet key={s.id} companyName={s.companyName} storeName={s.storeName} url={s.url} lineOnly={s.lineOnly} lineName={s.lineName} />)}
     </div>
   )
 }
