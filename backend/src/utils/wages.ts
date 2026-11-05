@@ -35,7 +35,7 @@ export function hideWages<T extends Record<string, any>>(rows: T[], req: AuthReq
   if (canSeeWages(req)) return rows;
   return rows.map(r => {
     const o: any = { ...r };
-    for (const k of ['hourly_wage', 'total_wage', 'can_see_wages']) if (k in o) o[k] = null;
+    for (const k of ['hourly_wage', 'total_wage', 'can_see_wages', 'wage_exempt']) if (k in o) o[k] = null;
     return o;
   });
 }

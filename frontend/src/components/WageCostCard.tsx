@@ -44,8 +44,10 @@ export default function WageCostCard({ shifts, stores, month }: { shifts: Shift[
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shifts, users])
 
-  const total = rows.reduce((a, r) => a + r.cost, 0)
-  const unset = rows.filter(r => !Number(r.u.hourly_wage)).length
+  // 時給なし（社長・役員など）は人件費にも「未設定」にも数えない
+  const exempt = (u: User) => !!(u as any).wage_exempt
+  const total = rows.reduce((a, r) => a + (exempt(r.u) ? 0 : r.cost), 0)
+  const unset = rows.filter(r => !exempt(r.u) && !Number(r.u.hourly_wage)).length
 
   const save = async (u: User, v: string) => {
     if (v === '' && !Number(u.hourly_wage)) return
@@ -90,6 +92,9 @@ export default function WageCostCard({ shifts, stores, month }: { shifts: Shift[
           <div key={u.id} className="px-4 sm:px-6 py-2 flex items-center gap-3">
             <span className="flex-1 min-w-0 truncate text-sm font-medium text-gray-900">{u.display_name || u.name}</span>
             <span className="w-14 text-right text-sm text-gray-500 tabular-nums">{hours(mins)}h</span>
+            {exempt(u) ? (
+              <span className="w-[6.5rem] text-right text-sm text-gray-400">時給なし</span>
+            ) : (
             <label className="flex items-center gap-1 text-sm text-gray-500">
               ¥
               <input
@@ -102,7 +107,8 @@ export default function WageCostCard({ shifts, stores, month }: { shifts: Shift[
                 className={`w-20 rounded-md border px-2 py-1 text-right tabular-nums text-gray-900 ${Number(u.hourly_wage) ? 'border-gray-200' : 'border-amber-300 bg-amber-50'}`}
               />
             </label>
-            <span className="w-20 text-right text-sm font-bold text-gray-900 tabular-nums">{yen(cost)}</span>
+            )}
+            <span className={`w-20 text-right text-sm font-bold tabular-nums ${exempt(u) ? 'text-gray-300' : 'text-gray-900'}`}>{exempt(u) ? '—' : yen(cost)}</span>
           </div>
         ))}
       </div>

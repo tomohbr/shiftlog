@@ -27,6 +27,7 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
   const { selectedCompany } = useAuth()
   const canWages = !!(selectedCompany as any)?.can_see_wages
   const [seeWages, setSeeWages] = useState(!!(user as any)?.can_see_wages)
+  const [wageExempt, setWageExempt] = useState(!!(user as any)?.wage_exempt)
   const [signupUrl, setSignupUrl] = useState('')
   const makeSignup = async () => {
     try {
@@ -65,7 +66,7 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
     setLoading(true)
     try {
       if (user) {
-        await usersApi.update(user.id, { name, email: email || undefined, password: password || undefined, pin, color, ...(canWages ? { hourly_wage: hourlyWage, can_see_wages: role === 'admin' ? seeWages : false } : {}), phone, role, employment_type: employmentType, display_name: displayName, sort_order: sortOrder === '' ? null : Number(sortOrder) } as any)
+        await usersApi.update(user.id, { name, email: email || undefined, password: password || undefined, pin, color, ...(canWages ? { hourly_wage: wageExempt ? 0 : hourlyWage, wage_exempt: wageExempt, can_see_wages: role === 'admin' ? seeWages : false } : {}), phone, role, employment_type: employmentType, display_name: displayName, sort_order: sortOrder === '' ? null : Number(sortOrder) } as any)
         toast.success('スタッフ情報を更新しました')
       } else {
         await usersApi.create({ name, email: email || undefined, password: password || undefined, pin, color, ...(canWages ? { hourly_wage: hourlyWage } : {}), phone, role, employment_type: employmentType })
@@ -193,6 +194,12 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
                 min={0}
               />
               <p className="text-xs text-gray-500 mt-1">時給は、時給を見られる人だけに見えます（本人・ほかのスタッフ・店長には見えません）。</p>
+              {user && (
+                <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={wageExempt} onChange={e => setWageExempt(e.target.checked)} className="w-4 h-4" />
+                  時給なし（社長・役員など。人件費に入れない）
+                </label>
+              )}
               {user && role === 'admin' && (
                 <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
                   <input type="checkbox" checked={seeWages} onChange={e => setSeeWages(e.target.checked)} className="w-4 h-4" />

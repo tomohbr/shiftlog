@@ -96,7 +96,7 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   const users = db.prepare(`
     SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
-           uc.employment_type, uc.display_name, uc.sort_order, uc.can_see_wages,
+           uc.employment_type, uc.display_name, uc.sort_order, uc.can_see_wages, uc.wage_exempt,
            (SELECT MAX(tr.updated_at) FROM time_records tr WHERE tr.user_id = u.id AND tr.company_id = ?) as last_timecard_at,
            (SELECT COUNT(*) FROM time_records tr WHERE tr.user_id = u.id AND tr.company_id = ?) as timecard_count
     FROM users u
@@ -233,7 +233,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     return;
   }
 
-  const { name, email, password, pin, color, phone, role, employment_type, furigana, display_name, sort_order, can_see_wages } = req.body;
+  const { name, email, password, pin, color, phone, role, employment_type, furigana, display_name, sort_order, can_see_wages, wage_exempt } = req.body;
   // 時給を変えられるのは「時給を見られる人」だけ（本人・ほかの管理者からは変えられない）
   const wageOk = canSeeWages(req);
   const hourly_wage = wageOk ? req.body.hourly_wage : undefined;
@@ -278,6 +278,9 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     db.prepare('UPDATE user_companies SET sort_order = ? WHERE user_id = ? AND company_id = ?').run(n !== null && Number.isFinite(n) ? n : null, userId, companyId);
   }
   // 「時給を見られる」を付け外しできるのも、時給を見られる人だけ
+  if (wageOk && wage_exempt !== undefined) {
+    db.prepare('UPDATE user_companies SET wage_exempt = ? WHERE user_id = ? AND company_id = ?').run(wage_exempt ? 1 : 0, userId, companyId);
+  }
   if (wageOk && can_see_wages !== undefined) {
     db.prepare('UPDATE user_companies SET can_see_wages = ? WHERE user_id = ? AND company_id = ?').run(can_see_wages ? 1 : 0, userId, companyId);
   }
@@ -285,7 +288,7 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   const updated = db.prepare(`
     SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
-           uc.employment_type, uc.display_name, uc.sort_order, uc.can_see_wages
+           uc.employment_type, uc.display_name, uc.sort_order, uc.can_see_wages, uc.wage_exempt
     FROM users u
     JOIN user_companies uc ON u.id = uc.user_id AND uc.company_id = ?
     WHERE u.id = ?

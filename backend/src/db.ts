@@ -434,6 +434,8 @@ try {
   if (!ucCols.includes('display_name')) db.exec('ALTER TABLE user_companies ADD COLUMN display_name TEXT');
   // 時給・人件費を見られる人（utils/wages.ts。誰かに付けると、その人と運営者だけが見られる）
   if (!ucCols.includes('can_see_wages')) db.exec('ALTER TABLE user_companies ADD COLUMN can_see_wages INTEGER DEFAULT 0');
+  // 時給なし（社長・役員など、人件費の見込みに入れない人）
+  if (!ucCols.includes('wage_exempt')) db.exec('ALTER TABLE user_companies ADD COLUMN wage_exempt INTEGER DEFAULT 0');
   if (!ucCols.includes('sort_order')) db.exec('ALTER TABLE user_companies ADD COLUMN sort_order INTEGER');
   if (!ucCols.includes('employment_type')) {
     db.exec("ALTER TABLE user_companies ADD COLUMN employment_type TEXT NOT NULL DEFAULT 'part_time'");
