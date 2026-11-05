@@ -1086,12 +1086,16 @@ export async function pushToUsers(companyId: number, userIds: number[], message:
 
 export { buttonsCard };
 
+// スタッフからの相談・質問・休み・登録の確認が届く人（担当者）。
+// 「時給を見られる人」を決めた会社では、その人と運営者だけ（社員を管理者にしていても、スタッフの相談が全員に届かないように）
 function adminLineIds(companyId: number): string[] {
   return (db.prepare(`
     SELECT uli.line_user_id FROM user_line_ids uli
     JOIN users u ON u.id = uli.user_id AND u.is_active = 1
     JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ?
-    WHERE uc.role = 'admin' OR u.role IN ('admin', 'super_admin')
+    WHERE (uc.role = 'admin' OR u.role IN ('admin', 'super_admin'))
+      AND (u.role = 'super_admin' OR uc.can_see_wages = 1
+           OR NOT EXISTS (SELECT 1 FROM user_companies x WHERE x.company_id = uc.company_id AND x.can_see_wages = 1))
   `).all(companyId) as { line_user_id: string }[]).map(r => r.line_user_id);
 }
 
