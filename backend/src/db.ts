@@ -435,6 +435,8 @@ try {
   // 時給・人件費を見られる人（utils/wages.ts。誰かに付けると、その人と運営者だけが見られる）
   if (!ucCols.includes('can_see_wages')) db.exec('ALTER TABLE user_companies ADD COLUMN can_see_wages INTEGER DEFAULT 0');
   // 時給なし（社長・役員など、人件費の見込みに入れない人）
+  // この人から公式LINEに来た文は、短い言葉でも毎回そのまま担当者に届ける（新人など）
+  if (!ucCols.includes('line_watch')) db.exec('ALTER TABLE user_companies ADD COLUMN line_watch INTEGER DEFAULT 0');
   if (!ucCols.includes('wage_exempt')) db.exec('ALTER TABLE user_companies ADD COLUMN wage_exempt INTEGER DEFAULT 0');
   if (!ucCols.includes('sort_order')) db.exec('ALTER TABLE user_companies ADD COLUMN sort_order INTEGER');
   if (!ucCols.includes('employment_type')) {

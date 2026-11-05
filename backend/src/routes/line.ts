@@ -868,6 +868,10 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
     }
   }
 
+  // 「毎回届ける」にした人（新人など）は、短い言葉でもそのまま担当者に届ける（メニューの返事はそのあと普段どおり）
+  const watched = !!me && !!(db.prepare('SELECT line_watch FROM user_companies WHERE user_id = ? AND company_id = ?').get(me.id, companyId) as any)?.line_watch;
+  if (me && watched && !isAdminMember(me)) await forwardToAdmins(companyId, token, me, lineUserId, 'の連絡', [text.slice(0, 400)]);
+
   // 連携済み: 短いキーワードはメニューと同じ、それ以外は質問として店長へ
   if (me) {
     const short = text.length <= 10;
@@ -884,7 +888,7 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
     if (what) { await replyMenu(what, companyId, lineUserId, token, replyToken); return; }
     if (isAdminMember(me)) return; // 店長自身の書き込みは転送しない
     await replyLine(token, replyToken, `${W(companyId)}に届けました。返事はこのトークでお知らせします。\n（シフトを変えたいときは、下のメニューの「シフトの相談」からも送れます）`);
-    await forwardToAdmins(companyId, token, me, lineUserId, '質問', [text.slice(0, 400)]);
+    if (!watched) await forwardToAdmins(companyId, token, me, lineUserId, '質問', [text.slice(0, 400)]);
     return;
   }
 
