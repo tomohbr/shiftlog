@@ -317,7 +317,7 @@ export type CampaignCard = { id: number; title: string; start_date: string; end_
 
 export type CampaignKind = 'open' | 'remind' | 'reply' | 'more';
 export function campaignHeading(c: CampaignCard, kind: CampaignKind) {
-  if (kind === 'more') return `【${c.title}】人が足りない日の希望を教えてください`;
+  if (kind === 'more') return `【${c.title}】追加で入れる日を教えてください`;
   return kind === 'remind' ? `【${c.title}】シフトの希望がまだ届いていません` : `【${c.title}】シフトの希望を教えてください`;
 }
 
@@ -354,7 +354,7 @@ function campaignBubble(companyId: number, heading: string, name: string, c: Cam
   };
 }
 
-const MORE_NOTE = 'まだ人が足りない日（白い日）だけ選べます。入れる日があれば、1日でも助かります🙏 すでに出した希望はそのまま残っています。';
+const MORE_NOTE = 'まだ人が足りない日があります。選べるのは白い日だけです。入れる日があれば教えてください。1日でも助かります🙏\n前に出した希望は、そのまま残っています。';
 export function campaignCard(companyId: number, userId: number, name: string, c: CampaignCard, kind: CampaignKind) {
   const heading = campaignHeading(c, kind);
   const left = daysLeft(c.deadline);
