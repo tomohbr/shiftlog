@@ -38,6 +38,7 @@ import LineLinkPage from './pages/LineLinkPage'
 import QrClockPage from './pages/QrClockPage'
 import StoreQrPosterPage from './pages/StoreQrPosterPage'
 import AllStoresQrPosterPage from './pages/AllStoresQrPosterPage'
+import ViewSchedulePage from './pages/ViewSchedulePage'
 import LineInvitePage from './pages/LineInvitePage'
 import LiffPunchPage from './pages/LiffPunchPage'
 import LiffStockPage from './pages/LiffStockPage'
@@ -86,6 +87,11 @@ function AppRoutes() {
   }
   if (liffMatch) {
     return <LiffPunchPage companyId={Number(liffMatch[1])} />
+  }
+
+  // 閲覧用リンク（社長など、ログインせずにシフト表を見る）。見るだけ
+  if (location.pathname.startsWith('/v/')) {
+    return <ViewSchedulePage token={decodeURIComponent(location.pathname.slice(3).split('/')[0])} />
   }
 
   // LINE 招待（スタッフ本人専用のQR/リンク）。ログイン不要
