@@ -5,6 +5,7 @@ import { Users, Calendar, Clock, CheckCircle, AlertTriangle, DollarSign, Repeat,
 import { Link } from 'react-router-dom'
 import TeamCalendar from '../components/TeamCalendar'
 import WageCostCard from '../components/WageCostCard'
+import ShortagesCard from '../components/ShortagesCard'
 import TodayByVenue from '../components/TodayByVenue'
 import { storeColorMap } from '../lib/storeColors'
 import ShiftModal from '../components/ShiftModal'
@@ -213,68 +214,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {!loading && noTimecard && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-start gap-5 justify-between">
-            <div className="flex-1">
-              <p className="text-xs font-semibold text-blue-700 mb-1">
-                {setupStepsDone ? 'あと一歩：まだ誰も打刻していません' : '今日から打刻を始める'}
-              </p>
-              <h3 className="text-lg font-bold text-gray-900">
-                {setupStepsDone
-                  ? 'スタッフに下のQRを見せる（または案内を送る）と、その場で打刻が始まります'
-                  : 'スタッフ1人にログイン案内を送り、最初の出勤打刻まで進めましょう'}
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">
-                会社PINを入力する代わりに、QRコードを1回スキャンするだけでスタッフはログインできます。レジ横やバックヤードに貼っておくのがおすすめです。
-              </p>
-              <div className="flex flex-wrap gap-2 mt-4">
-                <Link to="/staff" className="btn-primary">
-                  ログイン案内を送る
-                </Link>
-                <Link to="/timecards" className="btn-secondary">
-                  打刻画面を開く
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!companyPin) {
-                      toast.error('会社PINを取得できませんでした')
-                      return
-                    }
-                    navigator.clipboard.writeText(companyPin)
-                    toast.success('会社PINをコピーしました')
-                  }}
-                  className="btn-secondary"
-                >
-                  会社PINをコピー
-                </button>
-              </div>
-            </div>
-            {companyPin && (
-              <div className="shrink-0 mx-auto lg:mx-0">
-                <StaffLoginQR companyPin={companyPin} />
-              </div>
-            )}
-          </div>
-          <div className="grid md:grid-cols-4 gap-3 mt-4">
-            {[
-              ['1', 'スタッフ登録', '名前だけでも開始できます'],
-              ['2', 'QR表示 or 案内文コピー', 'その場でスキャン、またはLINE・メールで送ります'],
-              ['3', '出勤打刻', 'スマホまたは店舗タブレットで打刻します'],
-              ['4', '未打刻確認', '管理者が今日の状況を確認します'],
-            ].map(([step, title, body]) => (
-              <div key={step} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
-                <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mb-2">{step}</div>
-                <p className="text-sm font-bold text-gray-900">{title}</p>
-                <p className="text-xs text-gray-600 mt-1">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 今日の会場ごとの状況（いちばん上に） */}
+      {/* いちばん上はカレンダー（会場の切り替え → 未公開の注意 → カレンダー） */}
       {/* 会場の切り替え（全画面で同じ色） */}
       {stores.length > 1 && (() => {
         const colorOf = storeColorMap(stores)
@@ -298,34 +238,6 @@ export default function DashboardPage() {
           </div>
         )
       })()}
-
-      {stores.length > 0 && <TodayByVenue stores={stores} onlyStoreId={venue} />}
-
-      {/* 数字は1本の帯に小さくまとめる（主役は今日の会場とカレンダー） */}
-      <div className="card p-0 grid grid-cols-3 lg:grid-cols-6 divide-x divide-y lg:divide-y-0 divide-gray-100 overflow-hidden">
-        {([
-          ['今月のシフト', `${totalShifts}件`, null, ''],
-          ['今日の出勤予定', `${todayShifts.length}人`, null, ''],
-          ['スタッフ', `${users.length}人`, '/staff', ''],
-          ...(canWages ? [['今月の人件費', `¥${monthlyLabor.toLocaleString()}`, '/labor', '']] : []),
-          ['労務アラート', `${alertCount}件`, canWages ? '/labor' : null, alertCount > 0 ? 'text-red-600' : ''],
-          ['交代リクエスト', `${pendingSwaps}件`, '/swaps', pendingSwaps > 0 ? 'text-orange-600' : ''],
-        ] as [string, string, string | null, string][]).map(([label, value, to, cls]) => {
-          const body = (
-            <>
-              <p className="text-[11px] text-gray-500">{label}</p>
-              <p className={`text-lg font-bold text-gray-900 tabular-nums ${cls}`}>{value}</p>
-            </>
-          )
-          return to
-            ? <Link key={label} to={to} className="px-4 py-2.5 hover:bg-gray-50">{body}</Link>
-            : <div key={label} className="px-4 py-2.5">{body}</div>
-        })}
-      </div>
-
-      {canWages && shifts.length > 0 && (
-        <WageCostCard shifts={venue ? shifts.filter(s => s.store_id === venue) : shifts} stores={stores} month={currentDate.getMonth() + 1} />
-      )}
 
       {/* シフトはあるのに未公開＝スタッフには何も見えていない。カレンダーの上で言い切る */}
       {!loading && shifts.length > 0 && !isPublished && (
@@ -389,6 +301,101 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* 人が足りないところ（管理者だけ）。押すとその日の顔ぶれ */}
+      {isEventMode(selectedCompany) && stores.length > 0 && (
+        <ShortagesCard stores={stores} venue={venue} reloadKey={shifts} onPick={d => { setCurrentDate(new Date(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, 1)); setDayOpen(d) }} />
+      )}
+
+      {/* ここから下は、毎日は見なくてよいもの（今日の会場・数字・人件費・打刻の案内） */}
+      {stores.length > 0 && <TodayByVenue stores={stores} onlyStoreId={venue} />}
+
+      {/* 数字は1本の帯に小さくまとめる（主役は今日の会場とカレンダー） */}
+      <div className="card p-0 grid grid-cols-3 lg:grid-cols-6 divide-x divide-y lg:divide-y-0 divide-gray-100 overflow-hidden">
+        {([
+          ['今月のシフト', `${totalShifts}件`, null, ''],
+          ['今日の出勤予定', `${todayShifts.length}人`, null, ''],
+          ['スタッフ', `${users.length}人`, '/staff', ''],
+          ...(canWages ? [['今月の人件費', `¥${monthlyLabor.toLocaleString()}`, '/labor', '']] : []),
+          ['労務アラート', `${alertCount}件`, canWages ? '/labor' : null, alertCount > 0 ? 'text-red-600' : ''],
+          ['交代リクエスト', `${pendingSwaps}件`, '/swaps', pendingSwaps > 0 ? 'text-orange-600' : ''],
+        ] as [string, string, string | null, string][]).map(([label, value, to, cls]) => {
+          const body = (
+            <>
+              <p className="text-[11px] text-gray-500">{label}</p>
+              <p className={`text-lg font-bold text-gray-900 tabular-nums ${cls}`}>{value}</p>
+            </>
+          )
+          return to
+            ? <Link key={label} to={to} className="px-4 py-2.5 hover:bg-gray-50">{body}</Link>
+            : <div key={label} className="px-4 py-2.5">{body}</div>
+        })}
+      </div>
+
+      {canWages && shifts.length > 0 && (
+        <WageCostCard shifts={venue ? shifts.filter(s => s.store_id === venue) : shifts} stores={stores} month={currentDate.getMonth() + 1} />
+      )}
+
+      {!loading && noTimecard && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-start gap-5 justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-blue-700 mb-1">
+                {setupStepsDone ? 'あと一歩：まだ誰も打刻していません' : '今日から打刻を始める'}
+              </p>
+              <h3 className="text-lg font-bold text-gray-900">
+                {setupStepsDone
+                  ? 'スタッフに下のQRを見せる（または案内を送る）と、その場で打刻が始まります'
+                  : 'スタッフ1人にログイン案内を送り、最初の出勤打刻まで進めましょう'}
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                会社PINを入力する代わりに、QRコードを1回スキャンするだけでスタッフはログインできます。レジ横やバックヤードに貼っておくのがおすすめです。
+              </p>
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Link to="/staff" className="btn-primary">
+                  ログイン案内を送る
+                </Link>
+                <Link to="/timecards" className="btn-secondary">
+                  打刻画面を開く
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!companyPin) {
+                      toast.error('会社PINを取得できませんでした')
+                      return
+                    }
+                    navigator.clipboard.writeText(companyPin)
+                    toast.success('会社PINをコピーしました')
+                  }}
+                  className="btn-secondary"
+                >
+                  会社PINをコピー
+                </button>
+              </div>
+            </div>
+            {companyPin && (
+              <div className="shrink-0 mx-auto lg:mx-0">
+                <StaffLoginQR companyPin={companyPin} />
+              </div>
+            )}
+          </div>
+          <div className="grid md:grid-cols-4 gap-3 mt-4">
+            {[
+              ['1', 'スタッフ登録', '名前だけでも開始できます'],
+              ['2', 'QR表示 or 案内文コピー', 'その場でスキャン、またはLINE・メールで送ります'],
+              ['3', '出勤打刻', 'スマホまたは店舗タブレットで打刻します'],
+              ['4', '未打刻確認', '管理者が今日の状況を確認します'],
+            ].map(([step, title, body]) => (
+              <div key={step} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+                <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center mb-2">{step}</div>
+                <p className="text-sm font-bold text-gray-900">{title}</p>
+                <p className="text-xs text-gray-600 mt-1">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 日付を押したとき: その日の会場ごとの顔ぶれ。押すと編集、＋で追加 */}
       {dayOpen && (() => {
