@@ -60,3 +60,23 @@ export function computeShortages(companyId: number, from: string, to: string): S
   }
   return out;
 }
+
+/**
+ * 希望の画面用: 公開済みの月の日について、まだ丸ごと足りない部（昼 a／夜 b）を返す。
+ * 公開済みの月で足りない部がない日は「埋まり」（希望を新しく出せない）。公開前の月は null（全部出せる）。
+ */
+export function openPartsByDate(companyId: number, from: string, to: string): Map<string, ('a' | 'b')[]> | null {
+  const pubs = db.prepare('SELECT year, month FROM shift_publications WHERE company_id = ? AND is_published = 1').all(companyId) as { year: number; month: number }[];
+  const published = new Set(pubs.map(p => `${p.year}-${String(p.month).padStart(2, '0')}`));
+  if (published.size === 0) return null;
+  const out = new Map<string, ('a' | 'b')[]>();
+  const shorts = computeShortages(companyId, from, to).filter(x => x.kind === 'full');
+  for (let t = Date.parse(from); t <= Date.parse(to); t += 86400000) {
+    const d = new Date(t).toISOString().slice(0, 10);
+    if (!published.has(d.slice(0, 7))) continue;
+    const parts = new Set<'a' | 'b'>();
+    for (const s of shorts) if (s.date === d) parts.add(s.start_time < '15:00' ? 'a' : 'b');
+    out.set(d, [...parts]);
+  }
+  return out;
+}

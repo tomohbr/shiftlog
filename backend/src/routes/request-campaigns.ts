@@ -1,3 +1,4 @@
+import { openPartsByDate } from '../utils/shortages';
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
@@ -135,12 +136,17 @@ router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const dayset = new Set(days.map(d => d.date));
   const entries: Record<string, { availability: string; part: Part | null }> = {};
   for (const r of reqs) if (dayset.has(r.date)) entries[r.date] = { availability: r.availability, part: PARTS.includes(r.part) ? r.part : null };
+  // シフト公開後は、まだ人が足りない日・部だけ希望を出せる（埋まった日はグレーで押せない）
+  const openParts = openPartsByDate(companyId, c.start_date, c.end_date);
   res.json({
     campaign: view(forUser(companyId, c, userId)),
     contact: W(companyId),
     me: { name: req.user!.name },
     stores: st,
-    days: days.map(d => ({ date: d.date, weekday: d.weekday, long: d.long, venues: d.venues.map(v => ({ store_id: v.store_id, slots: v.slots.map(s => ({ start_time: s.start_time, end_time: s.end_time, part: s.part })) })), times: d.times })),
+    days: days.map(d => ({ date: d.date, weekday: d.weekday, long: d.long,
+      filled: !!openParts?.has(d.date) && openParts.get(d.date)!.length === 0,
+      open_parts: openParts?.get(d.date) ?? null,
+      venues: d.venues.map(v => ({ store_id: v.store_id, slots: v.slots.map(s => ({ start_time: s.start_time, end_time: s.end_time, part: s.part })) })), times: d.times })),
     answer: answerView(answer, names),
     entries,
     transports: TRANSPORTS,
@@ -179,16 +185,23 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
 
   const days = campaignDays(companyId, c.start_date, c.end_date);
   const dayOf = new Map<string, CampaignDay>(days.map(d => [d.date, d]));
+  // 埋まった日（公開後に足りない部がない日）は、送られてきても変えない（前の答えはそのまま残す）
+  const openParts = openPartsByDate(companyId, c.start_date, c.end_date);
+  const filled = (date: string) => !!openParts?.has(date) && openParts.get(date)!.length === 0;
   const raw = Array.isArray(req.body?.entries) ? req.body.entries : [];
   const entries: { date: string; availability: string; part: Part | null }[] = [];
   for (const e of raw) {
     const date = String(e?.date || '');
     if (!dayOf.has(date)) continue; // 候補日以外は受け取らない
+    if (filled(date)) continue;
     const availability = ['preferred', 'available', 'unavailable'].includes(e.availability) ? e.availability : null;
     if (!availability) continue;
     const day = dayOf.get(date)!;
     let part: Part | null = availability !== 'unavailable' && day.long ? (PARTS.includes(e.part) ? e.part : 'full') : null;
     if (part === 'all' && longDay === 'half') part = 'full';
+    // 片方の部しか足りない日は、その部に寄せる
+    const op = openParts?.get(date);
+    if (part && op && op.length === 1 && part !== op[0]) part = op[0];
     entries.push({ date, availability, part });
   }
 
@@ -204,7 +217,7 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const del = db.prepare('DELETE FROM shift_requests WHERE company_id = ? AND user_id = ? AND date = ?');
   db.transaction(() => {
     const given = new Set(entries.map(e => e.date));
-    for (const d of days) if (!given.has(d.date)) del.run(companyId, userId, d.date);
+    for (const d of days) if (!given.has(d.date) && !filled(d.date)) del.run(companyId, userId, d.date);
     for (const e of entries) {
       // 昼／夜は時間にも直して入れる（自動作成は preferred_start/end を見る）。通し・短い日は時間なし
       const t = partTimes(dayOf.get(e.date), e.part);

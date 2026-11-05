@@ -681,6 +681,10 @@ export interface CampaignDay {
   date: string
   weekday: number
   long: boolean
+  // シフト公開後: 人が足りていて新しく希望を出せない日（グレー）
+  filled?: boolean
+  // シフト公開後: まだ足りない部（昼 a／夜 b）。null は公開前（全部出せる）
+  open_parts?: ('a' | 'b')[] | null
   venues: { store_id: number | null; slots: { start_time: string; end_time: string; part: 'a' | 'b' }[] }[]
   times: Record<'a' | 'b', { start: string; end: string }>
 }

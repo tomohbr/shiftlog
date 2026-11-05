@@ -133,6 +133,7 @@ export default function CampaignAnswerPage() {
     if (!open) return
     const day = dayOf.get(date)
     if (!day) return
+    if (day.filled) { toast('この日は人が足りています。足りない日（白い日）を選んでください'); return }
     if (pen === 'clear') {
       setEntries(prev => { const n = { ...prev }; delete n[date]; return n })
       if (focusDay === date) setFocusDay(null)
@@ -140,7 +141,9 @@ export default function CampaignAnswerPage() {
     }
     const cur = entries[date]
     const longOk = day.long && pen !== 'unavailable'
-    setEntries(prev => ({ ...prev, [date]: { availability: pen, part: longOk ? (cur && cur.availability !== 'unavailable' && cur.part ? cur.part : defaultPart) : null } }))
+    // 片方の部だけ足りない日は、最初からその部にする
+    const only = day.open_parts && day.open_parts.length === 1 ? day.open_parts[0] : null
+    setEntries(prev => ({ ...prev, [date]: { availability: pen, part: longOk ? (only || (cur && cur.availability !== 'unavailable' && cur.part ? cur.part : defaultPart)) : null } }))
     setFocusDay(longOk ? date : null)
   }
   // 「1日通しでも入れる」なら、昼夜の日に印をつけたときの最初の選択を「通し」にする
@@ -164,7 +167,7 @@ export default function CampaignAnswerPage() {
   const fillRest = (a: CampaignAvailability) => {
     setEntries(prev => {
       const n = { ...prev }
-      for (const d of days) if (!n[d.date]) n[d.date] = { availability: a, part: d.long && a !== 'unavailable' ? defaultPart : null }
+      for (const d of days) if (!n[d.date] && !d.filled) n[d.date] = { availability: a, part: d.long && a !== 'unavailable' ? (d.open_parts?.length === 1 ? d.open_parts[0] : defaultPart) : null }
       return n
     })
     setFocusDay(null)
@@ -179,6 +182,7 @@ export default function CampaignAnswerPage() {
     setEntries(prev => {
       const n = { ...prev }
       for (const d of targets) {
+        if (d.filled) continue
         if (on) n[d.date] = { availability: 'unavailable', part: null }
         else if (n[d.date]?.availability === 'unavailable') delete n[d.date]
       }
@@ -398,6 +402,9 @@ export default function CampaignAnswerPage() {
             </div>
           )}
           <p className="text-xs text-gray-500 mt-1"><span className="inline-block px-1 rounded bg-amber-100 text-amber-800 font-bold text-[10px] mr-1">昼夜</span>の日は、昼だけ・夜だけ・どちらか・1日通し を選べます</p>
+          {days.some(d => d.filled) && (
+            <p className="text-xs text-gray-500 mt-1"><span className="inline-block w-3 h-3 align-[-2px] rounded-sm bg-gray-200 mr-1" />グレーの日は人が足りています。白い日（まだ人が足りない日）から選んでください</p>
+          )}
         </div>
 
         {open && (
@@ -434,15 +441,20 @@ export default function CampaignAnswerPage() {
                 const e = entries[d]
                 const p = e ? penOf(e.availability) : null
                 const focused = focusDay === d
+                const full = !!day?.filled
                 return (
                   <button key={d} onClick={() => tap(d)} disabled={!open || !day}
-                    className={`min-h-[78px] border-b border-r border-gray-100 flex flex-col items-stretch pt-0.5 pb-1 ${day ? 'bg-white active:bg-blue-50' : 'bg-gray-50'} ${focused ? 'ring-2 ring-inset ring-amber-400' : ''}`}>
+                    className={`min-h-[78px] border-b border-r border-gray-100 flex flex-col items-stretch pt-0.5 pb-1 ${day && !full ? 'bg-white active:bg-blue-50' : 'bg-gray-100'} ${focused ? 'ring-2 ring-inset ring-amber-400' : ''}`}>
                     <span className="flex items-center justify-center gap-0.5">
                       <span className={`text-[13px] font-semibold ${!day ? 'text-gray-300' : col === 5 ? 'text-blue-500' : col === 6 ? 'text-red-500' : 'text-gray-800'}`}>{Number(d.slice(8))}</span>
                       {day?.long && <span className="text-[8px] font-bold px-0.5 rounded bg-amber-100 text-amber-800 leading-tight">昼夜</span>}
                     </span>
+                    {full && !p && <span className="mx-[2px] mt-1 text-center text-[10px] font-bold text-gray-400 leading-tight">埋まって<br />います</span>}
+                    {day && !full && day.open_parts && day.long && day.open_parts.length === 1 && !p && (
+                      <span className="mx-[2px] mt-1 text-center text-[10px] font-bold text-red-600 leading-tight">{day.open_parts[0] === 'a' ? '昼が' : '夜が'}<br />足りない</span>
+                    )}
                     {p && (
-                      <span className="mx-[2px] mt-0.5 rounded-[5px] text-white font-bold text-center leading-tight py-0.5" style={{ backgroundColor: p.color }}>
+                      <span className={`mx-[2px] mt-0.5 rounded-[5px] text-white font-bold text-center leading-tight py-0.5 ${full ? 'opacity-50' : ''}`} style={{ backgroundColor: p.color }}>
                         <span className="block text-[15px]">{p.mark}</span>
                         <span className="block text-[10px]">{e.part ? PART_LABEL[e.part] : p.label}</span>
                       </span>
@@ -531,6 +543,9 @@ function Chip({ on, onClick, disabled, color = '#1C7ED6', children }: { on: bool
 }
 
 function PartButtons({ day, value, onPick, disabled, allowAll }: { day: CampaignDay; value: CampaignPart; onPick: (p: CampaignPart) => void; disabled?: boolean; allowAll: boolean }) {
+  // 片方の部しか足りない日は、その部だけ選べる
+  const only = day.open_parts && day.open_parts.length === 1 ? day.open_parts[0] : null
+  const off = (k: CampaignPart) => !!only && k !== only
   const opts: { key: CampaignPart; label: string; sub: string; icon?: typeof Sun }[] = [
     { key: 'a', label: '昼だけ', sub: partRange(day, 'a'), icon: Sun },
     { key: 'b', label: '夜だけ', sub: partRange(day, 'b'), icon: Moon },
@@ -543,8 +558,8 @@ function PartButtons({ day, value, onPick, disabled, allowAll }: { day: Campaign
         const on = value === o.key
         const Icon = o.icon
         return (
-          <button key={o.key} onClick={() => onPick(o.key)} disabled={disabled}
-            className={`rounded-xl border-2 py-1.5 leading-tight ${on ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-gray-200 text-gray-800'}`}>
+          <button key={o.key} onClick={() => onPick(o.key)} disabled={disabled || off(o.key)}
+            className={`rounded-xl border-2 py-1.5 leading-tight ${on ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-gray-200 text-gray-800'} ${off(o.key) ? 'opacity-30' : ''}`}>
             <span className="text-sm font-bold flex items-center justify-center gap-1">{Icon && <Icon className="w-3.5 h-3.5" />}{o.label}</span>
             <span className={`block text-[10px] tracking-tighter ${on ? 'text-white' : 'text-gray-500'}`}>{o.sub || '—'}</span>
           </button>
@@ -563,7 +578,7 @@ function PartRow({ day, entry, onPick, disabled, allowAll }: { day: CampaignDay;
       <p className="text-sm font-semibold w-[6.5rem] flex-shrink-0 whitespace-nowrap" style={{ color: p.color }}>{p.mark} {md(day.date)}</p>
       <div className={`flex-1 grid ${allowAll ? 'grid-cols-4' : 'grid-cols-3'} gap-1`}>
         {(allowAll ? ['a', 'b', 'full', 'all'] : ['a', 'b', 'full'] as CampaignPart[]).map(k => (
-          <button key={k} onClick={() => onPick(k as CampaignPart)} disabled={disabled} title={k === 'full' ? '昼か夜の片方' : partRange(day, k as 'a' | 'b' | 'all')}
+          <button key={k} onClick={() => onPick(k as CampaignPart)} disabled={disabled || (!!day.open_parts && day.open_parts.length === 1 && k !== day.open_parts[0])} title={k === 'full' ? '昼か夜の片方' : partRange(day, k as 'a' | 'b' | 'all')}
             className={`rounded-lg border-2 py-1 text-sm font-bold ${value === k ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-gray-200 text-gray-700'}`}>
             {PART_LABEL[k as CampaignPart]}
           </button>
