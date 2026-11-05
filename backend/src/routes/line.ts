@@ -726,6 +726,7 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
           await replyLine(s.channel_access_token, event.replyToken, 'この連携コードは見つからないか、期限切れです。アプリでもう一度コードを表示してください。');
           continue;
         }
+        unlinkOthers(companyId, row.user_id, lineUserId);
         db.prepare(`
           INSERT INTO user_line_ids (user_id, line_user_id) VALUES (?, ?)
           ON CONFLICT(user_id) DO UPDATE SET line_user_id = excluded.line_user_id
@@ -738,6 +739,24 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
     }
   }
 });
+
+// 同じ LINE が、この会社の別のスタッフにもつながっていたら外す（1つの LINE は1人だけ）。
+// 先に名前を送って「新しいスタッフ」として作られ、そのあと本人用の招待で元の自分につないだ場合など、
+// 作られたばかりで中身のない方（シフトも希望もない）は会社からも外す。
+function unlinkOthers(companyId: number, userId: number, lineUserId: string) {
+  const others = db.prepare(`
+    SELECT uli.user_id FROM user_line_ids uli JOIN user_companies uc ON uc.user_id = uli.user_id AND uc.company_id = ?
+    WHERE uli.line_user_id = ? AND uli.user_id != ?
+  `).all(companyId, lineUserId, userId) as { user_id: number }[];
+  for (const o of others) {
+    db.prepare('DELETE FROM user_line_ids WHERE user_id = ?').run(o.user_id);
+    const empty = !db.prepare('SELECT 1 FROM shifts WHERE user_id = ? AND company_id = ?').get(o.user_id, companyId)
+      && !db.prepare('SELECT 1 FROM shift_requests WHERE user_id = ? AND company_id = ?').get(o.user_id, companyId)
+      && !db.prepare('SELECT 1 FROM time_records WHERE user_id = ? AND company_id = ?').get(o.user_id, companyId);
+    const madeByLine = db.prepare("SELECT 1 FROM line_registrations WHERE company_id = ? AND user_id = ? AND requested_name IS NOT NULL").get(companyId, o.user_id);
+    if (empty && madeByLine) db.prepare('DELETE FROM user_companies WHERE user_id = ? AND company_id = ?').run(o.user_id, companyId);
+  }
+}
 
 // ---- 文字のメッセージ: 名前で登録（店長が承認）／キーワード／質問を店長へ ----
 // 社長がグループLINEに1通送るだけで始められるように、招待QRがなくても「フルネームを送る→店長が承認」で連携できる。
