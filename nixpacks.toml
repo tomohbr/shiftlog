@@ -8,4 +8,5 @@ cmds = ["cd frontend && npm install --include=dev", "cd backend && npm install -
 cmds = ["cd frontend && npm run build", "cd backend && npm run build"]
 
 [start]
-cmd = "cd backend && node dist/index.js"
+# exec で node 自身が SIGTERM を受け取る（sh が挟まると合図が届かず強制終了になる）
+cmd = "cd backend && exec node dist/index.js"

@@ -34,6 +34,7 @@ import viewLinkRoutes from './routes/view-links';
 import loginSetupRoutes from './routes/login-setup';
 import liffRoutes from './routes/liff';
 import inventoryRoutes from './routes/inventory';
+import db from './db';
 import { reportServerError } from './utils/ops-alerts';
 import { startDailyDigest } from './utils/daily-digest';
 import { startTrialNotifier } from './utils/trial-notify';
@@ -165,9 +166,26 @@ app.use((err: any, req: express.Request, res: express.Response, _next: express.N
 process.on('unhandledRejection', reason => reportServerError(reason, { path: 'unhandledRejection' }));
 process.on('uncaughtException', err => reportServerError(err, { path: 'uncaughtException' }));
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// 新しい版を出すと Railway が古い版に SIGTERM を送る。受け取らないと異常終了（デプロイ失敗・クラッシュ扱い）に
+// なるので、受付を止めて DB を閉じてから正常終了する（10秒で終わらなければそのまま終える）
+let stopping = false;
+const shutdown = (signal: string) => {
+  if (stopping) return;
+  stopping = true;
+  console.log(`[shutdown] ${signal} を受け取りました。終了します`);
+  const done = () => {
+    try { db.close(); } catch { /* もう閉じている */ }
+    process.exit(0);
+  };
+  server.close(done);
+  setTimeout(done, 10_000).unref();
+};
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 // トライアル終了前後のメール通知（SMTP未設定時は自動スキップ）
 startTrialNotifier();
