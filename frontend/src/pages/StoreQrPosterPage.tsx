@@ -57,19 +57,7 @@ export default function StoreQrPosterPage({ storeId }: { storeId: number }) {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <style>{`
-        @page { size: A4 portrait; margin: 12mm; }
-        @media print {
-          .qr-poster-noprint { display: none !important; }
-          body { background: white !important; }
-          .qr-poster-sheet {
-            box-shadow: none !important;
-            margin: 0 !important;
-            width: auto !important;
-            min-height: auto !important;
-          }
-        }
-      `}</style>
+      <style>{POSTER_PRINT_CSS}</style>
 
       {/* 画面表示時だけのツールバー */}
       <div className="qr-poster-noprint sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
@@ -102,7 +90,32 @@ export default function StoreQrPosterPage({ storeId }: { storeId: number }) {
         </div>
       </div>
 
-      {/* ポスター本体（A4縦を想定した1枚） */}
+      <PosterSheet companyName={companyName} storeName={storeName} url={url} />
+    </div>
+  )
+}
+
+// ポスター本体（A4縦を想定した1枚）。全会場まとめて印刷するページでも使う
+export const POSTER_PRINT_CSS = `
+  @page { size: A4 portrait; margin: 12mm; }
+  @media print {
+    .qr-poster-noprint { display: none !important; }
+    body { background: white !important; }
+    .qr-poster-sheet {
+      box-shadow: none !important;
+      margin: 0 !important;
+      width: auto !important;
+      min-height: auto !important;
+      height: 270mm !important;
+      break-after: page;
+      page-break-after: always;
+    }
+    .qr-poster-sheet:last-child { break-after: auto; page-break-after: auto; }
+  }
+`
+
+export function PosterSheet({ companyName, storeName, url }: { companyName: string; storeName: string; url: string }) {
+  return (
       <div className="qr-poster-sheet bg-white shadow-lg mx-auto my-6 max-w-[210mm] min-h-[280mm] px-12 py-14 flex flex-col items-center text-center">
         <p className="text-lg font-semibold text-gray-500 tracking-widest break-words">{companyName}</p>
         <h1 className="text-5xl font-bold text-gray-900 mt-3 break-words leading-tight">
@@ -139,6 +152,5 @@ export default function StoreQrPosterPage({ storeId }: { storeId: number }) {
           シフトログ ｜ 打刻時に不正防止のため位置情報を記録します（許可しなくても打刻できます）
         </p>
       </div>
-    </div>
   )
 }

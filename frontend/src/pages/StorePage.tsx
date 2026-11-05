@@ -310,6 +310,15 @@ export default function StorePage() {
               </span>
             )}
           </p>
+          {stores.length > 1 && (
+            <button
+              onClick={() => window.open('/qr-poster/stores', '_blank')}
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100"
+            >
+              <QrCode className="w-4 h-4" />
+              全{stores.length}会場の打刻用QRをまとめて印刷
+            </button>
+          )}
         </div>
         <button
           onClick={handleAddStore}

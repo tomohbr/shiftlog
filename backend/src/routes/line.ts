@@ -8,6 +8,7 @@ import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../m
 import { absenceRule, phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
 import { canAddStaff } from '../utils/billing';
 import { daysLeft, forUser, isAccepting } from '../utils/requestCampaign';
+import { mergeBlocks, partNameOf, PART_NAME, ShiftBlock } from '../utils/shiftParts';
 
 // LINE 連携（お店ごとの LINE 公式アカウント → スタッフへの通知）
 //
@@ -20,7 +21,7 @@ import { daysLeft, forUser, isAccepting } from '../utils/requestCampaign';
 //   4. 以後、シフト公開・希望収集の開始などを LINE で送る
 //   5. 希望収集の案内・催促・シフト公開には本人専用のリンクを付ける。LINE から開くと名前選択なしで
 //      その月の希望提出画面／シフト画面に入れる
-//   6. トーク画面の下にメニュー（シフトを見る・希望を出す・休みの連絡・打刻のしかた）を付ける。押すと本人専用の
+//   6. トーク画面の下にメニュー（シフトを見る・希望を出す・打刻／休みの連絡・シフトの相談・質問）を付ける。押すと本人専用の
 //      カードを返信する（返信なので無料プランの通数に数えない）。文字で「シフト」「希望」と送っても同じ
 
 const router = Router();
@@ -143,11 +144,13 @@ function shiftsCard(companyId: number, userId: number, name: string, heading: st
     WHERE s.company_id = ? AND s.user_id = ? AND s.date >= ?
     ORDER BY s.date, s.start_time LIMIT 1
   `).get(companyId, userId, jstToday()) as any;
-  const nextBox = next
+  const nb = next ? myBlocks(companyId, userId, next.date, next.date)[0] : null;
+  const nextBox = nb
     ? [
         { type: 'text', text: '次の勤務', size: 'xs', color: '#888888' },
-        { type: 'text', text: `${md2(next.date)} ${String(next.start_time).slice(0, 5)}–${String(next.end_time).slice(0, 5)}`, size: 'lg', weight: 'bold', wrap: true },
-        ...(next.store_name ? [{ type: 'text', text: `📍 ${next.store_name}`, size: 'md', weight: 'bold', color: '#E8590C', wrap: true }] : []),
+        { type: 'text', text: `${md2(nb.date)} ${hm5(nb.start_time)}–${hm5(nb.end_time)}`, size: 'lg', weight: 'bold', wrap: true },
+        ...(nb.part ? [{ type: 'text', text: blockPartText(nb), size: 'sm', weight: 'bold', color: '#1C7ED6', wrap: true }] : []),
+        ...(nb.store_name ? [{ type: 'text', text: `📍 ${nb.store_name}`, size: 'md', weight: 'bold', color: '#E8590C', wrap: true }] : []),
       ]
     : [{ type: 'text', text: `まだシフトは決まっていません。決まったら、このLINEでお知らせします。`, size: 'sm', color: '#888888', wrap: true }];
   return {
@@ -176,20 +179,38 @@ function shiftsCard(companyId: number, userId: number, name: string, heading: st
 }
 
 // シフト変更のお知らせカード（変更前は取り消し線、変更後を太字で）
-type Snap = { date: string; start_time: string; end_time: string; store_name: string | null };
-const snapText = (x: Snap) => `${x.store_name ? x.store_name + ' ' : ''}${String(x.start_time).slice(0, 5)}–${String(x.end_time).slice(0, 5)}`;
+type Snap = { date: string; start_time: string; end_time: string; store_name: string | null; store_id?: number | null };
+const snapText = (companyId: number, x: Snap) => {
+  const part = partNameOf(companyId, { date: x.date, start_time: x.start_time, end_time: x.end_time, store_id: x.store_id ?? null });
+  return `${x.store_name ? x.store_name + ' ' : ''}${part ? part + ' ' : ''}${hm5(x.start_time)}–${hm5(x.end_time)}`;
+};
+const hm5 = (t: string) => String(t).slice(0, 5);
+// 同じ日・同じ会場で、つながった「追加」どうし・「お休み」どうしは1つにまとめる（昼の部＋夜の部 → 1日通し）
+function mergeChanges(changes: { before: Snap | null; after: Snap | null }[]) {
+  const key = (c: { before: Snap | null; after: Snap | null }) => { const x = (c.after || c.before)!; return `${x.date} ${hm5(x.start_time)}`; };
+  const out: { before: Snap | null; after: Snap | null }[] = [];
+  for (const c of [...changes].sort((a, b) => key(a).localeCompare(key(b)))) {
+    const last = out[out.length - 1];
+    const joins = (x: Snap | null, y: Snap | null) => !!x && !!y && x.date === y.date && (x.store_name ?? '') === (y.store_name ?? '') && hm5(x.end_time) === hm5(y.start_time);
+    if (last && !last.before && !c.before && joins(last.after, c.after)) { last.after = { ...last.after!, end_time: c.after!.end_time }; continue; }
+    if (last && !last.after && !c.after && joins(last.before, c.before)) { last.before = { ...last.before!, end_time: c.before!.end_time }; continue; }
+    out.push({ before: c.before && { ...c.before }, after: c.after && { ...c.after } });
+  }
+  return out;
+}
 
 export async function sendShiftChangeCard(companyId: number, userId: number, name: string, changes: { before: Snap | null; after: Snap | null }[]): Promise<boolean> {
   const s = db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
   const to = db.prepare('SELECT line_user_id FROM user_line_ids WHERE user_id = ?').get(userId) as any;
   if (!s?.channel_access_token || !to) return false;
+  changes = mergeChanges(changes);
   const rows = changes.slice(0, 12).map(c => {
     const d = (c.after || c.before)!.date;
     const lines: any[] = [{ type: 'text', text: md2(d), weight: 'bold', size: 'md' }];
     if (c.before && c.after && c.before.date !== c.after.date) lines[0].text = `${md2(c.before.date)} → ${md2(c.after.date)}`;
-    if (c.before) lines.push({ type: 'text', text: c.after ? snapText(c.before) : `${snapText(c.before)}`, size: 'sm', color: '#999999', decoration: 'line-through', wrap: true });
+    if (c.before) lines.push({ type: 'text', text: snapText(companyId, c.before), size: 'sm', color: '#999999', decoration: 'line-through', wrap: true });
     lines.push(c.after
-      ? { type: 'text', text: `${c.before ? '→ ' : '追加 '}${snapText(c.after)}`, size: 'md', weight: 'bold', color: c.before ? '#1C7ED6' : '#2F9E44', wrap: true }
+      ? { type: 'text', text: `${c.before ? '→ ' : '追加 '}${snapText(companyId, c.after)}`, size: 'md', weight: 'bold', color: c.before ? '#1C7ED6' : '#2F9E44', wrap: true }
       : { type: 'text', text: 'この日はお休みになりました', size: 'md', weight: 'bold', color: '#E03131', wrap: true });
     return { type: 'box', layout: 'vertical', spacing: 'xs', contents: lines };
   });
@@ -681,7 +702,7 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
       } else if (event.type === 'follow' && event.replyToken) {
         const known = lineMember(companyId, lineUserId);
         await replyLine(s.channel_access_token, event.replyToken, known
-          ? `${known.name}さん、おかえりなさい。トーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。`
+          ? `${known.name}さん、おかえりなさい。トーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・シフトの相談・打刻ができます。`
           : `友だち追加ありがとうございます。\n\nシフトの連絡を受け取るために、このトークに【名前とふりがな】を送ってください。\n例：山田 花子 やまだ はなこ\n\n${W(companyId)}が確認したら「連携できました」とお知らせします。\n（お店からもらった招待QRがある人は、そちらを読んでもOKです）`);
       } else if (event.type === 'unfollow') {
         db.prepare('DELETE FROM user_line_ids WHERE line_user_id = ?').run(lineUserId);
@@ -746,7 +767,7 @@ export function W(companyId: number): string {
 
 // 連携できたときの返事（招待リンク・承認のどちらでも同じ文面）
 const linkedMsg = (companyId: number, name: string) =>
-  `${name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。\n\nわからないことは、このトークにそのまま書いて送ってください。${W(companyId)}に届きます。`;
+  `${name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。\n\nシフトを変えたい・代わってほしいときは「シフトの相談」、そのほかは「質問・連絡」を押してください。${W(companyId)}に届きます。`;
 
 // まだ連携していない人への案内（メニューを押したときなど）
 const unlinkedMsg = (companyId: number) =>
@@ -770,27 +791,79 @@ async function lineDisplayName(token: string, lineUserId: string): Promise<strin
   try { const r = await lineApi(token, `/v2/bot/profile/${lineUserId}`); return r.data?.displayName || ''; } catch { return ''; }
 }
 
+// 「シフトの相談」「質問・連絡」で選んだ内容。次に送られた文と一緒に担当者へ届ける（30分で消える）
+db.exec(`
+  CREATE TABLE IF NOT EXISTS line_consults (
+    company_id INTEGER NOT NULL,
+    line_user_id TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    label TEXT,
+    expires_at DATETIME NOT NULL,
+    PRIMARY KEY (company_id, line_user_id)
+  );
+`);
+const CONSULT_TOPIC: Record<string, { name: string; example: string }> = {
+  time: { name: '時間を変えたい', example: '例：「16時からにできますか？」「昼の部だけにしたいです」' },
+  swap: { name: 'ほかの人と代わりたい', example: '例：「〇〇さんと代わってもいいですか？」「代わってくれる人を探してほしいです」' },
+  add: { name: '入れる日を増やしたい', example: '例：「12/5と12/6も入れます」「土日の夜も入れます」' },
+  less: { name: '入る日を減らしたい', example: '例：「12/10は入れなくなりました」' },
+  other: { name: 'そのほかの相談', example: '例：「12/19の集合場所を知りたいです」' },
+  ask: { name: '質問・連絡', example: '例：「駐車場はありますか？」「服装は何を着ればいいですか？」「少し遅れます」' },
+};
+function setConsult(companyId: number, lineUserId: string, topic: string, label: string | null) {
+  db.prepare(`
+    INSERT INTO line_consults (company_id, line_user_id, topic, label, expires_at) VALUES (?, ?, ?, ?, datetime('now', '+30 minutes'))
+    ON CONFLICT(company_id, line_user_id) DO UPDATE SET topic = excluded.topic, label = excluded.label, expires_at = excluded.expires_at
+  `).run(companyId, lineUserId, topic, label);
+}
+function takeConsult(companyId: number, lineUserId: string): { topic: string; label: string | null } | null {
+  const row = db.prepare("SELECT topic, label FROM line_consults WHERE company_id = ? AND line_user_id = ? AND expires_at >= datetime('now')").get(companyId, lineUserId) as any;
+  db.prepare('DELETE FROM line_consults WHERE company_id = ? AND line_user_id = ?').run(companyId, lineUserId);
+  return row || null;
+}
+
+// 担当者に「○○さんから相談／質問」を届ける（押すとその人とのトークが開く）
+async function forwardToAdmins(companyId: number, token: string, me: { name: string }, lineUserId: string, heading: string, lines: string[], includeSelf = false) {
+  const url = await chatUrl(companyId, token, lineUserId);
+  const card = buttonsCard(`${me.name}さんから${heading}`, `${me.name}さんから${heading}`, [...lines, '返事は下のボタンから、このトークに送れます。'],
+    [{ label: 'チャットで返事する', uri: url, primary: true, color: '#06C755' }]);
+  for (const id of adminLineIds(companyId)) if (includeSelf || id !== lineUserId) await sendLineMessage(token, id, card);
+}
+
 async function handleText(text: string, companyId: number, lineUserId: string, token: string, replyToken: string) {
   const me = lineMember(companyId, lineUserId);
+
+  // メニューの「シフトの相談」「質問・連絡」のあとに送った文は、選んだ内容と一緒に担当者へ
+  if (me) {
+    const c = takeConsult(companyId, lineUserId);
+    if (c) {
+      if (/^(やめる|やめます|キャンセル|取り消し|取消)$/.test(text)) { await replyLine(token, replyToken, '相談をやめました。また必要なときにメニューから押してください。'); return; }
+      const t = CONSULT_TOPIC[c.topic] || CONSULT_TOPIC.other;
+      const heading = c.topic === 'ask' ? '質問・連絡' : 'シフトの相談';
+      await replyLine(token, replyToken, `${W(companyId)}に届けました。返事はこのトークでお知らせします。\n\n【${t.name}】${c.label ? `\n${c.label}` : ''}\n「${text.slice(0, 200)}」`);
+      await forwardToAdmins(companyId, token, me, lineUserId, heading,
+        [`【${t.name}】`, ...(c.label ? [c.label] : []), text.slice(0, 400)], true);
+      return;
+    }
+  }
 
   // 連携済み: 短いキーワードはメニューと同じ、それ以外は質問として店長へ
   if (me) {
     const short = text.length <= 10;
-    const what = !short ? '' : /希望/.test(text) ? 'requests' : /休み|欠勤|休む/.test(text) ? 'absent' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : /使い方|ヘルプ|help/i.test(text) ? 'help' : '';
+    const what = !short ? '' : /希望/.test(text) ? 'requests' : /変更|変え|代わ|交代|相談|ずら/.test(text) ? 'consult' : /休み|欠勤|休む/.test(text) ? 'absent' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : /使い方|ヘルプ|help/i.test(text) ? 'help' : '';
     // 催事の在庫（閉店の締め・積み込み）の画面を開くボタン
     if (short && /在庫|締め|残り|積み込み|積込/.test(text) && stockLiffUrl(companyId)) {
       await replyLine(token, replyToken, buttonsCard('在庫の画面', '在庫・閉店の締め', ['残りの数え・レジ締め・買い足し・足りない連絡はここから。'], [{ label: '在庫の画面を開く', uri: stockLiffUrl(companyId)!, primary: true, color: '#06C755' }]));
       return;
     }
     if (what === 'help') {
-      await replyLine(token, replyToken, `【使い方】トーク画面の下のメニューを押してください。\n・シフトを見る … 自分とみんなの予定\n・希望を出す … 出られる日を提出\n・休みの連絡 … 休むシフトを${W(companyId)}に連絡\n・打刻する … ブースのQRを読んで出勤・退勤\n\nそのほかの質問は、このトークにそのまま書いて送ってください。${W(companyId)}に届きます。`);
+      await replyLine(token, replyToken, `【使い方】トーク画面の下のメニューを押してください。\n・シフトを見る … 自分とみんなの予定\n・希望を出す … 出られる日を提出\n・打刻する … ブースのQRを読んで出勤・退勤\n・休みの連絡 … 休むシフトを${W(companyId)}に連絡\n・シフトの相談 … 時間を変えたい・代わりたい・日を増やしたい\n・質問・連絡 … そのほか何でも\n\nこのトークにそのまま書いて送っても、${W(companyId)}に届きます。`);
       return;
     }
     if (what) { await replyMenu(what, companyId, lineUserId, token, replyToken); return; }
     if (isAdminMember(me)) return; // 店長自身の書き込みは転送しない
-    await replyLine(token, replyToken, `${W(companyId)}に届けました。返事はこのトークでお知らせします。\n（シフトを見る・希望を出す・休みの連絡は、下のメニューからいつでもできます）`);
-    const card = buttonsCard(`${me.name}さんから質問`, `${me.name}さんから質問`, [text.slice(0, 300), '返事は LINE公式アカウントのアプリの「チャット」から送れます。'], [{ label: 'チャットを開く', uri: 'https://chat.line.biz/', primary: true, color: '#06C755' }]);
-    for (const id of adminLineIds(companyId)) if (id !== lineUserId) await sendLineMessage(token, id, card);
+    await replyLine(token, replyToken, `${W(companyId)}に届けました。返事はこのトークでお知らせします。\n（シフトを変えたいときは、下のメニューの「シフトの相談」からも送れます）`);
+    await forwardToAdmins(companyId, token, me, lineUserId, '質問', [text.slice(0, 400)]);
     return;
   }
 
@@ -846,8 +919,17 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
 
 // メニュー（またはキーワード）への返信
 async function replyMenu(what: string, companyId: number, lineUserId: string, token: string, replyToken: string) {
+  // ほかのメニューを押したら、書きかけの相談はやめたことにする
+  if (what !== 'ask') db.prepare('DELETE FROM line_consults WHERE company_id = ? AND line_user_id = ?').run(companyId, lineUserId);
   if (what === 'requests') return replyRequestLink(companyId, lineUserId, token, replyToken);
   if (what === 'absent') return replyAbsentPicker(companyId, lineUserId, token, replyToken);
+  if (what === 'consult') return replyConsultPicker(companyId, lineUserId, token, replyToken);
+  if (what === 'ask') {
+    const me = lineMember(companyId, lineUserId);
+    if (!me) return replyLine(token, replyToken, unlinkedMsg(companyId));
+    setConsult(companyId, lineUserId, 'ask', null);
+    return replyLine(token, replyToken, `聞きたいこと・伝えたいことを、このトークに書いて送ってください。${W(companyId)}に届きます。\n\n${CONSULT_TOPIC.ask.example}\n\n※シフトを変えたいときは「シフトの相談」、休むときは「休みの連絡」が早いです。`);
+  }
   if (what === 'howto') {
     const liff = (db.prepare('SELECT liff_id FROM line_settings WHERE company_id = ?').get(companyId) as any)?.liff_id;
     return replyLine(token, replyToken, liff
@@ -907,7 +989,58 @@ function shiftWithStore(shiftId: number) {
     LEFT JOIN stores st ON st.id = s.store_id JOIN users u ON u.id = s.user_id WHERE s.id = ?
   `).get(shiftId) as any;
 }
-const shiftLabel = (s: any) => `${md2(s.date)} ${s.store_name ? s.store_name + ' ' : ''}${String(s.start_time).slice(0, 5)}–${String(s.end_time).slice(0, 5)}`;
+const shiftLabel = (s: any) => {
+  const part = s.company_id ? partNameOf(s.company_id, s) : '';
+  return `${md2(s.date)} ${s.store_name ? s.store_name + ' ' : ''}${part ? part + ' ' : ''}${hm5(s.start_time)}–${hm5(s.end_time)}`;
+};
+// まとめたシフト（1日通しなど）の1行
+const blockLabel = (b: ShiftBlock) =>
+  `${md2(b.date)} ${b.store_name ? b.store_name + ' ' : ''}${b.part ? PART_NAME[b.part] + ' ' : ''}${hm5(b.start_time)}–${hm5(b.end_time)}`;
+// 「1日通し（昼の部＋夜の部）」のような部の説明
+const blockPartText = (b: ShiftBlock) => {
+  if (!b.part) return '';
+  if (b.pieces.length > 1) return `${PART_NAME[b.part]}（${b.pieces.map(x => `${hm5(x.start_time)}–${hm5(x.end_time)}`).join(' と ')}）`;
+  return PART_NAME[b.part];
+};
+
+/** 本人の公開済みシフトを、つながったものはまとめて返す */
+function myBlocks(companyId: number, userId: number, from: string, to: string): ShiftBlock[] {
+  const rows = db.prepare(`
+    SELECT s.id, s.user_id, s.date, s.start_time, s.end_time, s.store_id, st.name AS store_name FROM shifts s
+    LEFT JOIN stores st ON st.id = s.store_id
+    JOIN shift_publications p ON p.company_id = s.company_id AND p.is_published = 1
+      AND p.year = CAST(substr(s.date, 1, 4) AS INTEGER) AND p.month = CAST(substr(s.date, 6, 2) AS INTEGER)
+    WHERE s.company_id = ? AND s.user_id = ? AND s.date >= ? AND s.date <= ?
+  `).all(companyId, userId, from, to) as any[];
+  return mergeBlocks(companyId, rows);
+}
+const plusDays = (n: number) => new Date(Date.now() + 9 * 3600 * 1000 + n * 86400 * 1000).toISOString().slice(0, 10);
+
+/** postback の s=1-2-3 から、本人のシフトだけを取り出す（1つでも他人のものがあれば null） */
+function ownShifts(companyId: number, meId: number, ids: string | null): any[] | null {
+  const list = String(ids || '').split(/[-,]/).map(Number).filter(n => n > 0);
+  if (list.length === 0 || list.length > 6) return null;
+  const rows = list.map(id => shiftWithStore(id));
+  if (rows.some(r => !r || r.user_id !== meId || r.company_id !== companyId)) return null;
+  return rows.sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)));
+}
+// 何枚かのシフト（つながっていれば1日通し）を1行で
+function shiftsLabel(companyId: number, rows: any[]): string {
+  if (rows.length === 1) return shiftLabel(rows[0]);
+  const b = mergeBlocks(companyId, rows);
+  return b.map(blockLabel).join('／');
+}
+
+// LINE公式アカウントのチャットで、その人とのトークを直接開くURL
+const botUserIds = new Map<number, string>();
+async function chatUrl(companyId: number, token: string, lineUserId: string): Promise<string> {
+  let bot = botUserIds.get(companyId);
+  if (!bot) {
+    try { const r = await lineApi(token, '/v2/bot/info'); bot = r.data?.userId; } catch { /* 一覧を開く */ }
+    if (bot) botUserIds.set(companyId, bot);
+  }
+  return bot ? `https://chat.line.biz/${bot}/chat/${lineUserId}` : 'https://chat.line.biz/';
+}
 
 function buttonsCard(altText: string, title: string, lines: string[], buttons: { label: string; data?: string; uri?: string; primary?: boolean; color?: string }[]) {
   return {
@@ -966,29 +1099,31 @@ function adminLineIds(companyId: number): string[] {
 async function replyAbsentPicker(companyId: number, lineUserId: string, token: string, replyToken: string) {
   const me = lineMember(companyId, lineUserId);
   if (!me) { await replyLine(token, replyToken, unlinkedMsg(companyId)); return; }
-  const today = jstToday();
-  const limit = new Date(Date.now() + 9 * 3600 * 1000 + 30 * 86400 * 1000).toISOString().slice(0, 10);
-  const shifts = db.prepare(`
-    SELECT s.id, s.date, s.start_time, s.end_time, s.store_id, st.name AS store_name FROM shifts s
-    LEFT JOIN stores st ON st.id = s.store_id
-    JOIN shift_publications p ON p.company_id = s.company_id AND p.is_published = 1
-      AND p.year = CAST(substr(s.date, 1, 4) AS INTEGER) AND p.month = CAST(substr(s.date, 6, 2) AS INTEGER)
-    WHERE s.company_id = ? AND s.user_id = ? AND s.date >= ? AND s.date <= ?
-    ORDER BY s.date, s.start_time LIMIT 8
-  `).all(companyId, me.id, today, limit) as any[];
-  if (shifts.length === 0) { await replyLine(token, replyToken, 'この先30日に、公開済みのシフトはありません。'); return; }
+  const blocks = myBlocks(companyId, me.id, jstToday(), plusDays(30)).slice(0, 8);
+  if (blocks.length === 0) { await replyLine(token, replyToken, 'この先30日に、公開済みのシフトはありません。'); return; }
   // 前日・当日など電話でしか受けない日は、押すと電話がかかるボタンにする
   const rule = absenceRule(companyId);
-  const anyPhone = shifts.some(x => phoneOnly(companyId, x.date, x.store_id));
+  const anyPhone = blocks.some(x => phoneOnly(companyId, x.date, x.store_id));
   await replyLine(token, replyToken, buttonsCard('休みの連絡', 'どのシフトを休みますか？',
-    ['押すと、理由を選ぶ画面になります。', ...(anyPhone ? [phoneOnlyMessage(companyId).split('\n')[0]] : [])],
-    shifts.map(x => {
-      if (!phoneOnly(companyId, x.date, x.store_id)) return { label: shiftLabel(x), data: `a=pick&s=${x.id}` };
-      const tel = absenceRule(companyId, x.store_id).phone || rule.phone;
+    ['押すと、理由を選ぶ画面になります。', ...(blocks.some(b => b.pieces.length > 1) ? ['1日通しの日は、次に「1日ぜんぶ」「昼の部だけ」「夜の部だけ」を選べます。'] : []), ...(anyPhone ? [phoneOnlyMessage(companyId).split('\n')[0]] : [])],
+    blocks.map(b => {
+      if (!phoneOnly(companyId, b.date, b.store_id)) return { label: blockLabel(b), data: `a=${b.pieces.length > 1 ? 'pickday' : 'pick'}&s=${b.ids.join('-')}` };
+      const tel = absenceRule(companyId, b.store_id).phone || rule.phone;
       return tel
-        ? { label: `📞 ${shiftLabel(x)}`, uri: `tel:${tel.replace(/[^0-9+]/g, '')}` }
-        : { label: `📞 ${shiftLabel(x)}`, data: `a=phone&s=${x.id}` };
+        ? { label: `📞 ${blockLabel(b)}`, uri: `tel:${tel.replace(/[^0-9+]/g, '')}` }
+        : { label: `📞 ${blockLabel(b)}`, data: `a=phone&s=${b.ids[0]}` };
     })));
+}
+
+// メニュー「シフトの相談」: これからのシフト（日ごと）と「シフトがない日のこと」を出す
+async function replyConsultPicker(companyId: number, lineUserId: string, token: string, replyToken: string) {
+  const me = lineMember(companyId, lineUserId);
+  if (!me) { await replyLine(token, replyToken, unlinkedMsg(companyId)); return; }
+  const blocks = myBlocks(companyId, me.id, jstToday(), plusDays(60)).slice(0, 9);
+  await replyLine(token, replyToken, buttonsCard('シフトの相談', 'どのシフトの相談ですか？',
+    [blocks.length ? '押すと「時間を変えたい」「代わりたい」などを選べます。' : 'これからのシフトはまだありません。', `選んだあとに書いた文が、${W(companyId)}に届きます。`],
+    [...blocks.map(b => ({ label: blockLabel(b), data: `a=cs&s=${b.ids.join('-')}` })),
+     { label: 'シフトがない日のこと（日を増やす・減らす）', data: 'a=cs&s=', primary: true, color: '#7048E8' }]));
 }
 
 async function handleAbsencePostback(q: URLSearchParams, companyId: number, lineUserId: string, token: string, replyToken: string) {
@@ -1028,6 +1163,50 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     return;
   }
 
+  // スタッフ: 相談するシフトを選んだ → どうしたいかを選ぶ
+  if (a === 'cs') {
+    const ids = q.get('s') || '';
+    if (!ids) {
+      await replyLine(token, replyToken, buttonsCard('シフトの相談', 'シフトがない日のこと', ['どうしたいですか？'],
+        [{ label: '入れる日を増やしたい', data: 'a=ct&k=add&s=', primary: true, color: '#7048E8' }, { label: '入る日を減らしたい', data: 'a=ct&k=less&s=' }, { label: 'そのほかの相談', data: 'a=ct&k=other&s=' }]));
+      return;
+    }
+    const rows = ownShifts(companyId, me.id, ids);
+    if (!rows) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。もう一度メニューから選んでください。'); return; }
+    await replyLine(token, replyToken, buttonsCard('シフトの相談', shiftsLabel(companyId, rows), ['どうしたいですか？'],
+      [{ label: '時間を変えたい', data: `a=ct&k=time&s=${ids}`, primary: true, color: '#7048E8' },
+       { label: 'ほかの人と代わりたい', data: `a=ct&k=swap&s=${ids}` },
+       { label: '休みたい（休みの連絡へ）', data: `a=${rows.length > 1 ? 'pickday' : 'pick'}&s=${ids}` },
+       { label: 'そのほかの相談', data: `a=ct&k=other&s=${ids}` }]));
+    return;
+  }
+
+  // スタッフ: 相談の中身を選んだ → 次に送る文を担当者へ届ける
+  if (a === 'ct') {
+    const k = CONSULT_TOPIC[q.get('k') || ''] ? q.get('k')! : 'other';
+    const ids = q.get('s') || '';
+    let label: string | null = null;
+    if (ids) {
+      const rows = ownShifts(companyId, me.id, ids);
+      if (!rows) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。もう一度メニューから選んでください。'); return; }
+      label = shiftsLabel(companyId, rows);
+    }
+    setConsult(companyId, lineUserId, k, label);
+    await replyLine(token, replyToken, `【${CONSULT_TOPIC[k].name}】${label ? `\n${label}` : ''}\n\nどうしたいか、このトークに書いて送ってください。${W(companyId)}に届きます。\n${CONSULT_TOPIC[k].example}\n\n（やめるときは「やめる」と送ってください）`);
+    return;
+  }
+
+  // スタッフ: 1日通しの日を選んだ → どこを休むか
+  if (a === 'pickday') {
+    const rows = ownShifts(companyId, me.id, q.get('s'));
+    if (!rows) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
+    if (phoneOnly(companyId, rows[0].date, rows[0].store_id)) { await replyLine(token, replyToken, phoneOnlyMessage(companyId, rows[0].store_id)); return; }
+    await replyLine(token, replyToken, buttonsCard('休みの連絡', shiftsLabel(companyId, rows), ['どこを休みますか？'],
+      [{ label: '1日ぜんぶ休む', data: `a=pick&s=${rows.map(r => r.id).join('-')}`, primary: true, color: '#E03131' },
+       ...rows.map(r => ({ label: `${partNameOf(companyId, r) || '一部'}だけ休む（${hm5(r.start_time)}–${hm5(r.end_time)}）`, data: `a=pick&s=${r.id}` }))]));
+    return;
+  }
+
   // 電話でしか受けない日（番号が未設定のとき）
   if (a === 'phone') {
     const sh = shiftWithStore(Number(q.get('s')));
@@ -1037,29 +1216,37 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
 
   // スタッフ: 休むシフトを選んだ → 理由を選ぶ
   if (a === 'pick') {
-    const sh = shiftWithStore(Number(q.get('s')));
-    if (!sh || sh.user_id !== me.id || sh.company_id !== companyId) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
+    const rows = ownShifts(companyId, me.id, q.get('s'));
+    if (!rows) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
+    const sh = rows[0];
     if (phoneOnly(companyId, sh.date, sh.store_id)) { await replyLine(token, replyToken, phoneOnlyMessage(companyId, sh.store_id)); return; }
-    await replyLine(token, replyToken, buttonsCard('休みの理由', `${shiftLabel(sh)} を休みます`, [`理由を選ぶと、${W(companyId)}に届きます。`],
-      [...REASONS.map((r, i) => ({ label: r, data: `a=report&s=${sh.id}&r=${i}`, primary: i === 0, color: '#E03131' }))]));
+    const ids = rows.map(r => r.id).join('-');
+    await replyLine(token, replyToken, buttonsCard('休みの理由', `${shiftsLabel(companyId, rows)} を休みます`, [`理由を選ぶと、${W(companyId)}に届きます。`],
+      [...REASONS.map((r, i) => ({ label: r, data: `a=report&s=${ids}&r=${i}`, primary: i === 0, color: '#E03131' }))]));
     return;
   }
 
   // スタッフ: 理由を選んだ → 記録して管理者に知らせる
   if (a === 'report') {
-    const sh = shiftWithStore(Number(q.get('s')));
-    if (!sh || sh.user_id !== me.id || sh.company_id !== companyId) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
+    const rows = ownShifts(companyId, me.id, q.get('s'));
+    if (!rows) { await replyLine(token, replyToken, 'このシフトは見つかりませんでした。'); return; }
     // 古いカードを後から押した場合も、前日・当日になっていたら電話へ
-    if (phoneOnly(companyId, sh.date, sh.store_id)) { await replyLine(token, replyToken, phoneOnlyMessage(companyId, sh.store_id)); return; }
+    if (phoneOnly(companyId, rows[0].date, rows[0].store_id)) { await replyLine(token, replyToken, phoneOnlyMessage(companyId, rows[0].store_id)); return; }
     const reason = REASONS[Number(q.get('r'))] || 'その他';
-    let ab = db.prepare("SELECT * FROM absence_reports WHERE shift_id = ? AND status IN ('pending','recruiting')").get(sh.id) as any;
-    if (!ab) {
-      const r = db.prepare('INSERT INTO absence_reports (company_id, user_id, shift_id, date, reason) VALUES (?, ?, ?, ?, ?)').run(companyId, me.id, sh.id, sh.date, reason);
-      ab = { id: Number(r.lastInsertRowid) };
-    }
-    await replyLine(token, replyToken, `${shiftLabel(sh)} のお休みを${W(companyId)}に伝えました。\n代わりが決まったら、このLINEでお知らせします。お大事にしてください。`);
-    const card = buttonsCard(`${me.name}さんから休みの連絡`, `${me.name}さんが休みます`, [shiftLabel(sh), `理由: ${reason}`],
-      [{ label: '代わりを募集する', data: `a=recruit&ab=${ab.id}`, primary: true }, { label: 'シフト画面を開く', uri: `${APP_URL}/shifts` }]);
+    const abs = rows.map(sh => {
+      let ab = db.prepare("SELECT * FROM absence_reports WHERE shift_id = ? AND status IN ('pending','recruiting')").get(sh.id) as any;
+      if (!ab) {
+        const r = db.prepare('INSERT INTO absence_reports (company_id, user_id, shift_id, date, reason) VALUES (?, ?, ?, ?, ?)').run(companyId, me.id, sh.id, sh.date, reason);
+        ab = { id: Number(r.lastInsertRowid) };
+      }
+      return { ab, sh };
+    });
+    const label = shiftsLabel(companyId, rows);
+    await replyLine(token, replyToken, `${label} のお休みを${W(companyId)}に伝えました。\n代わりが決まったら、このLINEでお知らせします。お大事にしてください。`);
+    // 代わりは部ごとに探す（昼の部と夜の部で別の人が入れるように）
+    const card = buttonsCard(`${me.name}さんから休みの連絡`, `${me.name}さんが休みます`, [label, `理由: ${reason}`],
+      [...abs.map(({ ab, sh }) => ({ label: abs.length > 1 ? `代わりを募集（${partNameOf(companyId, sh) || hm5(sh.start_time) + '〜'}）` : '代わりを募集する', data: `a=recruit&ab=${ab.id}`, primary: true })),
+       { label: 'シフト画面を開く', uri: `${APP_URL}/shifts` }]);
     for (const id of adminLineIds(companyId)) await sendLineMessage(token, id, card);
     return;
   }
@@ -1128,26 +1315,28 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
   }
 }
 
-// トーク画面の下のメニューを付ける（画像は backend/assets/richmenu.png、2500x843 の4分割）
+// トーク画面の下のメニューを付ける（画像は backend/assets/richmenu.png、2500x1686 の 3列×2段）
+//   上: シフトを見る／希望を出す／打刻する   下: 休みの連絡／シフトの相談／質問・連絡
 export async function installRichMenu(companyId: number): Promise<{ ok: boolean; error?: string }> {
   const s = db.prepare('SELECT channel_access_token, rich_menu_id, liff_id FROM line_settings WHERE company_id = ?').get(companyId) as any;
   if (!s?.channel_access_token) return { ok: false, error: 'LINE 通知の設定がまだです' };
   const token = s.channel_access_token;
-  const W = 2500, H = 843, w = Math.floor(W / 4);
-  const bounds = (i: number) => ({ x: i * w, y: 0, width: i === 3 ? W - 3 * w : w, height: H });
+  const W = 2500, H = 1686, w = Math.floor(W / 3), h = H / 2;
+  const bounds = (i: number) => ({ x: (i % 3) * w, y: Math.floor(i / 3) * h, width: i % 3 === 2 ? W - 2 * w : w, height: h });
   const area = (i: number, data: string, label: string) => ({
     bounds: bounds(i),
     action: { type: 'postback', data: `menu=${data}`, displayText: label },
   });
   // 「打刻する」は LIFF があれば本人専用の打刻画面を開く。なければ打刻のしかたを返す
   const punchArea = s.liff_id
-    ? { bounds: bounds(3), action: { type: 'uri', uri: `https://liff.line.me/${s.liff_id}` } }
-    : area(3, 'howto', '打刻のしかた');
+    ? { bounds: bounds(2), action: { type: 'uri', uri: `https://liff.line.me/${s.liff_id}` } }
+    : area(2, 'howto', '打刻のしかた');
   const created = await lineApi(token, '/v2/bot/richmenu', {
     method: 'POST',
     body: {
       size: { width: W, height: H }, selected: true, name: 'shiftlog-menu', chatBarText: 'シフトのメニュー',
-      areas: [area(0, 'shifts', 'シフトを見る'), area(1, 'requests', '希望を出す'), area(2, 'absent', '休みの連絡'), punchArea],
+      areas: [area(0, 'shifts', 'シフトを見る'), area(1, 'requests', '希望を出す'), punchArea,
+        area(3, 'absent', '休みの連絡'), area(4, 'consult', 'シフトの相談'), area(5, 'ask', '質問・連絡')],
     },
   });
   const id = created.data?.richMenuId;

@@ -6,12 +6,14 @@ import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import LineLinkCard from '../components/LineLinkCard'
 import { storeColorMap, StoreColor } from '../lib/storeColors'
+import { mergeShifts, MergedShift, PartKind, PART_NAME, PART_SHORT } from '../lib/shiftParts'
 
 // スタッフの「シフト」画面。スマホで LINE から開かれる前提。
 // 基本はカレンダー（月全体が一目で分かる）。日付を押すと、その日の詳細（時間・会場・一緒に入る人）が下に出る。
 //   自分の予定 … 自分の勤務日を会場の色で塗り、時間を書く。最初は「次の勤務」の日を選んだ状態で開く
 //   みんなの予定 … 各日に会場の色ごとの人数。押すとその日の会場別の顔ぶれ
 // 一覧（リスト）にも切り替えられる。会場は色＋会場名で表す（lib/storeColors。管理画面と同じ色）
+// 土日など昼と夜に分かれる日は「昼の部」「夜の部」、続けて入る人は1つにまとめて「1日通し」と出す（lib/shiftParts）
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
 const VIEW_KEY = 'shiftlog:myShiftsView'
@@ -48,6 +50,22 @@ function shiftMinutes(s: Shift): number {
 
 function readView(): 'calendar' | 'list' {
   try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'calendar' } catch { return 'calendar' }
+}
+
+// 昼の部・夜の部・1日通し の小さな札
+const PART_STYLE: Record<PartKind, { bg: string; fg: string }> = {
+  day: { bg: '#FFF4E6', fg: '#C2410C' },
+  night: { bg: '#EEF2FF', fg: '#3730A3' },
+  all: { bg: '#ECFDF5', fg: '#047857' },
+}
+function PartBadge({ k, short = false }: { k?: PartKind | null; short?: boolean }) {
+  if (!k) return null
+  const st = PART_STYLE[k]
+  return (
+    <span className="inline-block shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold leading-none whitespace-nowrap" style={{ backgroundColor: st.bg, color: st.fg }}>
+      {short ? PART_SHORT[k] : PART_NAME[k]}
+    </span>
+  )
 }
 
 function VenuePill({ name, color, size = 'md' }: { name?: string | null; color: StoreColor; size?: 'md' | 'lg' }) {
@@ -132,7 +150,8 @@ export default function MyShiftsPage() {
   const barColor = (s: Shift) => (s.store_id ? colorOf(s.store_id) : { solid: '#2563EB', soft: '#EFF6FF', text: '#1D4ED8' })
 
   // 公開済みの月だけ見せる（下書きを見せると混乱するため）
-  const published = isPublished ? shifts : []
+  // 続けて入るシフト（昼の部＋夜の部）は1つにまとめる
+  const published: MergedShift[] = isPublished ? mergeShifts(shifts) : []
   const mine = published.filter(s => s.user_id === user?.id).sort(byTime)
   const myVisible = mine.filter(inStore)
   const allVisible = published.filter(inStore).sort(byTime)
@@ -168,7 +187,7 @@ export default function MyShiftsPage() {
       : date === tomorrowStr ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-800 text-white">明日</span>
       : null
 
-  const ShiftCard = ({ s, showDate = true }: { s: Shift; showDate?: boolean }) => {
+  const ShiftCard = ({ s, showDate = true }: { s: MergedShift; showDate?: boolean }) => {
     const p = parts(s.date)
     const c = barColor(s)
     const mates = coworkers(s)
@@ -185,14 +204,22 @@ export default function MyShiftsPage() {
         )}
         <div className="flex-1 min-w-0 px-3 py-3 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xl font-bold text-gray-900 tabular-nums">{hm(s.start_time)}<span className="text-gray-400 mx-1">–</span>{hm(s.end_time)}</span>
+            <span className="flex items-center gap-2 min-w-0">
+              <span className="text-xl font-bold text-gray-900 tabular-nums">{hm(s.start_time)}<span className="text-gray-400 mx-1">–</span>{hm(s.end_time)}</span>
+              <PartBadge k={s.part} />
+            </span>
             {showDate && dayLabelBadge(s.date)}
           </div>
+          {(s.pieces?.length || 0) > 1 && (
+            <p className="text-xs text-gray-500 tabular-nums">
+              {s.pieces!.map((x, i) => `${i === 0 ? '昼の部' : '夜の部'} ${hm(x.start_time)}–${hm(x.end_time)}`).join(' ／ ')}
+            </p>
+          )}
           <VenuePill name={s.store_name} color={c} />
           {mates.length > 0 && (
             <p className="text-sm text-gray-600 flex items-start gap-1">
               <Users className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" />
-              <span>{mates.map(o => `${o.user_name}（${hm(o.start_time)}〜）`).join('、')}</span>
+              <span>{mates.map(o => `${o.user_name}（${o.part ? PART_SHORT[o.part] : `${hm(o.start_time)}〜`}）`).join('、')}</span>
             </p>
           )}
         </div>
@@ -224,7 +251,10 @@ export default function MyShiftsPage() {
                         {s.user_name}
                         {me && <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-600 text-white">あなた</span>}
                       </span>
-                      <span className="text-base tabular-nums text-gray-700">{hm(s.start_time)}–{hm(s.end_time)}</span>
+                      <span className="flex items-center gap-1.5">
+                        <PartBadge k={s.part} short />
+                        <span className="text-base tabular-nums text-gray-700">{hm(s.start_time)}–{hm(s.end_time)}</span>
+                      </span>
                     </div>
                   )
                 })}
@@ -320,10 +350,11 @@ export default function MyShiftsPage() {
                             ? <span className={`block tabular-nums whitespace-nowrap tracking-tight ${t.length === 7 ? 'text-[11px]' : 'text-[12px]'}`}>{t}</span>
                             : <span className="block tabular-nums whitespace-nowrap text-[11.5px] leading-[1.2]">{compact(s.start_time)}<br />-{compact(s.end_time)}</span>
                         })()}
+                        {s.part && <span className="block mt-0.5 mx-auto w-fit rounded bg-white/90 px-1 text-[10.5px] leading-[15px]" style={{ color: barColor(s).text }}>{PART_SHORT[s.part]}</span>}
                       </span>
                     ))
                   : <>
-                      {items.slice(0, MAX_CHIPS).map(s => chip(s.id, shortName(s.user_name), barColor(s).solid, { mine: s.user_id === user?.id, title: `${s.user_name} ${hm(s.start_time)}–${hm(s.end_time)}` }))}
+                      {items.slice(0, MAX_CHIPS).map(s => chip(s.id, shortName(s.user_name), barColor(s).solid, { mine: s.user_id === user?.id, title: `${s.user_name} ${s.part ? PART_NAME[s.part] + ' ' : ''}${hm(s.start_time)}–${hm(s.end_time)}` }))}
                       {items.length > MAX_CHIPS && <span className="block text-center text-[11px] font-bold text-gray-500 mt-0.5">+{items.length - MAX_CHIPS}</span>}
                     </>}
               </button>
@@ -365,7 +396,10 @@ export default function MyShiftsPage() {
           <div className="px-4 space-y-2">
             {who === 'me' ? (
               myDay.length > 0
-                ? myDay.map(s => <ShiftCard key={s.id} s={s} showDate={false} />)
+                ? <>
+                    {myDay.map(s => <ShiftCard key={s.id} s={s} showDate={false} />)}
+                    <p className="text-xs text-gray-500 px-1 pt-1">時間を変えたい・代わってほしいときは、LINEの下のメニュー「シフトの相談」から送れます。</p>
+                  </>
                 : <p className="text-sm text-gray-400 bg-white rounded-xl border border-gray-200 py-6 text-center">この日は勤務がありません</p>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden"><DayLineup date={pickedDate} /></div>
@@ -387,6 +421,7 @@ export default function MyShiftsPage() {
         <span className="min-w-0 flex-1">
           <span className={`font-bold ${dowColor(p.dow)}`}>{p.m}/{p.d}（{p.dowLabel}）</span>
           <span className="ml-1.5 font-bold text-gray-900 tabular-nums">{hm(nextShift.start_time)}–{hm(nextShift.end_time)}</span>
+          {nextShift.part && <span className="ml-1.5 align-middle"><PartBadge k={nextShift.part} /></span>}
           {nextShift.store_name && <span className="ml-1.5 text-sm font-bold" style={{ color: c.text }}>{nextShift.store_name}</span>}
         </span>
         <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />

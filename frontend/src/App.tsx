@@ -37,6 +37,7 @@ import QrPosterPage from './pages/QrPosterPage'
 import LineLinkPage from './pages/LineLinkPage'
 import QrClockPage from './pages/QrClockPage'
 import StoreQrPosterPage from './pages/StoreQrPosterPage'
+import AllStoresQrPosterPage from './pages/AllStoresQrPosterPage'
 import LineInvitePage from './pages/LineInvitePage'
 import LiffPunchPage from './pages/LiffPunchPage'
 import LiffStockPage from './pages/LiffStockPage'
@@ -153,6 +154,10 @@ function AppRoutes() {
   // LINE 招待カードの一括印刷
   if (isAdminRole && location.pathname === '/line-invites/print') {
     return <LineInvitePrintPage />
+  }
+  // 全会場の打刻用QRポスターをまとめて印刷
+  if (isAdminRole && location.pathname === '/qr-poster/stores') {
+    return <AllStoresQrPosterPage />
   }
   // 会場ごとの打刻用QRポスター（/qr-poster/store/:id）
   const storePosterMatch = location.pathname.match(/^\/qr-poster\/store\/(\d+)$/)
