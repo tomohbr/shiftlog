@@ -31,6 +31,7 @@ import pushRoutes from './routes/push';
 import telemetryRoutes from './routes/telemetry';
 import qrClockRoutes from './routes/qr-clock';
 import viewLinkRoutes from './routes/view-links';
+import loginSetupRoutes from './routes/login-setup';
 import liffRoutes from './routes/liff';
 import inventoryRoutes from './routes/inventory';
 import { reportServerError } from './utils/ops-alerts';
@@ -105,6 +106,7 @@ app.use('/api/telemetry', telemetryRoutes);
 // 会場QRの打刻（ログイン不要。QRトークンで会場を特定する）
 app.use('/api/qr', qrClockRoutes);
 app.use('/api/view-links', viewLinkRoutes);
+app.use('/api/login-setup', loginSetupRoutes);
 app.use('/api/liff', liffRoutes);
 // 催事の在庫・補充（LINE の画面と管理画面の両方から）
 app.use('/api/inventory', inventoryRoutes);

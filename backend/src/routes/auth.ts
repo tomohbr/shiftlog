@@ -24,7 +24,8 @@ router.post('/login', (req: Request, res: Response): void => {
     return;
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ? AND is_active = 1').get(email) as any;
+  // メールの大文字・小文字や前後の空白の違いでは弾かない
+  const user = db.prepare('SELECT * FROM users WHERE lower(email) = lower(?) AND is_active = 1').get(String(email).trim()) as any;
 
   if (!user) {
     res.status(401).json({ error: 'メールアドレスまたはパスワードが正しくありません' });

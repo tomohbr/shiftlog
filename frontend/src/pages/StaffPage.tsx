@@ -1,7 +1,7 @@
 import { startProUpgrade } from '../lib/proUpgrade'
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, X, Eye, EyeOff, Upload, AlertCircle, Send, Copy, Crown, Share2, QrCode, Printer } from 'lucide-react'
-import { usersApi, billingApi, lineApi, BillingPlan, User } from '../api/client'
+import { api, usersApi, billingApi, lineApi, BillingPlan, User } from '../api/client'
 import LineInviteModal from '../components/LineInviteModal'
 import { useAuth } from '../contexts/AuthContext'
 import BulkImportModal from '../components/BulkImportModal'
@@ -27,6 +27,14 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
   const { selectedCompany } = useAuth()
   const canWages = !!(selectedCompany as any)?.can_see_wages
   const [seeWages, setSeeWages] = useState(!!(user as any)?.can_see_wages)
+  const [signupUrl, setSignupUrl] = useState('')
+  const makeSignup = async () => {
+    try {
+      const r = await api.post('/login-setup', { user_id: user!.id })
+      setSignupUrl(r.data.url)
+      try { await navigator.clipboard.writeText(r.data.url); toast.success('リンクをコピーしました。LINEで本人に送ってください') } catch { /* 下に出る */ }
+    } catch (e: any) { toast.error(e.response?.data?.error || 'リンクを作れませんでした') }
+  }
   const [name, setName] = useState(user?.name || '')
   const [email, setEmail] = useState(user?.email || '')
   const [pin, setPin] = useState((user as any)?.pin || '')
@@ -45,7 +53,8 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (isAdmin && !email) {
+    // 新しく管理者を作るときだけメール必須（社長など、メールのない管理者も時給・呼び名は直せるように）
+    if (isAdmin && !email && !user) {
       toast.error('管理者にはメールアドレスが必須です')
       return
     }
@@ -85,6 +94,16 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
             <label className="block text-sm font-medium text-gray-700 mb-1">氏名</label>
             <input value={name} onChange={e => setName(e.target.value)} className="input-field" required />
           </div>
+
+          {user && isAdmin && !user.email && canWages && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+              <p className="text-sm font-bold text-blue-900">まだログインがありません</p>
+              <p className="text-xs text-blue-900 mt-0.5">リンクを送ると、本人がメールアドレスとパスワードを決めて登録できます（7日間・1回だけ）。</p>
+              {signupUrl
+                ? <input readOnly value={signupUrl} onFocus={e => e.currentTarget.select()} className="mt-2 w-full rounded-md border border-blue-200 bg-white px-2 py-1.5 text-xs font-mono" />
+                : <button type="button" onClick={makeSignup} className="mt-2 btn-primary text-sm">新規登録のリンクを作る</button>}
+            </div>
+          )}
 
           {user && (
             <div className="grid grid-cols-3 gap-3">

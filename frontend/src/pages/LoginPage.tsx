@@ -27,7 +27,8 @@ interface TodayRecord {
 export default function LoginPage() {
   const { login, register, pinLogin } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'select'
+  // 新規登録リンクで登録したあとは ?email= 付きで来るので、メールのログイン画面をそのまま開く
+  const initialMode = searchParams.get('mode') === 'register' ? 'register' : searchParams.get('email') ? 'admin' : 'select'
   const [mode, setMode] = useState<'select' | 'admin' | 'kiosk' | 'pin-login' | 'register'>(initialMode)
   const previousMode = useRef<string | null>(null)
   // 登録画面への切り替えを計測し、StrictModeでの重複を防ぐ。
@@ -35,7 +36,7 @@ export default function LoginPage() {
     if (mode === 'register' && previousMode.current !== mode) track('register_start')
     previousMode.current = mode
   }, [mode])
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(searchParams.get('email') || '')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
