@@ -1,5 +1,6 @@
 import { Shift, Store } from '../api/client'
 import { storeColorMap } from '../lib/storeColors'
+import { mergeShifts } from '../lib/shiftParts'
 
 // 管理者向けの月カレンダー（スタッフの「みんなの予定」と同じ見た目）。
 // 月曜はじまり・マスの中に名前ラベルを会場の色で積む。予定が多い日はマスが伸びる。
@@ -19,6 +20,8 @@ export default function TeamCalendar({ year, month, shifts, stores, today, onPic
   maxChips?: number
 }) {
   const colorOf = storeColorMap(stores)
+  // 通しの人（昼の部＋夜の部）は1つにまとめる
+  const merged = mergeShifts(shifts)
   const sorted = [...stores].sort((a, b) => a.id - b.id)
   const storeIdx = (id?: number | null) => { const i = sorted.findIndex(s => s.id === id); return i < 0 ? 99 : i }
 
@@ -54,7 +57,7 @@ export default function TeamCalendar({ year, month, shifts, stores, today, onPic
       <div className="grid grid-cols-7">
         {cells.map(({ date, inMonth }, i) => {
           const col = i % 7
-          const day = inMonth ? shifts.filter(s => s.date === date)
+          const day = inMonth ? merged.filter(s => s.date === date)
             .sort((a, b) => storeIdx(a.store_id) - storeIdx(b.store_id) || (a.user_order ?? 9999) - (b.user_order ?? 9999) || a.start_time.localeCompare(b.start_time)) : []
           const people = new Set(day.map(s => s.user_id)).size
           return (
