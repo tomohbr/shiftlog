@@ -1245,6 +1245,11 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     }
     const st = storeId ? (db.prepare('SELECT name FROM stores WHERE id = ? AND company_id = ?').get(storeId, companyId) as any) : null;
     const label = `${md2(date)} ${st?.name ? st.name + ' ' : ''}${from}–${to}`;
+    // 今もまだ丸ごと足りない枠か（埋まった・一部だけの枠なら、お礼だけ返す）
+    const still = computeShortages(companyId, date, date).some(x => x.kind === 'full' && (x.store_id ?? 0) === (storeId ?? 0) && x.start_time === from && x.end_time === to);
+    if (!still) {
+      await replyLine(token, replyToken, `ありがとう！\n${label} は、人が足りたので大丈夫になりました。また足りない日が出たらお願いします🙏`); return;
+    }
     db.prepare(`INSERT OR IGNORE INTO fill_offers (company_id, user_id, date, store_id, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?)`).run(companyId, me.id, date, storeId, from, to);
     const o = db.prepare('SELECT id, status FROM fill_offers WHERE company_id = ? AND user_id = ? AND date = ? AND COALESCE(store_id, 0) = COALESCE(?, 0) AND start_time = ?').get(companyId, me.id, date, storeId, from) as any;
     if (o.status !== 'pending') { await replyLine(token, replyToken, `${label} はもう返事済みです。`); return; }
@@ -1511,14 +1516,14 @@ function fillOffersFor(companyId: number) {
   const RANK: Record<string, number> = { preferred: 0, available: 1 };
   return staff.map(u => {
     const offers: FillOffer[] = [];
-    for (const sh of shorts) {
+    // 打診するのは丸ごと足りない枠（赤）だけ。一部の時間だけ足りない枠（黄）は送らない
+    for (const sh of shorts.filter(x => x.kind === 'full')) {
       const k = `${u.id}|${sh.date}`;
       if (busy.has(k)) continue;
       const rq = reqs.get(k);
       if (rq?.availability === 'unavailable') continue;
       if (!prefs.venueOk(u.id, sh.date, sh.store_id)) continue;
-      const windows = sh.kind === 'full' ? [{ from: sh.start_time, to: sh.end_time }] : sh.gaps.map(g => ({ from: g.from, to: g.to }));
-      for (const w of windows) {
+      for (const w of [{ from: sh.start_time, to: sh.end_time }]) {
         const part = w.from < '15:00' ? 'a' : 'b';
         if ((rq?.part === 'a' || rq?.part === 'b') && rq.part !== part) continue;
         offers.push({ date: sh.date, store_id: sh.store_id, store_name: sh.store_name, from: w.from, to: w.to, rank: rq ? (RANK[rq.availability] ?? 2) : 2 });
