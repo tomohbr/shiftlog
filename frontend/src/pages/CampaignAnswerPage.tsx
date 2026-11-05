@@ -133,7 +133,7 @@ export default function CampaignAnswerPage() {
     if (!open) return
     const day = dayOf.get(date)
     if (!day) return
-    if (day.filled) { toast('この日は人が足りています。足りない日（白い日）を選んでください'); return }
+    if (day.filled) { toast(day.working ? 'この日はもうシフトに入っています' : 'この日は人が足りています。足りない日（白い日）を選んでください'); return }
     if (pen === 'clear') {
       setEntries(prev => { const n = { ...prev }; delete n[date]; return n })
       if (focusDay === date) setFocusDay(null)
@@ -449,7 +449,7 @@ export default function CampaignAnswerPage() {
                       <span className={`text-[13px] font-semibold ${!day ? 'text-gray-300' : col === 5 ? 'text-blue-500' : col === 6 ? 'text-red-500' : 'text-gray-800'}`}>{Number(d.slice(8))}</span>
                       {day?.long && <span className="text-[8px] font-bold px-0.5 rounded bg-amber-100 text-amber-800 leading-tight">昼夜</span>}
                     </span>
-                    {full && !p && <span className="mx-[2px] mt-1 text-center text-[10px] font-bold text-gray-400 leading-tight">埋まって<br />います</span>}
+                    {full && !p && <span className={`mx-[2px] mt-1 text-center text-[10px] font-bold leading-tight ${day?.working ? 'text-blue-600' : 'text-gray-400'}`}>{day?.working ? <>シフト<br />あり</> : <>埋まって<br />います</>}</span>}
                     {day && !full && day.open_parts && day.long && day.open_parts.length === 1 && !p && (
                       <span className="mx-[2px] mt-1 text-center text-[10px] font-bold text-red-600 leading-tight">{day.open_parts[0] === 'a' ? '昼が' : '夜が'}<br />足りない</span>
                     )}

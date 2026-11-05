@@ -138,13 +138,16 @@ router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   for (const r of reqs) if (dayset.has(r.date)) entries[r.date] = { availability: r.availability, part: PARTS.includes(r.part) ? r.part : null };
   // シフト公開後は、まだ人が足りない日・部だけ希望を出せる（埋まった日はグレーで押せない）
   const openParts = openPartsByDate(companyId, c.start_date, c.end_date);
+  // 自分のシフトがもう入っている日も選べない（同じ日に別の会場へは入れない）
+  const myDays = new Set((db.prepare('SELECT date FROM shifts WHERE company_id = ? AND user_id = ? AND date >= ? AND date <= ?').all(companyId, userId, c.start_date, c.end_date) as any[]).map(r => r.date));
   res.json({
     campaign: view(forUser(companyId, c, userId)),
     contact: W(companyId),
     me: { name: req.user!.name },
     stores: st,
     days: days.map(d => ({ date: d.date, weekday: d.weekday, long: d.long,
-      filled: !!openParts?.has(d.date) && openParts.get(d.date)!.length === 0,
+      filled: (!!openParts?.has(d.date) && openParts.get(d.date)!.length === 0) || (!!openParts && myDays.has(d.date)),
+      working: myDays.has(d.date),
       open_parts: openParts?.get(d.date) ?? null,
       venues: d.venues.map(v => ({ store_id: v.store_id, slots: v.slots.map(s => ({ start_time: s.start_time, end_time: s.end_time, part: s.part })) })), times: d.times })),
     answer: answerView(answer, names),
@@ -187,7 +190,8 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const dayOf = new Map<string, CampaignDay>(days.map(d => [d.date, d]));
   // 埋まった日（公開後に足りない部がない日）は、送られてきても変えない（前の答えはそのまま残す）
   const openParts = openPartsByDate(companyId, c.start_date, c.end_date);
-  const filled = (date: string) => !!openParts?.has(date) && openParts.get(date)!.length === 0;
+  const myDays = new Set((db.prepare('SELECT date FROM shifts WHERE company_id = ? AND user_id = ? AND date >= ? AND date <= ?').all(companyId, userId, c.start_date, c.end_date) as any[]).map(r => r.date));
+  const filled = (date: string) => (!!openParts?.has(date) && openParts.get(date)!.length === 0) || (!!openParts && myDays.has(date));
   const raw = Array.isArray(req.body?.entries) ? req.body.entries : [];
   const entries: { date: string; availability: string; part: Part | null }[] = [];
   for (const e of raw) {
@@ -337,6 +341,23 @@ router.post('/:id/send-to', authenticateToken, requireCompany, requireEventMode,
   const staff = new Set(campaignStaff(companyId).filter(s => s.linked).map(s => s.id));
   const result = await sendCampaignLinks(companyId, c, 'open', ids.filter(id => staff.has(id)));
   logAudit({ userId: req.user!.id, companyId, action: 'update', entity: 'request_campaign', entityId: c.id, summary: `希望の募集「${c.title}」の案内を送信（LINE ${result.sent}/${result.targets}人）` });
+  res.json(result);
+});
+
+// POST /api/request-campaigns/:id/send-more { user_ids? }  シフト公開後に「人が足りない日の希望」を募る（スタッフだけ）
+router.post('/:id/send-more', authenticateToken, requireCompany, requireEventMode, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!adminOnly(req, res)) return;
+  const companyId = req.companyId!;
+  const c = getCampaign(companyId, req.params.id);
+  if (!c || c.status !== 'open') { res.status(409).json({ error: 'この募集は受付中ではありません' }); return; }
+  const only = Array.isArray(req.body?.user_ids) ? new Set((req.body.user_ids as any[]).map(Number)) : null;
+  const staffIds = (db.prepare(`
+    SELECT u.id FROM users u JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ?
+    WHERE u.is_active = 1 AND uc.role = 'staff' AND u.role NOT IN ('admin', 'super_admin')
+  `).all(companyId) as any[]).map(r => r.id).filter(id => !only || only.has(id));
+  const linked = new Set(campaignStaff(companyId).filter(s => s.linked).map(s => s.id));
+  const result = await sendCampaignLinks(companyId, c, 'more', staffIds.filter(id => linked.has(id)));
+  logAudit({ userId: req.user!.id, companyId, action: 'update', entity: 'request_campaign', entityId: c.id, summary: `「${c.title}」人が足りない日の希望を募集（LINE ${result.sent}/${result.targets}人）` });
   res.json(result);
 });
 

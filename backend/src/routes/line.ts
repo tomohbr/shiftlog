@@ -315,11 +315,13 @@ export async function sendRequestLinks(
 // 「【クリスマスマーケット】シフトの希望を教えてください」「期間 11/20〜12/25」「締切 11/10（あと7日）」「担当の○○」＋「希望を出す」
 export type CampaignCard = { id: number; title: string; start_date: string; end_date: string; deadline: string | null; sent_at?: string | null };
 
-export function campaignHeading(c: CampaignCard, kind: 'open' | 'remind' | 'reply') {
+export type CampaignKind = 'open' | 'remind' | 'reply' | 'more';
+export function campaignHeading(c: CampaignCard, kind: CampaignKind) {
+  if (kind === 'more') return `【${c.title}】人が足りない日の希望を教えてください`;
   return kind === 'remind' ? `【${c.title}】シフトの希望がまだ届いていません` : `【${c.title}】シフトの希望を教えてください`;
 }
 
-function campaignBubble(companyId: number, heading: string, name: string, c: CampaignCard, url: string) {
+function campaignBubble(companyId: number, heading: string, name: string, c: CampaignCard, url: string, note?: string) {
   const left = daysLeft(c.deadline);
   const rows: [string, string][] = [['期間', `${md(c.start_date)}〜${md(c.end_date)}`]];
   if (c.deadline) rows.push(['締切', `${md2(c.deadline)}${left !== null && left >= 0 ? `（${left === 0 ? '今日まで' : `あと${left}日`}）` : ''}`]);
@@ -340,6 +342,7 @@ function campaignBubble(companyId: number, heading: string, name: string, c: Cam
             ],
           })),
         },
+        ...(note ? [{ type: 'text', text: note, size: 'sm', color: '#333333', wrap: true }] : []),
         { type: 'text', text: `${W(companyId)}より`, size: 'sm', color: '#555555', wrap: true },
         { type: 'text', text: `${name}さん専用のボタンです。名前を選ばずに開けます。`, size: 'xs', color: '#888888', wrap: true },
       ],
@@ -351,11 +354,12 @@ function campaignBubble(companyId: number, heading: string, name: string, c: Cam
   };
 }
 
-export function campaignCard(companyId: number, userId: number, name: string, c: CampaignCard, kind: 'open' | 'remind' | 'reply') {
+const MORE_NOTE = 'まだ人が足りない日（白い日）だけ選べます。入れる日があれば、1日でも助かります🙏 すでに出した希望はそのまま残っています。';
+export function campaignCard(companyId: number, userId: number, name: string, c: CampaignCard, kind: CampaignKind) {
   const heading = campaignHeading(c, kind);
   const left = daysLeft(c.deadline);
   const alt = `${heading} 期間 ${md(c.start_date)}〜${md(c.end_date)}${c.deadline ? `・締切 ${md(c.deadline)}${left !== null && left >= 0 ? `（あと${left}日）` : ''}` : ''}`;
-  return { type: 'flex', altText: alt.slice(0, 400), contents: campaignBubble(companyId, heading, name, c, campaignLinkUrl(userId, companyId, c)) };
+  return { type: 'flex', altText: alt.slice(0, 400), contents: campaignBubble(companyId, heading, name, c, campaignLinkUrl(userId, companyId, c), kind === 'more' ? MORE_NOTE : undefined) };
 }
 
 /**
@@ -363,7 +367,7 @@ export function campaignCard(companyId: number, userId: number, name: string, c:
  * onlyUserIds を渡すとその人だけ（未回答の人への催促用）。送った人の id を返す
  */
 export async function sendCampaignLinks(
-  companyId: number, c: CampaignCard, kind: 'open' | 'remind', onlyUserIds?: number[],
+  companyId: number, c: CampaignCard, kind: 'open' | 'remind' | 'more', onlyUserIds?: number[],
 ): Promise<{ sent: number; targets: number; failed: string[] }> {
   const settings = db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
   if (!settings?.channel_access_token) return { sent: 0, targets: 0, failed: [] };
