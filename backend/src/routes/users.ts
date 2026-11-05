@@ -1,3 +1,4 @@
+import { canSeeWages, hideWages } from '../utils/wages';
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db';
@@ -43,7 +44,7 @@ router.post('/bulk', authenticateToken, requireCompany, (req: AuthRequest, res: 
       }
       const email = row.email ? String(row.email).trim().toLowerCase() : null;
       const pin = hasProAccess(companyId) && row.pin ? String(row.pin).trim() : null;
-      const hourlyWage = row.hourly_wage != null ? Number(row.hourly_wage) : 1000;
+      const hourlyWage = row.hourly_wage != null && canSeeWages(req) ? Number(row.hourly_wage) : 0;
       const employmentType = row.employment_type || 'パート';
       const phone = row.phone ? String(row.phone).trim() : null;
 
@@ -95,7 +96,7 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
   const users = db.prepare(`
     SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
-           uc.employment_type, uc.display_name, uc.sort_order,
+           uc.employment_type, uc.display_name, uc.sort_order, uc.can_see_wages,
            (SELECT MAX(tr.updated_at) FROM time_records tr WHERE tr.user_id = u.id AND tr.company_id = ?) as last_timecard_at,
            (SELECT COUNT(*) FROM time_records tr WHERE tr.user_id = u.id AND tr.company_id = ?) as timecard_count
     FROM users u
@@ -112,7 +113,8 @@ router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Respo
     return;
   }
 
-  res.json({ users });
+  // 時給は「見られる人」だけ（店長などの管理者にも出さない）
+  res.json({ users: hideWages(users, req), can_see_wages: canSeeWages(req) });
 });
 
 // GET /api/users/:id
@@ -139,7 +141,8 @@ router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     return;
   }
 
-  res.json({ user });
+  // スタッフは自分の時給も見られない
+  res.json({ user: hideWages([user as any], req)[0] });
 });
 
 // POST /api/users - Create new staff in company
@@ -194,7 +197,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
   try {
     db.prepare(
       'INSERT INTO user_companies (user_id, company_id, role, employment_type, color, hourly_wage, phone) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(userId, companyId, role || 'staff', employment_type || 'part_time', color || '#4A90E2', hourly_wage || 0, phone || null);
+    ).run(userId, companyId, role || 'staff', employment_type || 'part_time', color || '#4A90E2', canSeeWages(req) ? (hourly_wage || 0) : 0, phone || null);
   } catch (err: any) {
     res.status(400).json({ error: 'スタッフの追加に失敗しました' });
     return;
@@ -209,7 +212,7 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
     WHERE u.id = ?
   `).get(companyId, userId);
 
-  res.status(201).json({ user });
+  res.status(201).json({ user: hideWages([user as any], req)[0] });
 });
 
 // PUT /api/users/:id
@@ -230,7 +233,10 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     return;
   }
 
-  const { name, email, password, pin, color, hourly_wage, phone, role, employment_type, furigana, display_name, sort_order } = req.body;
+  const { name, email, password, pin, color, phone, role, employment_type, furigana, display_name, sort_order, can_see_wages } = req.body;
+  // 時給を変えられるのは「時給を見られる人」だけ（本人・ほかの管理者からは変えられない）
+  const wageOk = canSeeWages(req);
+  const hourly_wage = wageOk ? req.body.hourly_wage : undefined;
   if (furigana !== undefined) db.prepare('UPDATE users SET furigana = ? WHERE id = ?').run(String(furigana || '').trim() || null, parseInt(req.params.id));
   const staffPin = hasProAccess(companyId) ? pin : undefined;
 
@@ -271,17 +277,21 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     const n = sort_order === null || sort_order === '' ? null : Math.trunc(Number(sort_order));
     db.prepare('UPDATE user_companies SET sort_order = ? WHERE user_id = ? AND company_id = ?').run(n !== null && Number.isFinite(n) ? n : null, userId, companyId);
   }
+  // 「時給を見られる」を付け外しできるのも、時給を見られる人だけ
+  if (wageOk && can_see_wages !== undefined) {
+    db.prepare('UPDATE user_companies SET can_see_wages = ? WHERE user_id = ? AND company_id = ?').run(can_see_wages ? 1 : 0, userId, companyId);
+  }
 
   const updated = db.prepare(`
     SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,
            uc.color, uc.hourly_wage, uc.phone, uc.role as company_role,
-           uc.employment_type, uc.display_name, uc.sort_order
+           uc.employment_type, uc.display_name, uc.sort_order, uc.can_see_wages
     FROM users u
     JOIN user_companies uc ON u.id = uc.user_id AND uc.company_id = ?
     WHERE u.id = ?
   `).get(companyId, userId);
 
-  res.json({ user: updated });
+  res.json({ user: hideWages([updated as any], req)[0] });
 });
 
 // DELETE /api/users/:id (remove from company)

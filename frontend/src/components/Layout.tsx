@@ -79,8 +79,11 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/shift-requests', label: '希望シフト収集', icon: ClipboardList },
     ...(eventMode ? [{ path: '/request-campaigns', label: '期間で希望を募集', icon: Megaphone }] : []),
     { path: '/templates', label: 'テンプレート', icon: Copy },
-    { path: '/labor', label: '人件費・売上', icon: DollarSign },
-    { path: '/payroll', label: '給与エクスポート', icon: FileSpreadsheet },
+    // 時給・人件費は「時給を見られる人」だけ
+    ...((selectedCompany as any)?.can_see_wages ? [
+      { path: '/labor', label: '人件費・売上', icon: DollarSign },
+      { path: '/payroll', label: '給与エクスポート', icon: FileSpreadsheet },
+    ] : []),
     { path: '/absence', label: '欠勤・ヘルプ', icon: AlertCircle },
     { path: '/swaps', label: 'シフト交代', icon: Repeat },
     { path: '/skills', label: 'スキル管理', icon: Tag },

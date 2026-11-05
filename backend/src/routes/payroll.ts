@@ -1,3 +1,4 @@
+import { requireWages } from '../utils/wages';
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
@@ -95,7 +96,7 @@ function summarize(companyId: number, year: number, month: number): WorkSummary[
 }
 
 // GET /api/payroll/export?year=&month=&format=freee|moneyforward|kingoftime|generic
-router.get('/export', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/export', authenticateToken, requireCompany, requireWages, (req: AuthRequest, res: Response): void => {
   if (!requireProFeature(req, res, '給与ソフト向けCSV出力')) return;
   if (!['admin','super_admin'].includes(req.user!.role) && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
@@ -154,7 +155,7 @@ router.get('/export', authenticateToken, requireCompany, (req: AuthRequest, res:
 });
 
 // GET /api/payroll/summary?year=&month= (プレビュー用JSON)
-router.get('/summary', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.get('/summary', authenticateToken, requireCompany, requireWages, (req: AuthRequest, res: Response): void => {
   if (!['admin','super_admin'].includes(req.user!.role) && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;

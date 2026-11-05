@@ -1,3 +1,4 @@
+import { requireWages } from '../utils/wages';
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, requireAdmin, AuthRequest } from '../middleware/auth';
@@ -66,7 +67,7 @@ router.get('/timecards', authenticateToken, requireCompany, requireAdmin, (req: 
 });
 
 // GET /api/csv/summary?year=2026&month=3
-router.get('/summary', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
+router.get('/summary', authenticateToken, requireCompany, requireAdmin, requireWages, (req: AuthRequest, res: Response): void => {
   if (!requireProFeature(req, res, 'CSV出力')) return;
   const companyId = req.companyId!;
   const { year, month } = req.query;

@@ -23,6 +23,10 @@ interface UserModalProps {
 }
 
 function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
+  // 時給は「時給を見られる人」だけが見て・変えられる（店長などの管理者・スタッフ本人には出さない）
+  const { selectedCompany } = useAuth()
+  const canWages = !!(selectedCompany as any)?.can_see_wages
+  const [seeWages, setSeeWages] = useState(!!(user as any)?.can_see_wages)
   const [name, setName] = useState(user?.name || '')
   const [email, setEmail] = useState(user?.email || '')
   const [pin, setPin] = useState((user as any)?.pin || '')
@@ -52,10 +56,10 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
     setLoading(true)
     try {
       if (user) {
-        await usersApi.update(user.id, { name, email: email || undefined, password: password || undefined, pin, color, hourly_wage: hourlyWage, phone, role, employment_type: employmentType, display_name: displayName, sort_order: sortOrder === '' ? null : Number(sortOrder) } as any)
+        await usersApi.update(user.id, { name, email: email || undefined, password: password || undefined, pin, color, ...(canWages ? { hourly_wage: hourlyWage, can_see_wages: role === 'admin' ? seeWages : false } : {}), phone, role, employment_type: employmentType, display_name: displayName, sort_order: sortOrder === '' ? null : Number(sortOrder) } as any)
         toast.success('スタッフ情報を更新しました')
       } else {
-        await usersApi.create({ name, email: email || undefined, password: password || undefined, pin, color, hourly_wage: hourlyWage, phone, role, employment_type: employmentType })
+        await usersApi.create({ name, email: email || undefined, password: password || undefined, pin, color, ...(canWages ? { hourly_wage: hourlyWage } : {}), phone, role, employment_type: employmentType })
         toast.success('スタッフを追加しました')
       }
       onSave()
@@ -159,16 +163,25 @@ function UserModal({ user, onClose, onSave, isPro }: UserModalProps) {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">時給 (円){employmentType === 'full_time' && <span className="text-gray-400 text-xs ml-1">※社員は月給制</span>}</label>
-            <input
-              type="number"
-              value={hourlyWage}
-              onChange={e => setHourlyWage(parseInt(e.target.value))}
-              className="input-field"
-              min={0}
-            />
-          </div>
+          {canWages && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">時給 (円){employmentType === 'full_time' && <span className="text-gray-400 text-xs ml-1">※社員は月給制</span>}</label>
+              <input
+                type="number"
+                value={hourlyWage}
+                onChange={e => setHourlyWage(parseInt(e.target.value))}
+                className="input-field"
+                min={0}
+              />
+              <p className="text-xs text-gray-500 mt-1">時給は、時給を見られる人だけに見えます（本人・ほかのスタッフ・店長には見えません）。</p>
+              {user && role === 'admin' && (
+                <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={seeWages} onChange={e => setSeeWages(e.target.checked)} className="w-4 h-4" />
+                  この人も時給・人件費を見られる
+                </label>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">電話番号</label>
@@ -236,6 +249,7 @@ Android(Chrome): メニュー → ホーム画面に追加
 
 export default function StaffPage() {
   const { selectedCompany } = useAuth()
+  const canWages = !!(selectedCompany as any)?.can_see_wages
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -473,7 +487,7 @@ export default function StaffPage() {
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">スタッフ</th>
                 {isPro && <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">打刻用PIN</th>}
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">時給</th>
+                {canWages && <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">時給</th>}
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">形態</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">役割</th>
                 <th className="px-6 py-3"></th>
@@ -509,9 +523,11 @@ export default function StaffPage() {
                       <span className="text-sm text-gray-600 font-mono">{(u as any).pin || '-'}</span>
                     </td>
                   )}
-                  <td className="px-6 py-4 hidden lg:table-cell">
-                    <span className="text-sm text-gray-600">¥{(u.hourly_wage || 0).toLocaleString()}</span>
-                  </td>
+                  {canWages && (
+                    <td className="px-6 py-4 hidden lg:table-cell">
+                      <span className="text-sm text-gray-600">¥{(u.hourly_wage || 0).toLocaleString()}</span>
+                    </td>
+                  )}
                   <td className="px-6 py-4">
                     <span className={(u as any).employment_type === 'full_time' ? 'text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700' : 'text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700'}>
                       {(u as any).employment_type === 'full_time' ? '社員' : 'パート'}

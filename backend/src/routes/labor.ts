@@ -1,3 +1,4 @@
+import { requireWages } from '../utils/wages';
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, requireAdmin, AuthRequest } from '../middleware/auth';
@@ -5,7 +6,7 @@ import { authenticateToken, requireCompany, requireAdmin, AuthRequest } from '..
 const router = Router();
 
 // GET /api/labor/costs?year=2026&month=3 - Labor cost calculation
-router.get('/costs', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
+router.get('/costs', authenticateToken, requireCompany, requireAdmin, requireWages, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const datePrefix = `${year}-${String(Number(month as string)).padStart(2, '0')}`;
@@ -168,7 +169,7 @@ router.get('/alerts', authenticateToken, requireCompany, requireAdmin, (req: Aut
 });
 
 // GET /api/labor/ratio?year=2026&month=3 - Labor cost ratio
-router.get('/ratio', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
+router.get('/ratio', authenticateToken, requireCompany, requireAdmin, requireWages, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const datePrefix = `${year}-${String(Number(month as string)).padStart(2, '0')}`;
@@ -221,7 +222,7 @@ router.get('/ratio', authenticateToken, requireCompany, requireAdmin, (req: Auth
 });
 
 // POST /api/labor/sales - Upsert daily sales
-router.post('/sales', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+router.post('/sales', authenticateToken, requireCompany, requireWages, (req: AuthRequest, res: Response): void => {
   if (!['admin','super_admin'].includes(req.user!.role)) {
     res.status(403).json({ error: '管理者権限が必要です' });
     return;
@@ -240,7 +241,7 @@ router.post('/sales', authenticateToken, requireCompany, (req: AuthRequest, res:
 });
 
 // GET /api/labor/sales?year=2026&month=3
-router.get('/sales', authenticateToken, requireCompany, requireAdmin, (req: AuthRequest, res: Response): void => {
+router.get('/sales', authenticateToken, requireCompany, requireAdmin, requireWages, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const { year, month } = req.query;
   const sales = db.prepare(

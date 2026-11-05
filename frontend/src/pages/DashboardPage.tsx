@@ -4,6 +4,7 @@ import { format, addMonths, subMonths } from 'date-fns'
 import { Users, Calendar, Clock, CheckCircle, AlertTriangle, DollarSign, Repeat, Store as StoreIcon, ArrowRight, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import TeamCalendar from '../components/TeamCalendar'
+import WageCostCard from '../components/WageCostCard'
 import TodayByVenue from '../components/TodayByVenue'
 import { storeColorMap } from '../lib/storeColors'
 import ShiftModal from '../components/ShiftModal'
@@ -130,6 +131,8 @@ export default function DashboardPage() {
   // シフトは月ごとに空になるので、店舗とスタッフがそろえば準備は済んだとみなす（空の月は下のカレンダーで案内する）
   const setupStepsDone = !noStore && !noStaff
   const companyPin = (selectedCompany as any)?.company_pin || ''
+  // 時給・人件費は「時給を見られる人」だけ（店長などの管理者には出さない）
+  const canWages = !!(selectedCompany as any)?.can_see_wages
 
   return (
     <div className="space-y-6">
@@ -304,10 +307,10 @@ export default function DashboardPage() {
           ['今月のシフト', `${totalShifts}件`, null, ''],
           ['今日の出勤予定', `${todayShifts.length}人`, null, ''],
           ['スタッフ', `${users.length}人`, '/staff', ''],
-          ['今月の人件費', `¥${monthlyLabor.toLocaleString()}`, '/labor', ''],
-          ['労務アラート', `${alertCount}件`, '/labor', alertCount > 0 ? 'text-red-600' : ''],
+          ...(canWages ? [['今月の人件費', `¥${monthlyLabor.toLocaleString()}`, '/labor', '']] : []),
+          ['労務アラート', `${alertCount}件`, canWages ? '/labor' : null, alertCount > 0 ? 'text-red-600' : ''],
           ['交代リクエスト', `${pendingSwaps}件`, '/swaps', pendingSwaps > 0 ? 'text-orange-600' : ''],
-        ] as const).map(([label, value, to, cls]) => {
+        ] as [string, string, string | null, string][]).map(([label, value, to, cls]) => {
           const body = (
             <>
               <p className="text-[11px] text-gray-500">{label}</p>
@@ -319,6 +322,10 @@ export default function DashboardPage() {
             : <div key={label} className="px-4 py-2.5">{body}</div>
         })}
       </div>
+
+      {canWages && shifts.length > 0 && (
+        <WageCostCard shifts={venue ? shifts.filter(s => s.store_id === venue) : shifts} stores={stores} month={currentDate.getMonth() + 1} />
+      )}
 
       {/* シフトはあるのに未公開＝スタッフには何も見えていない。カレンダーの上で言い切る */}
       {!loading && shifts.length > 0 && !isPublished && (

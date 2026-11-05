@@ -192,7 +192,7 @@ function AppRoutes() {
           <Route path="/shift-requests" element={<ShiftRequestPage />} />
           <Route path="/request-campaigns" element={isEventMode(selectedCompany) ? <RequestCampaignPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/campaign/:id" element={<CampaignAnswerPage />} />
-          <Route path="/labor" element={<LaborPage />} />
+          <Route path="/labor" element={(selectedCompany as any)?.can_see_wages ? <LaborPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/absence" element={<AbsencePage />} />
           <Route path="/templates" element={<TemplatePage />} />
           <Route path="/line-settings" element={<LineSettingsPage />} />
@@ -202,7 +202,7 @@ function AppRoutes() {
           <Route path="/audit-logs" element={<AuditLogPage />} />
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/swaps" element={<SwapsPage />} />
-          <Route path="/payroll" element={<PayrollPage />} />
+          <Route path="/payroll" element={(selectedCompany as any)?.can_see_wages ? <PayrollPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/auto-schedule" element={isEventMode(selectedCompany) ? <VenueSchedulePage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/inventory" element={isEventMode(selectedCompany) ? <InventoryPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/admin-hub" element={<AdminHubPage />} />

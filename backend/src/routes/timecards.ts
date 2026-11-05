@@ -1,3 +1,4 @@
+import { canSeeWages, hideWages } from '../utils/wages';
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, requireAdmin, AuthRequest } from '../middleware/auth';
@@ -370,7 +371,7 @@ router.get('/summary', authenticateToken, requireCompany, requireAdmin, (req: Au
     total_wage: row.total_minutes ? Math.floor((row.total_minutes / 60) * row.hourly_wage) : 0,
   }));
 
-  res.json({ summary: result });
+  res.json({ summary: hideWages(result, req), can_see_wages: canSeeWages(req) });
 });
 
 export default router;

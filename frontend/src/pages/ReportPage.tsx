@@ -18,6 +18,9 @@ interface SummaryRow {
   total_wage: number
 }
 
+// 時給・金額は「時給を見られる人」だけ。見られない人にはサーバーが null で返すので「—」
+const yen = (n: number | null | undefined) => (n == null ? '—' : `¥${n.toLocaleString()}`)
+
 export default function ReportPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [summary, setSummary] = useState<SummaryRow[]>([])
@@ -56,7 +59,7 @@ export default function ReportPage() {
 
   const totalShifts = shifts.length
   const totalHours = summary.reduce((sum, row) => sum + row.total_hours + row.total_minutes_remainder / 60, 0)
-  const totalWage = summary.reduce((sum, row) => sum + row.total_wage, 0)
+  const totalWage = summary.some(r => r.total_wage == null) ? null : summary.reduce((sum, row) => sum + (row.total_wage || 0), 0)
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob)
@@ -160,7 +163,7 @@ export default function ReportPage() {
           </div>
           <div>
             <p className="text-sm text-gray-500">総人件費</p>
-            <p className="text-xl md:text-2xl font-bold text-gray-900">¥{totalWage.toLocaleString()}</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900">{yen(totalWage)}</p>
           </div>
         </div>
       </div>
@@ -185,13 +188,13 @@ export default function ReportPage() {
                         <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: row.user_color }} />
                         <span className="text-sm font-medium text-gray-900 break-words">{row.user_name}</span>
                       </div>
-                      <span className="text-base font-bold text-gray-900 whitespace-nowrap">¥{row.total_wage.toLocaleString()}</span>
+                      <span className="text-base font-bold text-gray-900 whitespace-nowrap">{yen(row.total_wage)}</span>
                     </div>
-                    <p className="text-xs text-gray-600">{row.shift_count}日 / {row.total_hours}時間{row.total_minutes_remainder > 0 ? `${row.total_minutes_remainder}分` : ''} / 時給 ¥{row.hourly_wage.toLocaleString()}</p>
+                    <p className="text-xs text-gray-600">{row.shift_count}日 / {row.total_hours}時間{row.total_minutes_remainder > 0 ? `${row.total_minutes_remainder}分` : ''} / 時給 {yen(row.hourly_wage)}</p>
                   </article>
                 ))}
                 <div className="p-4 bg-gray-50 space-y-2">
-                  <div className="flex justify-between gap-3 text-sm font-bold text-gray-900"><span>合計</span><span>¥{totalWage.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3 text-sm font-bold text-gray-900"><span>合計</span><span>{yen(totalWage)}</span></div>
                   <p className="text-xs text-gray-600">{summary.reduce((s, r) => s + r.shift_count, 0)}日 / {Math.floor(totalHours)}時間{Math.round((totalHours % 1) * 60) > 0 ? `${Math.round((totalHours % 1) * 60)}分` : ''}</p>
                 </div>
               </div>
@@ -228,10 +231,10 @@ export default function ReportPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <span className="text-sm text-gray-600">¥{row.hourly_wage.toLocaleString()}</span>
+                        <span className="text-sm text-gray-600">{yen(row.hourly_wage)}</span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-bold text-gray-900">¥{row.total_wage.toLocaleString()}</span>
+                        <span className="text-sm font-bold text-gray-900">{yen(row.total_wage)}</span>
                       </td>
                     </tr>
                   ))}
@@ -247,7 +250,7 @@ export default function ReportPage() {
                     </td>
                     <td className="px-4 py-3"></td>
                     <td className="px-6 py-3 text-right text-sm font-bold text-gray-900">
-                      ¥{totalWage.toLocaleString()}
+                      {yen(totalWage)}
                     </td>
                   </tr>
                 </tfoot>
