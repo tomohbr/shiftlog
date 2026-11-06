@@ -61,23 +61,49 @@ export function computeShortages(companyId: number, from: string, to: string): S
   return out;
 }
 
+/** 1日分の「まだ人が足りないところ」を会場ごとに。キーは会場ID（会場なしは 0） */
+export interface DayOpen {
+  parts: Record<string, ('a' | 'b')[]>   // 足りない部（昼 a／夜 b）
+  full: Record<string, boolean>          // 丸ごと足りない枠がある
+  times: Record<string, string[]>        // 一部の時間だけ足りない時間（例: 16:00〜18:00）
+}
+
 /**
- * 希望の画面用: 公開済みの月の日について、まだ人が足りない部（昼 a／夜 b。丸ごと足りない枠も、一部の時間だけ足りない枠も）を返す。
- * 公開済みの月で足りない部がない日は「埋まり」（希望を新しく出せない）。公開前の月は null（全部出せる）。
+ * 希望の画面用: 公開済みの月の日について、会場ごとにまだ人が足りない部を返す（丸ごと足りない枠も、一部の時間だけ足りない枠も）。
+ * 公開済みの月で足りないところがない日は空の DayOpen（埋まり）。公開前の月は入れない。どの月も公開前なら null（全部出せる）。
  */
-export function openPartsByDate(companyId: number, from: string, to: string): Map<string, ('a' | 'b')[]> | null {
+export function openByDate(companyId: number, from: string, to: string): Map<string, DayOpen> | null {
   const pubs = db.prepare('SELECT year, month FROM shift_publications WHERE company_id = ? AND is_published = 1').all(companyId) as { year: number; month: number }[];
   const published = new Set(pubs.map(p => `${p.year}-${String(p.month).padStart(2, '0')}`));
   if (published.size === 0) return null;
-  const out = new Map<string, ('a' | 'b')[]>();
-  // 丸ごと足りない枠（赤）に加えて、一部の時間だけ足りない枠（黄。例: 16〜18時だけ空き）も選べるようにする
+  const out = new Map<string, DayOpen>();
   const shorts = computeShortages(companyId, from, to);
   for (let t = Date.parse(from); t <= Date.parse(to); t += 86400000) {
     const d = new Date(t).toISOString().slice(0, 10);
-    if (!published.has(d.slice(0, 7))) continue;
-    const parts = new Set<'a' | 'b'>();
-    for (const s of shorts) if (s.date === d) parts.add(s.start_time < '15:00' ? 'a' : 'b');
-    out.set(d, [...parts]);
+    if (published.has(d.slice(0, 7))) out.set(d, { parts: {}, full: {}, times: {} });
+  }
+  for (const s of shorts) {
+    const o = out.get(s.date);
+    if (!o) continue;
+    const k = String(s.store_id ?? 0);
+    const part: 'a' | 'b' = s.start_time < '15:00' ? 'a' : 'b';
+    const ps = (o.parts[k] ??= []);
+    if (!ps.includes(part)) ps.push(part);
+    if (s.kind === 'full') o.full[k] = true;
+    else for (const g of s.gaps) { const tt = `${g.from}〜${g.to}`; const ts = (o.times[k] ??= []); if (!ts.includes(tt)) ts.push(tt); }
   }
   return out;
+}
+
+/**
+ * その人が行ける会場（'any' か会場IDの配列。空ならどこでも）だけで見た、足りない部と足りない時間。
+ * 行ける会場のどこかに丸ごと足りない枠がある日は、時間（times）は出さない。
+ */
+export function openFor(o: DayOpen | undefined, venues: 'any' | number[]): { parts: ('a' | 'b')[]; times: string | null } {
+  if (!o) return { parts: [], times: null };
+  const keys = Object.keys(o.parts).filter(k => venues === 'any' || venues.length === 0 || k === '0' || venues.includes(Number(k)));
+  const parts = [...new Set(keys.flatMap(k => o.parts[k]))];
+  const anyFull = keys.some(k => o.full[k]);
+  const times = anyFull ? [] : [...new Set(keys.flatMap(k => o.times[k] ?? []))];
+  return { parts, times: times.length ? times.join('、') : null };
 }

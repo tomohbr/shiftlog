@@ -689,6 +689,8 @@ export interface CampaignDay {
   open_parts?: ('a' | 'b')[] | null
   // 一部の時間だけ足りない日の、足りない時間（例: 16:00〜18:00）
   short_times?: string | null
+  // 会場ごとの足りないところ（キーは会場ID、会場なしは 0）。画面で「行ける会場」に合わせて open_parts / short_times / filled を出し直す
+  open?: { parts: Record<string, ('a' | 'b')[]>; full: Record<string, boolean>; times: Record<string, string[]> } | null
   venues: { store_id: number | null; slots: { start_time: string; end_time: string; part: 'a' | 'b' }[] }[]
   times: Record<'a' | 'b', { start: string; end: string }>
 }

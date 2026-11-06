@@ -38,6 +38,17 @@ const DPW: { key: '1-2' | '3-4' | '5+'; label: string }[] = [
   { key: '1-2', label: '1〜2日' }, { key: '3-4', label: '3〜4日' }, { key: '5+', label: '5日以上' },
 ]
 
+// 行ける会場（'any' か会場ID。空ならどこでも）で見た、その日の足りない部・時間
+function forVenues(d: CampaignDay, venues: 'any' | number[]): CampaignDay {
+  const o = d.open
+  if (!o) return d
+  const keys = Object.keys(o.parts).filter(k => venues === 'any' || venues.length === 0 || k === '0' || venues.includes(Number(k)))
+  const parts = [...new Set(keys.flatMap(k => o.parts[k]))]
+  const anyFull = keys.some(k => o.full[k])
+  const times = anyFull ? [] : [...new Set(keys.flatMap(k => o.times[k] ?? []))]
+  return { ...d, open_parts: parts, short_times: times.length ? times.join('、') : null, filled: !!d.working || parts.length === 0 }
+}
+
 // 「16:00〜18:00、…」→「16-18時」（カレンダーのマス用。最初の時間だけ）
 const shortHours = (t: string) => {
   const m = t.match(/^(\d{2}):(\d{2})〜(\d{2}):(\d{2})/)
@@ -107,7 +118,8 @@ export default function CampaignAnswerPage() {
     return () => window.removeEventListener('beforeunload', h)
   }, [dirty])
 
-  const dayOf = useMemo(() => new Map((data?.days || []).map(d => [d.date, d])), [data])
+  // 選んでいる会場で足りないところだけ選べるように、日ごとの open_parts / short_times / filled を出し直す
+  const dayOf = useMemo(() => new Map((data?.days || []).map(d => [d.date, forVenues(d, answer.venues)])), [data, answer.venues])
   const colorOf = useMemo(() => storeColorMap(data?.stores || []), [data])
   const shortOf = useMemo(() => storeShortNames(data?.stores || []), [data])
 
@@ -126,7 +138,7 @@ export default function CampaignAnswerPage() {
   const c = data.campaign
   const open = c.accepting
   const submitted = !!data.answer?.submitted_at
-  const days = data.days
+  const days = [...dayOf.values()]
   const filled = days.filter(d => entries[d.date]).length
   const count = (a: CampaignAvailability) => days.filter(d => entries[d.date]?.availability === a).length
   const left = days.length - filled

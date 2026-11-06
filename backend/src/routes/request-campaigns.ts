@@ -1,4 +1,4 @@
-import { openPartsByDate, computeShortages } from '../utils/shortages';
+import { openByDate, openFor } from '../utils/shortages';
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
@@ -136,31 +136,27 @@ router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const dayset = new Set(days.map(d => d.date));
   const entries: Record<string, { availability: string; part: Part | null }> = {};
   for (const r of reqs) if (dayset.has(r.date)) entries[r.date] = { availability: r.availability, part: PARTS.includes(r.part) ? r.part : null };
-  // シフト公開後は、まだ人が足りない日・部だけ希望を出せる（埋まった日はグレーで押せない）
-  const openParts = openPartsByDate(companyId, c.start_date, c.end_date);
+  // シフト公開後は、まだ人が足りない日・部だけ希望を出せる（埋まった日はグレーで押せない）。
+  // 会場ごとに返し、画面で「行ける会場」に合わせて出し分ける（駅だけの人に花畑の空きを見せない）
+  const open = openByDate(companyId, c.start_date, c.end_date);
+  const myVenues: 'any' | number[] = answer ? (parseVenues((answer as any).venues) ?? 'any') : 'any';
   // 自分のシフトがもう入っている日も選べない（同じ日に別の会場へは入れない）
   const myDays = new Set((db.prepare('SELECT date FROM shifts WHERE company_id = ? AND user_id = ? AND date >= ? AND date <= ?').all(companyId, userId, c.start_date, c.end_date) as any[]).map(r => r.date));
-  // 一部の時間だけ足りない日（例: 16:00〜18:00だけ空き）は、その時間を出す。丸ごと足りない枠がある日は出さない
-  const shortTimes = new Map<string, string[]>();
-  const shortList = openParts ? computeShortages(companyId, c.start_date, c.end_date) : [];
-  const fullDates = new Set(shortList.filter(s => s.kind === 'full').map(s => s.date));
-  for (const s of shortList) {
-    if (s.kind !== 'partial' || fullDates.has(s.date)) continue;
-    const list = shortTimes.get(s.date) ?? [];
-    for (const g of s.gaps) { const t = `${g.from}〜${g.to}`; if (!list.includes(t)) list.push(t); }
-    shortTimes.set(s.date, list);
-  }
   res.json({
     campaign: view(forUser(companyId, c, userId)),
     contact: W(companyId),
     me: { name: req.user!.name },
     stores: st,
-    days: days.map(d => ({ date: d.date, weekday: d.weekday, long: d.long,
-      filled: (!!openParts?.has(d.date) && openParts.get(d.date)!.length === 0) || (!!openParts && myDays.has(d.date)),
+    days: days.map(d => {
+      const o = open ? openFor(open.get(d.date), myVenues) : null;
+      return { date: d.date, weekday: d.weekday, long: d.long,
+      filled: (!!open?.has(d.date) && o!.parts.length === 0) || (!!open && myDays.has(d.date)),
       working: myDays.has(d.date),
-      open_parts: openParts?.get(d.date) ?? null,
-      short_times: shortTimes.get(d.date)?.join('、') ?? null,
-      venues: d.venues.map(v => ({ store_id: v.store_id, slots: v.slots.map(s => ({ start_time: s.start_time, end_time: s.end_time, part: s.part })) })), times: d.times })),
+      open_parts: open?.has(d.date) ? o!.parts : null,
+      short_times: open?.has(d.date) ? o!.times : null,
+      open: open?.get(d.date) ?? null,
+      venues: d.venues.map(v => ({ store_id: v.store_id, slots: v.slots.map(s => ({ start_time: s.start_time, end_time: s.end_time, part: s.part })) })), times: d.times };
+    }),
     answer: answerView(answer, names),
     entries,
     transports: TRANSPORTS,
@@ -200,7 +196,9 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const days = campaignDays(companyId, c.start_date, c.end_date);
   const dayOf = new Map<string, CampaignDay>(days.map(d => [d.date, d]));
   // 埋まった日（公開後に足りない部がない日）は、送られてきても変えない（前の答えはそのまま残す）
-  const openParts = openPartsByDate(companyId, c.start_date, c.end_date);
+  // 送られてきた「行ける会場」で、足りない部を見る
+  const open = openByDate(companyId, c.start_date, c.end_date);
+  const openParts = open ? new Map([...open].map(([d, o]) => [d, openFor(o, venues === 'any' ? 'any' : venues.split(',').map(Number)).parts])) : null;
   const myDays = new Set((db.prepare('SELECT date FROM shifts WHERE company_id = ? AND user_id = ? AND date >= ? AND date <= ?').all(companyId, userId, c.start_date, c.end_date) as any[]).map(r => r.date));
   const filled = (date: string) => (!!openParts?.has(date) && openParts.get(date)!.length === 0) || (!!openParts && myDays.has(date));
   const raw = Array.isArray(req.body?.entries) ? req.body.entries : [];
