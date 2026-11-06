@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
+import { autoDisplayName } from '../utils/displayName';
 import { FREE_STAFF_LIMIT, canAddStaff, hasProAccess, sendUpgradeRequired } from '../utils/billing';
 
 const router = Router();
@@ -202,6 +203,8 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
     res.status(400).json({ error: 'スタッフの追加に失敗しました' });
     return;
   }
+  // 呼び名（下の名前）を使っている会社なら、新しい人にも入れる（スタッフだけ）
+  if ((role || 'staff') === 'staff' && !req.body.display_name) autoDisplayName(companyId, Number(userId), name);
 
   const user = db.prepare(`
     SELECT u.id, u.email, u.name, u.furigana, u.pin, u.role, u.is_active, u.created_at,

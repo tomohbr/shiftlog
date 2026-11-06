@@ -7,6 +7,7 @@ import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../middleware/auth';
 import { absenceRule, phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
 import { canAddStaff } from '../utils/billing';
+import { autoDisplayName } from '../utils/displayName';
 import { daysLeft, forUser, isAccepting, campaignPreferences } from '../utils/requestCampaign';
 import { computeShortages } from '../utils/shortages';
 import { recordShiftChange, snapOf, pendingChanges, markNotified } from '../utils/shiftChanges';
@@ -1237,7 +1238,11 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     db.prepare("UPDATE line_registrations SET status = 'approved' WHERE id = ?").run(reg.id);
     if (reg.furigana) db.prepare("UPDATE users SET furigana = COALESCE(NULLIF(furigana, ''), ?) WHERE id = ?").run(reg.furigana, reg.user_id);
     db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE company_id = ? AND user_id = ? AND status = 'pending'").run(companyId, reg.user_id);
-    await replyLine(token, replyToken, a === 'reg_new' ? `${reg.name}さんをスタッフに登録して、承認しました。（時給などはスタッフ管理で入れてください）` : `${reg.name}さんを承認しました。`);
+    // 呼び名（下の名前）を使っている会社なら、新しく入った人にも入れる。氏名に区切りが無くて入れられなければ一言添える
+    const dn = autoDisplayName(companyId, reg.user_id, reg.name);
+    const dnNote = dn.used && !dn.set && !(db.prepare("SELECT display_name FROM user_companies WHERE user_id = ? AND company_id = ?").get(reg.user_id, companyId) as any)?.display_name
+      ? `\n呼び名（下の名前）は自動で入れられなかったので、スタッフ管理で入れてください。` : '';
+    await replyLine(token, replyToken, (a === 'reg_new' ? `${reg.name}さんをスタッフに登録して、承認しました。（時給などはスタッフ管理で入れてください）` : `${reg.name}さんを承認しました。`) + dnNote);
     await sendLineMessage(token, reg.line_user_id, linkedMsg(companyId, reg.name));
     await sendOpenCampaignsTo(companyId, reg.user_id);
     return;
