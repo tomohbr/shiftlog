@@ -21,3 +21,4 @@ frontend/ios/App/App/config.xml
 
 # 審査用アカウントの認証情報（ローカルのみ）
 store-assets/review-account.local.md
+.claude/worktrees/
