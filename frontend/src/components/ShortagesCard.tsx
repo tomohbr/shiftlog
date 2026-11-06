@@ -48,9 +48,9 @@ export default function ShortagesCard({ stores, venue, reloadKey, onPick }: {
         {list.length === 0
           ? <span className="text-sm text-green-700 font-bold">これから先は全部埋まっています</span>
           : <span className="text-sm text-gray-600">
-              <span className="font-bold text-red-600">足りない {totalShort}枠</span>
+              <span className="font-bold text-red-600">あと {totalShort}人</span>
               {partialCount > 0 && <>・<span className="font-bold text-amber-600">一部だけ {partialCount}枠</span></>}
-              <span className="text-gray-400">（{dates.length}日）</span>
+              <span className="text-gray-400">（{list.length - partialCount}枠・{dates.length}日）</span>
             </span>}
         <span className="ml-auto text-xs text-gray-400">管理者だけに表示</span>
       </div>
