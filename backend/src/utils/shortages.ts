@@ -2,8 +2,8 @@ import db from '../db';
 import { campaignDays } from './requestCampaign';
 import { toMinutes, toHHMM } from './venueSchedule';
 
-// 人が足りないところ。会場の枠（必要人数）に対して、入っているスタッフ（管理者・社員は数えない）を分単位で重ね、
-// 足りない時間帯を出す。full = 枠に丸ごと足りない、partial = 一部の時間だけ（例: 18時からの人しかいない）
+// 人が足りないところ。会場の枠（必要人数）に対して、入っているスタッフ（管理者・社員は数えない）を数え、
+// 足りない枠を出す。一部の時間だけ入る人も1人と数えるので、出るのは full（人数が足りない枠）だけ。partial は今は出さない
 export interface ShortageGap { from: string; to: string; short: number }
 export interface Shortage {
   date: string; weekday: number; store_id: number | null; store_name: string
@@ -30,27 +30,16 @@ export function computeShortages(companyId: number, from: string, to: string): S
         const s0 = toMinutes(sl.start_time), e0 = toMinutes(sl.end_time);
         const here = shifts.filter(x => x.date === d.date && (x.store_id ?? null) === (v.store_id ?? null)
           && toMinutes(x.start_time) < e0 && toMinutes(x.end_time) > s0);
-        // 境目ごとに人数を数えて、足りない区間をつなげる
-        const cuts = [...new Set([s0, e0, ...here.flatMap(x => [toMinutes(x.start_time), toMinutes(x.end_time)])])]
-          .filter(t => t >= s0 && t <= e0).sort((a, b) => a - b);
-        const gaps: { from: string; to: string; short: number }[] = [];
-        for (let i = 0; i < cuts.length - 1; i++) {
-          const a = cuts[i], b = cuts[i + 1];
-          const n = here.filter(x => toMinutes(x.start_time) <= a && toMinutes(x.end_time) >= b).length;
-          const short = sl.needed - n;
-          if (short <= 0) continue;
-          const last = gaps[gaps.length - 1];
-          if (last && last.to === toHHMM(a) && last.short === short) last.to = toHHMM(b);
-          else gaps.push({ from: toHHMM(a), to: toHHMM(b), short });
-        }
-        if (!gaps.length) continue;
-        const wholeSlot = gaps.length === 1 && gaps[0].from === toHHMM(s0) && gaps[0].to === toHHMM(e0);
+        // 一部の時間だけ入る人（例: 18時から）も、その枠に入っている1人として数える。
+        // 「16〜18時だけ足りない」ような一部の不足（黄）は出さない（2026-11-06 芝原さん指示）。足りないのは人数そのものが足りない枠だけ
+        const short = sl.needed - here.length;
+        if (short <= 0) continue;
         out.push({
           date: d.date, weekday: d.weekday, store_id: v.store_id, store_name: v.store_id ? storeName.get(v.store_id) || '' : '',
           start_time: toHHMM(s0), end_time: toHHMM(e0), needed: sl.needed, have: here.length,
-          kind: wholeSlot ? 'full' : 'partial',
-          short: Math.max(...gaps.map(g => g.short)),
-          gaps,
+          kind: 'full',
+          short,
+          gaps: [{ from: toHHMM(s0), to: toHHMM(e0), short }],
           // 一部だけ入っている人（「凜空 18:00〜」のように）
           partial_people: here.filter(x => toMinutes(x.start_time) > s0 || toMinutes(x.end_time) < e0)
             .map(x => ({ name: x.name, start_time: String(x.start_time).slice(0, 5), end_time: String(x.end_time).slice(0, 5) })),
