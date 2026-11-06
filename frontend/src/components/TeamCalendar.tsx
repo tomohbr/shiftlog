@@ -1,9 +1,15 @@
+import { Fragment } from 'react'
 import { Shift, Store } from '../api/client'
 import { storeColorMap } from '../lib/storeColors'
-import { mergeShifts } from '../lib/shiftParts'
+import { mergeShifts, PART_SHORT, PartKind } from '../lib/shiftParts'
 
 // 管理者向けの月カレンダー（スタッフの「みんなの予定」と同じ見た目）。
 // 月曜はじまり・マスの中に名前ラベルを会場の色で積む。予定が多い日はマスが伸びる。
+
+// 昼の部・夜の部がある日は、通し → 昼 → 夜 の順に小さな見出しを付けて分ける
+const PART_RANK: Record<string, number> = { all: 0, day: 1, night: 2 }
+const PART_TONE: Record<PartKind, string> = { all: 'text-gray-500', day: 'text-amber-600', night: 'text-indigo-600' }
+const PART_ICON: Record<PartKind, string> = { all: '', day: '☀', night: '☾' }
 
 const WEEK = ['月', '火', '水', '木', '金', '土', '日']
 const fmt = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
@@ -58,7 +64,7 @@ export default function TeamCalendar({ year, month, shifts, stores, today, onPic
         {cells.map(({ date, inMonth }, i) => {
           const col = i % 7
           const day = inMonth ? merged.filter(s => s.date === date)
-            .sort((a, b) => storeIdx(a.store_id) - storeIdx(b.store_id) || (a.user_order ?? 9999) - (b.user_order ?? 9999) || a.start_time.localeCompare(b.start_time)) : []
+            .sort((a, b) => (PART_RANK[a.part ?? ''] ?? 3) - (PART_RANK[b.part ?? ''] ?? 3) || storeIdx(a.store_id) - storeIdx(b.store_id) || (a.user_order ?? 9999) - (b.user_order ?? 9999) || a.start_time.localeCompare(b.start_time)) : []
           const people = new Set(day.map(s => s.user_id)).size
           return (
             <button
@@ -73,9 +79,12 @@ export default function TeamCalendar({ year, month, shifts, stores, today, onPic
                 }`}>{Number(date.slice(8))}</span>
                 {people > 0 && <span className="hidden sm:inline text-[11px] text-gray-400">{people}人</span>}
               </div>
-              {day.slice(0, maxChips).map(s => (
+              {day.slice(0, maxChips).map((s, k, arr) => (
+                <Fragment key={s.id}>
+                {s.part && s.part !== arr[k - 1]?.part && (
+                  <span className={`mx-1 mt-1 -mb-0.5 text-[10px] font-bold leading-none ${PART_TONE[s.part]}`}>{PART_ICON[s.part]}{PART_SHORT[s.part]}</span>
+                )}
                 <span
-                  key={s.id}
                   title={`${s.user_name} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}${s.store_name ? ` ${s.store_name}` : ''}`}
                   className="mx-[2px] sm:mx-1 mt-[3px] rounded-[5px] px-0.5 sm:px-1 text-[12px] leading-[21px] font-bold text-white flex items-center justify-center sm:justify-between gap-1 overflow-hidden"
                   style={{ backgroundColor: s.store_id ? colorOf(s.store_id).solid : '#4C6EF5' }}
@@ -83,6 +92,7 @@ export default function TeamCalendar({ year, month, shifts, stores, today, onPic
                   <span className="whitespace-nowrap overflow-hidden text-clip tracking-tighter sm:tracking-normal">{label(s.user_name)}</span>
                   <span className="text-[10px] font-semibold opacity-90 tabular-nums shrink-0 hidden xl:inline">{s.start_time.slice(0, 5).replace(/^0/, '')}</span>
                 </span>
+                </Fragment>
               ))}
               {day.length > maxChips && <span className="text-center text-[11px] font-bold text-gray-500 mt-0.5">+{day.length - maxChips}</span>}
             </button>
