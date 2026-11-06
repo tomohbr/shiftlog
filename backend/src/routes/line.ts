@@ -1131,6 +1131,36 @@ export async function pushToUsers(companyId: number, userIds: number[], message:
 
 export { buttonsCard };
 
+/**
+ * スタッフが希望を出したら、運営者（super_admin）の LINE に知らせる。
+ * 公開後の募集なら「まだ人が足りない日で ◎○ を付けた日」を並べる（そこからシフトに入れられるように）。
+ */
+export async function notifyCampaignSubmitted(companyId: number, userId: number, title: string, resubmit: boolean,
+  entries: { date: string; availability: string; part: string | null }[], openParts: Map<string, string[]> | null) {
+  const to = (db.prepare(`
+    SELECT uli.user_id FROM user_line_ids uli
+    JOIN users u ON u.id = uli.user_id AND u.is_active = 1 AND u.role = 'super_admin'
+    JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ?
+  `).all(companyId) as { user_id: number }[]).map(r => r.user_id).filter(id => id !== userId);
+  if (!to.length) return;
+  const name = (db.prepare(`SELECT COALESCE(NULLIF(uc.display_name, ''), u.name) AS n FROM users u JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ? WHERE u.id = ?`).get(companyId, userId) as any)?.n || 'スタッフ';
+  const cnt = (a: string) => entries.filter(e => e.availability === a).length;
+  const mark: Record<string, string> = { preferred: '◎', available: '○' };
+  const pn: Record<string, string> = { a: '昼', b: '夜', all: '通し', full: '昼か夜' };
+  const can = entries.filter(e => e.availability !== 'unavailable');
+  const lines = [`${name}さんから${resubmit ? '希望の出し直し' : '希望'}が届きました（${title}）`, `◎${cnt('preferred')}日 ○${cnt('available')}日 ×${cnt('unavailable')}日`];
+  if (openParts) {
+    const hits = can.filter(e => (openParts.get(e.date)?.length ?? 0) > 0);
+    lines.push('', hits.length ? `人が足りない日で入れる日（${hits.length}日）` : '人が足りない日で入れる日はありませんでした');
+    for (const e of hits.slice(0, 15)) lines.push(`${mark[e.availability]} ${md2(e.date)}${e.part ? ' ' + (pn[e.part] || '') : ''}`);
+    if (hits.length > 15) lines.push(`ほか${hits.length - 15}日`);
+  } else if (can.length) {
+    lines.push('', ...can.slice(0, 15).map(e => `${mark[e.availability]} ${md2(e.date)}${e.part ? ' ' + (pn[e.part] || '') : ''}`));
+    if (can.length > 15) lines.push(`ほか${can.length - 15}日`);
+  }
+  await pushToUsers(companyId, to, lines.join('\n'));
+}
+
 // スタッフからの相談・質問・休み・登録の確認が届く人（担当者）。
 // 「時給を見られる人」を決めた会社では、その人と運営者だけ（社員を管理者にしていても、スタッフの相談が全員に届かないように）
 function adminLineIds(companyId: number): string[] {

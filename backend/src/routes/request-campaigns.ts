@@ -4,7 +4,7 @@ import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { requireEventMode } from '../utils/billing';
 import { logAudit } from '../utils/audit';
-import { sendCampaignLinks, W } from './line';
+import { sendCampaignLinks, W, notifyCampaignSubmitted } from './line';
 import {
   CampaignDay, Part, PARTS, PART_LABEL, LONG_DAY, LONG_DAY_LABEL, REFERRAL, REFERRAL_LABEL, DAYS_PER_WEEK, DAYS_PER_WEEK_LABEL, TRANSPORTS,
   campaignDays, daysLeft, forUser, isAccepting, parseVenues, partTimes,
@@ -230,6 +230,7 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
       part = excluded.part
   `);
   const del = db.prepare('DELETE FROM shift_requests WHERE company_id = ? AND user_id = ? AND date = ?');
+  const resubmit = !!db.prepare('SELECT 1 FROM request_campaign_answers WHERE campaign_id = ? AND user_id = ?').get(c.id, userId);
   db.transaction(() => {
     const given = new Set(entries.map(e => e.date));
     for (const d of days) if (!given.has(d.date) && !filled(d.date)) del.run(companyId, userId, d.date);
@@ -251,6 +252,8 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   })();
 
   res.json({ message: '希望を提出しました', count: entries.length });
+  // 運営者の LINE に知らせる（失敗しても提出はそのまま）
+  notifyCampaignSubmitted(companyId, userId, c.title, resubmit, entries, openParts).catch(() => {});
 });
 
 // ---------------------------------------------------------------- 管理者
