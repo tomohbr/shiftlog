@@ -37,6 +37,7 @@ import inventoryRoutes from './routes/inventory';
 import db from './db';
 import { reportServerError } from './utils/ops-alerts';
 import { startDailyDigest } from './utils/daily-digest';
+import { startCampaignReminders } from './routes/request-campaigns';
 import { startTrialNotifier } from './utils/trial-notify';
 import { startInventoryNotifier } from './utils/inventory-notify';
 
@@ -192,6 +193,9 @@ startTrialNotifier();
 
 // 運営者向け日次レポート（毎朝 9:00 JST）
 startDailyDigest();
+
+// 希望の募集の「催促の予約」
+startCampaignReminders();
 
 // 催事の在庫の LINE 通知（締めの抜け・積み込みリスト・会社在庫を数える日）
 startInventoryNotifier();

@@ -31,6 +31,7 @@ function adminOnly(req: AuthRequest, res: Response): boolean {
 interface CampaignRow {
   id: number; company_id: number; title: string; start_date: string; end_date: string;
   deadline: string | null; status: 'draft' | 'open' | 'closed'; sent_at: string | null; created_at: string;
+  remind_at?: string | null; remind_user_ids?: string | null;
 }
 
 function getCampaign(companyId: number, id: unknown): CampaignRow | undefined {
@@ -39,7 +40,7 @@ function getCampaign(companyId: number, id: unknown): CampaignRow | undefined {
 
 const view = (c: CampaignRow) => ({
   id: c.id, title: c.title, start_date: c.start_date, end_date: c.end_date, deadline: c.deadline,
-  status: c.status, sent_at: c.sent_at, created_at: c.created_at,
+  status: c.status, sent_at: c.sent_at, created_at: c.created_at, remind_at: c.remind_at ?? null,
   days_left: daysLeft(c.deadline), accepting: isAccepting(c),
 });
 
@@ -373,20 +374,64 @@ router.post('/:id/send-more', authenticateToken, requireCompany, requireEventMod
   res.json(result);
 });
 
+// まだ答えていない人（LINE 連携済み）にだけ催促を送る。only を渡すとその人だけ
+async function sendRemind(companyId: number, c: CampaignRow, only: Set<number> | null) {
+  const answered = new Set((db.prepare('SELECT user_id FROM request_campaign_answers WHERE campaign_id = ? AND submitted_at IS NOT NULL').all(c.id) as any[]).map(r => r.user_id));
+  const pending = campaignStaff(companyId).filter(s => !answered.has(s.id) && (!only || only.has(s.id)));
+  const linked = pending.filter(s => s.linked).map(s => s.id);
+  const result = linked.length ? await sendCampaignLinks(companyId, c, 'remind', linked) : { sent: 0, targets: 0, failed: [] as string[] };
+  return { ...result, unanswered: pending.length, not_linked: pending.filter(s => !s.linked).map(s => s.name) };
+}
+
 // POST /api/request-campaigns/:id/remind  まだ答えていない人（LINE 連携済み）にだけ送る
 router.post('/:id/remind', authenticateToken, requireCompany, requireEventMode, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
   if (!c || c.status !== 'open') { res.status(409).json({ error: 'この募集は受付中ではありません' }); return; }
-  const answered = new Set((db.prepare('SELECT user_id FROM request_campaign_answers WHERE campaign_id = ? AND submitted_at IS NOT NULL').all(c.id) as any[]).map(r => r.user_id));
   // user_ids を渡すとその人だけ（あとから連携した人に1通だけ送る、など）
   const only = Array.isArray(req.body?.user_ids) ? new Set((req.body.user_ids as any[]).map(Number)) : null;
-  const pending = campaignStaff(companyId).filter(s => !answered.has(s.id) && (!only || only.has(s.id)));
-  const linked = pending.filter(s => s.linked).map(s => s.id);
-  const result = linked.length ? await sendCampaignLinks(companyId, c, 'remind', linked) : { sent: 0, targets: 0, failed: [] as string[] };
-  res.json({ ...result, unanswered: pending.length, not_linked: pending.filter(s => !s.linked).map(s => s.name) });
+  res.json(await sendRemind(companyId, c, only));
 });
+
+// PUT /api/request-campaigns/:id/remind-at { at: 'YYYY-MM-DD HH:MM'（JST） | null, user_ids? }  催促を予約する／取り消す
+router.put('/:id/remind-at', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+  if (!adminOnly(req, res)) return;
+  const companyId = req.companyId!;
+  const c = getCampaign(companyId, req.params.id);
+  if (!c) { res.status(404).json({ error: '募集が見つかりません' }); return; }
+  const at = req.body?.at == null || req.body.at === '' ? null : String(req.body.at).replace('T', ' ').slice(0, 16);
+  if (at !== null && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(at)) { res.status(400).json({ error: '日時は YYYY-MM-DD HH:MM で指定してください' }); return; }
+  const ids = Array.isArray(req.body?.user_ids) ? (req.body.user_ids as any[]).map(Number).filter(Number.isInteger) : null;
+  db.prepare('UPDATE request_campaigns SET remind_at = ?, remind_user_ids = ? WHERE id = ?').run(at, at && ids ? JSON.stringify(ids) : null, c.id);
+  logAudit({ userId: req.user!.id, companyId, action: 'update', entity: 'request_campaign', entityId: c.id, summary: at ? `「${c.title}」の催促を ${at} に予約` : `「${c.title}」の催促の予約を取り消し` });
+  res.json({ remind_at: at, user_ids: ids });
+});
+
+// 予約した催促を送る（5分ごとに確認。時刻を過ぎていて受付中なら1回だけ）
+export async function runScheduledReminds(): Promise<void> {
+  const nowJst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ');
+  const due = db.prepare("SELECT * FROM request_campaigns WHERE remind_at IS NOT NULL AND remind_at <= ?").all(nowJst) as CampaignRow[];
+  for (const c of due) {
+    // 先に予約を消す（再起動や重なりで二重に送らない）
+    const took = db.prepare('UPDATE request_campaigns SET remind_at = NULL, remind_user_ids = NULL WHERE id = ? AND remind_at = ?').run(c.id, c.remind_at);
+    if (took.changes === 0) continue;
+    if (c.status !== 'open') { console.log(`[campaign-remind] ${c.id} は受付中でないので送らない`); continue; }
+    let only: Set<number> | null = null;
+    try { const a = c.remind_user_ids ? JSON.parse(c.remind_user_ids) : null; if (Array.isArray(a)) only = new Set(a.map(Number)); } catch { /* 全員 */ }
+    try {
+      const r = await sendRemind(c.company_id, c, only);
+      console.log(`[campaign-remind] ${c.id} 送信 ${r.sent}/${r.targets}（未回答 ${r.unanswered}）`);
+      logAudit({ companyId: c.company_id, action: 'update', entity: 'request_campaign', entityId: c.id, summary: `「${c.title}」予約の催促を送信（LINE ${r.sent}/${r.targets}人）`, detail: r });
+    } catch (e) { console.error('[campaign-remind]', e); }
+  }
+}
+
+export function startCampaignReminders(): void {
+  const tick = () => { runScheduledReminds().catch(e => console.error('[campaign-remind]', e)); };
+  setTimeout(tick, 60 * 1000);
+  setInterval(tick, 5 * 60 * 1000);
+}
 
 // POST /api/request-campaigns/:id/close  締め切る / reopen で受付に戻す
 router.post('/:id/:action(close|reopen)', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
