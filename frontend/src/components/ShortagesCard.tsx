@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, ChevronRight } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Sun, Moon } from 'lucide-react'
 import { api, Store } from '../api/client'
 import { storeColorMap } from '../lib/storeColors'
 
@@ -17,6 +17,8 @@ interface Shortage {
 }
 
 const DOW = '日月火水木金土'
+// 昼の部（午前から）か、夜の部（午後から）か
+const isDay = (x: { start_time: string }) => x.start_time < '13:00'
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`
 
 export default function ShortagesCard({ stores, venue, reloadKey, onPick }: {
@@ -57,7 +59,8 @@ export default function ShortagesCard({ stores, venue, reloadKey, onPick }: {
       {list.length > 0 && (
         <div className="divide-y divide-gray-100">
           {shownDates.map(date => {
-            const rows = list.filter(x => x.date === date)
+            // 昼の部を上、夜の部を下に（同じ部の中は会場順）
+            const rows = list.filter(x => x.date === date).sort((a, b) => (isDay(a) === isDay(b) ? 0 : isDay(a) ? -1 : 1) || (a.store_id ?? 0) - (b.store_id ?? 0))
             const dow = rows[0].weekday
             return (
               <button key={date} onClick={() => onPick(date)} className="w-full text-left px-4 sm:px-6 py-2.5 flex gap-3 hover:bg-gray-50">
@@ -69,6 +72,9 @@ export default function ShortagesCard({ stores, venue, reloadKey, onPick }: {
                     const c = colorOf(x.store_id)
                     return (
                       <span key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {isDay(x)
+                          ? <span className="inline-flex items-center gap-0.5 w-12 justify-center rounded-md py-0.5 text-xs font-bold bg-amber-100 text-amber-800"><Sun className="w-3.5 h-3.5" />昼</span>
+                          : <span className="inline-flex items-center gap-0.5 w-12 justify-center rounded-md py-0.5 text-xs font-bold bg-indigo-100 text-indigo-800"><Moon className="w-3.5 h-3.5" />夜</span>}
                         <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ backgroundColor: c.soft, color: c.text }}>{x.store_name || '会場'}</span>
                         {x.kind === 'full' ? (
                           <>
