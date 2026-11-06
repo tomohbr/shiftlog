@@ -737,12 +737,28 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
         `).run(row.user_id, lineUserId);
         db.prepare('DELETE FROM line_link_codes WHERE code = ?').run(m[0]);
         await replyLine(s.channel_access_token, event.replyToken, linkedMsg(companyId, row.name));
+        await sendOpenCampaignsTo(companyId, row.user_id);
       }
     } catch (err) {
       console.error('[line] webhook 処理失敗:', (err as Error).message);
     }
   }
 });
+
+// つながった直後に、その人がまだ希望を出せる募集（あとから入った人は入った日から7日）があれば案内を送る。
+// 前からいる人がつなぎ直したときは、締切が過ぎていれば送らない
+async function sendOpenCampaignsTo(companyId: number, userId: number) {
+  try {
+    const staff = db.prepare("SELECT 1 FROM user_companies uc JOIN users u ON u.id = uc.user_id WHERE uc.user_id = ? AND uc.company_id = ? AND uc.role = 'staff' AND u.role NOT IN ('admin', 'super_admin')").get(userId, companyId);
+    if (!staff) return;
+    const answered = db.prepare('SELECT 1 FROM request_campaign_answers WHERE campaign_id = ? AND user_id = ? AND submitted_at IS NOT NULL');
+    const rows = (db.prepare("SELECT id, title, start_date, end_date, deadline, status, sent_at FROM request_campaigns WHERE company_id = ? AND status = 'open' AND sent_at IS NOT NULL").all(companyId) as any[])
+      .filter(c => isAccepting(forUser(companyId, c, userId)) && !answered.get(c.id, userId));
+    for (const c of rows) await sendCampaignLinks(companyId, c, 'open', [userId]);
+  } catch (err) {
+    console.error('[line] 募集の案内を送れませんでした:', (err as Error).message);
+  }
+}
 
 // 同じ LINE が、この会社の別のスタッフにもつながっていたら外す（1つの LINE は1人だけ）。
 // 先に名前を送って「新しいスタッフ」として作られ、そのあと本人用の招待で元の自分につないだ場合など、
@@ -1193,6 +1209,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     db.prepare("UPDATE line_registrations SET status = 'rejected' WHERE company_id = ? AND user_id = ? AND status = 'pending'").run(companyId, reg.user_id);
     await replyLine(token, replyToken, a === 'reg_new' ? `${reg.name}さんをスタッフに登録して、承認しました。（時給などはスタッフ管理で入れてください）` : `${reg.name}さんを承認しました。`);
     await sendLineMessage(token, reg.line_user_id, linkedMsg(companyId, reg.name));
+    await sendOpenCampaignsTo(companyId, reg.user_id);
     return;
   }
 
