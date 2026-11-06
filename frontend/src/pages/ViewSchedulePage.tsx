@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, EyeOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, EyeOff, CalendarDays, List } from 'lucide-react'
 import { apiBaseUrl } from '../native/platform'
-import type { Shift } from '../api/client'
+import type { Shift, Store } from '../api/client'
+import TeamCalendar from '../components/TeamCalendar'
 import { storeColorMap } from '../lib/storeColors'
 import { mergeShifts, MergedShift, PartKind, PART_SHORT } from '../lib/shiftParts'
 
 // 閲覧用リンク（/v/:token）。社長・オーナーなどがログインせずに、いつでもシフト表を見る画面。
-// 見るだけ（編集・時給・打刻はなし）。開いたら「今日」から下に、日ごと・会場ごとに誰が何時に入るかを出す。
+// 見るだけ（編集・時給・打刻はなし）。最初は月のカレンダー（ダッシュボードと同じ見た目）。日付を押すとその日の詳しい一覧（誰が何時に入るか）に移る。
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
 const hm = (t?: string) => (t || '').slice(0, 5)
@@ -40,6 +41,8 @@ export default function ViewSchedulePage({ token }: { token: string }) {
   const [error, setError] = useState('')
   const [storeFilter, setStoreFilter] = useState<number | null>(null)
   const [showPast, setShowPast] = useState(false)
+  const [view, setView] = useState<'cal' | 'list'>('cal')
+  const [jump, setJump] = useState<string | null>(null)
   const first = useRef(true)
   const reqId = useRef(0)
 
@@ -69,6 +72,17 @@ export default function ViewSchedulePage({ token }: { token: string }) {
   useEffect(() => { load(year, month) }, [load, year, month])
   useEffect(() => { setShowPast(false) }, [year, month])
   useEffect(() => { document.title = 'シフト表（見るだけ）' }, [])
+  // カレンダーで押した日へ、一覧を開いて移る
+  useEffect(() => {
+    if (view !== 'list' || !jump) return
+    const el = document.getElementById(`d-${jump}`)
+    if (el) { el.scrollIntoView({ block: 'start' }); window.scrollBy(0, -8) }
+    setJump(null)
+  }, [view, jump, showPast])
+  const pick = (date: string) => {
+    if (date < today) setShowPast(true)
+    setView('list'); setJump(date)
+  }
 
   const go = (d: number) => {
     const t = new Date(year, month - 1 + d, 1)
@@ -97,13 +111,21 @@ export default function ViewSchedulePage({ token }: { token: string }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-xl mx-auto px-4 pb-10">
+      <div className={`${view === 'cal' ? 'max-w-4xl' : 'max-w-xl'} mx-auto px-4 pb-10`}>
         <header className="pt-4 pb-2">
           <p className="text-xs font-semibold text-gray-500">{data.company_name}｜{data.label}用（見るだけ）</p>
           <div className="flex items-center gap-1 mt-1">
             <button onClick={() => go(-1)} aria-label="前の月" className="p-1.5 -ml-2 text-gray-600 rounded-lg active:bg-gray-200"><ChevronLeft className="w-6 h-6" /></button>
             <h1 className="text-xl font-bold text-gray-900 tabular-nums">{year}年{month}月のシフト</h1>
             <button onClick={() => go(1)} aria-label="次の月" className="p-1.5 text-gray-600 rounded-lg active:bg-gray-200"><ChevronRight className="w-6 h-6" /></button>
+            <div className="ml-auto flex rounded-lg border border-gray-200 bg-white p-0.5">
+              {([['cal', 'カレンダー', CalendarDays], ['list', '日ごと', List]] as const).map(([k, l, Icon]) => (
+                <button key={k} onClick={() => setView(k)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-bold ${view === k ? 'bg-gray-900 text-white' : 'text-gray-600'}`}>
+                  <Icon className="w-4 h-4" />{l}
+                </button>
+              ))}
+            </div>
           </div>
         </header>
 
@@ -128,6 +150,13 @@ export default function ViewSchedulePage({ token }: { token: string }) {
             <EyeOff className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
             <p className="text-sm text-gray-600">{month}月のシフトはまだ公開されていません。</p>
           </div>
+        ) : view === 'cal' ? (
+          <div className="mt-1 bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <TeamCalendar year={year} month={month} today={today} onPick={pick} maxChips={12}
+              stores={data.stores as unknown as Store[]}
+              shifts={data.shifts.filter(s => !storeFilter || s.store_id === storeFilter)} />
+            <p className="px-4 pb-3 text-xs text-gray-500">日付を押すと、その日の時間が見られます。</p>
+          </div>
         ) : (
           <div className="space-y-3 mt-1">
             {pastDates.length > 0 && (
@@ -141,7 +170,7 @@ export default function ViewSchedulePage({ token }: { token: string }) {
               const day = merged.filter(s => s.date === date)
               const groups = [...new Set(day.map(s => s.store_id ?? null))].sort((a, b) => storeOrder(a) - storeOrder(b))
               return (
-                <section key={date} className={`bg-white rounded-xl border overflow-hidden ${date === today ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-200'} ${date < today ? 'opacity-60' : ''}`}>
+                <section key={date} id={`d-${date}`} className={`bg-white rounded-xl border overflow-hidden ${date === today ? 'border-red-300 ring-2 ring-red-100' : 'border-gray-200'} ${date < today ? 'opacity-60' : ''}`}>
                   <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
                     <span className={`text-lg font-bold ${dowColor(dow)}`}>{m}/{d}（{DOW[dow]}）</span>
                     {date === today && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">今日</span>}
