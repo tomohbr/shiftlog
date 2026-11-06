@@ -62,7 +62,7 @@ export function computeShortages(companyId: number, from: string, to: string): S
 }
 
 /**
- * 希望の画面用: 公開済みの月の日について、まだ丸ごと足りない部（昼 a／夜 b）を返す。
+ * 希望の画面用: 公開済みの月の日について、まだ人が足りない部（昼 a／夜 b。丸ごと足りない枠も、一部の時間だけ足りない枠も）を返す。
  * 公開済みの月で足りない部がない日は「埋まり」（希望を新しく出せない）。公開前の月は null（全部出せる）。
  */
 export function openPartsByDate(companyId: number, from: string, to: string): Map<string, ('a' | 'b')[]> | null {
@@ -70,7 +70,8 @@ export function openPartsByDate(companyId: number, from: string, to: string): Ma
   const published = new Set(pubs.map(p => `${p.year}-${String(p.month).padStart(2, '0')}`));
   if (published.size === 0) return null;
   const out = new Map<string, ('a' | 'b')[]>();
-  const shorts = computeShortages(companyId, from, to).filter(x => x.kind === 'full');
+  // 丸ごと足りない枠（赤）に加えて、一部の時間だけ足りない枠（黄。例: 16〜18時だけ空き）も選べるようにする
+  const shorts = computeShortages(companyId, from, to);
   for (let t = Date.parse(from); t <= Date.parse(to); t += 86400000) {
     const d = new Date(t).toISOString().slice(0, 10);
     if (!published.has(d.slice(0, 7))) continue;

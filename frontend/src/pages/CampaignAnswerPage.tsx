@@ -38,6 +38,13 @@ const DPW: { key: '1-2' | '3-4' | '5+'; label: string }[] = [
   { key: '1-2', label: '1〜2日' }, { key: '3-4', label: '3〜4日' }, { key: '5+', label: '5日以上' },
 ]
 
+// 「16:00〜18:00、…」→「16-18時」（カレンダーのマス用。最初の時間だけ）
+const shortHours = (t: string) => {
+  const m = t.match(/^(\d{2}):(\d{2})〜(\d{2}):(\d{2})/)
+  if (!m) return '一部'
+  const h = (hh: string, mm: string) => `${Number(hh)}${mm === '00' ? '' : ':' + mm}`
+  return `${h(m[1], m[2])}-${h(m[3], m[4])}時`
+}
 const md = (date: string) => {
   const [y, m, d] = date.split('-').map(Number)
   return `${m}/${d}（${DOW[new Date(y, m - 1, d).getDay()]}）`
@@ -145,6 +152,7 @@ export default function CampaignAnswerPage() {
     const only = day.open_parts && day.open_parts.length === 1 ? day.open_parts[0] : null
     setEntries(prev => ({ ...prev, [date]: { availability: pen, part: longOk ? (only || (cur && cur.availability !== 'unavailable' && cur.part ? cur.part : defaultPart)) : null } }))
     setFocusDay(longOk ? date : null)
+    if (pen !== 'unavailable' && day.short_times) toast(`${md(date)} は ${day.short_times} の人が足りません`)
   }
   // 「1日通しでも入れる」なら、昼夜の日に印をつけたときの最初の選択を「通し」にする
   const defaultPart: CampaignPart = answer.long_day === 'yes' ? 'all' : 'full'
@@ -450,7 +458,10 @@ export default function CampaignAnswerPage() {
                       {day?.long && <span className="text-[8px] font-bold px-0.5 rounded bg-amber-100 text-amber-800 leading-tight">昼夜</span>}
                     </span>
                     {full && !p && <span className={`mx-[2px] mt-1 text-center text-[10px] font-bold leading-tight ${day?.working ? 'text-blue-600' : 'text-gray-400'}`}>{day?.working ? <>シフト<br />あり</> : <>埋まって<br />います</>}</span>}
-                    {day && !full && day.open_parts && day.long && day.open_parts.length === 1 && !p && (
+                    {day && !full && day.short_times && !p && (
+                      <span className="mx-[2px] mt-1 text-center text-[10px] font-bold text-amber-600 leading-tight">{shortHours(day.short_times)}<br />足りない</span>
+                    )}
+                    {day && !full && !day.short_times && day.open_parts && day.long && day.open_parts.length === 1 && !p && (
                       <span className="mx-[2px] mt-1 text-center text-[10px] font-bold text-red-600 leading-tight">{day.open_parts[0] === 'a' ? '昼が' : '夜が'}<br />足りない</span>
                     )}
                     {p && (

@@ -1,4 +1,4 @@
-import { openPartsByDate } from '../utils/shortages';
+import { openPartsByDate, computeShortages } from '../utils/shortages';
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
@@ -140,6 +140,16 @@ router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const openParts = openPartsByDate(companyId, c.start_date, c.end_date);
   // 自分のシフトがもう入っている日も選べない（同じ日に別の会場へは入れない）
   const myDays = new Set((db.prepare('SELECT date FROM shifts WHERE company_id = ? AND user_id = ? AND date >= ? AND date <= ?').all(companyId, userId, c.start_date, c.end_date) as any[]).map(r => r.date));
+  // 一部の時間だけ足りない日（例: 16:00〜18:00だけ空き）は、その時間を出す。丸ごと足りない枠がある日は出さない
+  const shortTimes = new Map<string, string[]>();
+  const shortList = openParts ? computeShortages(companyId, c.start_date, c.end_date) : [];
+  const fullDates = new Set(shortList.filter(s => s.kind === 'full').map(s => s.date));
+  for (const s of shortList) {
+    if (s.kind !== 'partial' || fullDates.has(s.date)) continue;
+    const list = shortTimes.get(s.date) ?? [];
+    for (const g of s.gaps) { const t = `${g.from}〜${g.to}`; if (!list.includes(t)) list.push(t); }
+    shortTimes.set(s.date, list);
+  }
   res.json({
     campaign: view(forUser(companyId, c, userId)),
     contact: W(companyId),
@@ -149,6 +159,7 @@ router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
       filled: (!!openParts?.has(d.date) && openParts.get(d.date)!.length === 0) || (!!openParts && myDays.has(d.date)),
       working: myDays.has(d.date),
       open_parts: openParts?.get(d.date) ?? null,
+      short_times: shortTimes.get(d.date)?.join('、') ?? null,
       venues: d.venues.map(v => ({ store_id: v.store_id, slots: v.slots.map(s => ({ start_time: s.start_time, end_time: s.end_time, part: s.part })) })), times: d.times })),
     answer: answerView(answer, names),
     entries,

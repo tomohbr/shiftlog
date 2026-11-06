@@ -687,6 +687,8 @@ export interface CampaignDay {
   working?: boolean
   // シフト公開後: まだ足りない部（昼 a／夜 b）。null は公開前（全部出せる）
   open_parts?: ('a' | 'b')[] | null
+  // 一部の時間だけ足りない日の、足りない時間（例: 16:00〜18:00）
+  short_times?: string | null
   venues: { store_id: number | null; slots: { start_time: string; end_time: string; part: 'a' | 'b' }[] }[]
   times: Record<'a' | 'b', { start: string; end: string }>
 }
