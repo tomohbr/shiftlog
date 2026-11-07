@@ -740,6 +740,7 @@ export interface CampaignMine {
   answer: CampaignAnswerView | null
   entries: Record<string, { availability: CampaignAvailability; part: CampaignPart | null }>
   transports: string[]
+  allow_all?: boolean
   colleagues?: { id: number; name: string }[]
 }
 export interface CampaignPerson { user_id: number; name: string; availability: CampaignAvailability; part: CampaignPart | null; part_label: string | null }

@@ -34,7 +34,14 @@ function adminOnly(req: AuthRequest, res: Response): boolean {
 interface CampaignRow {
   id: number; company_id: number; title: string; start_date: string; end_date: string;
   deadline: string | null; status: 'draft' | 'open' | 'closed'; sent_at: string | null; created_at: string;
-  remind_at?: string | null; remind_user_ids?: string | null;
+  remind_at?: string | null; remind_user_ids?: string | null; allday_until?: string | null;
+}
+
+// 1日通しを選べるか。allday_until（JSTの日付）以降に登録した人は選べない
+function allowAllDay(c: CampaignRow, userId: number): boolean {
+  if (!c.allday_until) return true;
+  const u = db.prepare("SELECT date(created_at, '+9 hours') AS d FROM users WHERE id = ?").get(userId) as any;
+  return !u?.d || u.d < c.allday_until;
 }
 
 function getCampaign(companyId: number, id: unknown): CampaignRow | undefined {
@@ -165,6 +172,7 @@ router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
     answer: answerView(answer, names),
     entries,
     transports: TRANSPORTS,
+    allow_all: allowAllDay(c, userId),
     // 「誰の紹介？」で選べる人（自分以外のスタッフの名前だけ）
     colleagues: campaignStaff(companyId).filter(s => s.id !== userId).map(s => ({ id: s.id, name: s.name })),
   });
@@ -194,7 +202,9 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const transport = (Array.isArray(a.transport) ? a.transport : []).map(String).filter((t: string) => TRANSPORTS.includes(t));
   const clip = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n) || null;
   const otherJob = a.other_job === 'yes' ? 'yes' : a.other_job === 'none' ? 'none' : null;
-  const longDay = (LONG_DAY as readonly string[]).includes(a.long_day) ? a.long_day : null;
+  const canAll = allowAllDay(c, userId);
+  const longDayRaw = (LONG_DAY as readonly string[]).includes(a.long_day) ? a.long_day : null;
+  const longDay = !canAll && longDayRaw === 'yes' ? 'depends' : longDayRaw;
   const weekdayFrom = WEEKDAY_FROM.includes(String(a.weekday_from)) ? String(a.weekday_from) : null;
   const referral = (REFERRAL as readonly string[]).includes(a.referral) ? a.referral : null;
   const referredBy = Number(a.referred_by) && Number(a.referred_by) !== userId && campaignStaff(companyId).some(s => s.id === Number(a.referred_by)) ? Number(a.referred_by) : null;
@@ -217,7 +227,7 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
     if (!availability) continue;
     const day = dayOf.get(date)!;
     let part: Part | null = availability !== 'unavailable' && day.long ? (PARTS.includes(e.part) ? e.part : 'full') : null;
-    if (part === 'all' && longDay === 'half') part = 'full';
+    if (part === 'all' && (longDay === 'half' || !canAll)) part = 'full';
     // 片方の部しか足りない日は、その部に寄せる
     const op = openParts?.get(date);
     if (part && op && op.length === 1 && part !== op[0]) part = op[0];
@@ -401,6 +411,17 @@ router.post('/:id/remind', authenticateToken, requireCompany, requireEventMode, 
   // user_ids を渡すとその人だけ（あとから連携した人に1通だけ送る、など）
   const only = Array.isArray(req.body?.user_ids) ? new Set((req.body.user_ids as any[]).map(Number)) : null;
   res.json(await sendRemind(companyId, c, only));
+});
+
+// PUT /api/request-campaigns/:id/allday-until { date: 'YYYY-MM-DD' | null }  この日以降に登録した人は通しを選べない
+router.put('/:id/allday-until', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+  if (!adminOnly(req, res)) return;
+  const c = getCampaign(req.companyId!, req.params.id);
+  if (!c) { res.status(404).json({ error: '募集が見つかりません' }); return; }
+  const d = req.body?.date == null || req.body.date === '' ? null : String(req.body.date);
+  if (d !== null && !/^\d{4}-\d{2}-\d{2}$/.test(d)) { res.status(400).json({ error: '日付は YYYY-MM-DD' }); return; }
+  db.prepare('UPDATE request_campaigns SET allday_until = ? WHERE id = ?').run(d, c.id);
+  res.json({ allday_until: d });
 });
 
 // PUT /api/request-campaigns/:id/remind-at { at: 'YYYY-MM-DD HH:MM'（JST） | null, user_ids? }  催促を予約する／取り消す

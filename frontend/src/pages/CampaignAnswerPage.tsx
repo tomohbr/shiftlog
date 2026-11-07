@@ -169,7 +169,8 @@ export default function CampaignAnswerPage() {
     if (pen !== 'unavailable' && day.short_times) toast(`${md(date)} は ${day.short_times} の人が足りません`)
   }
   // 「1日通しでも入れる」なら、昼夜の日に印をつけたときの最初の選択を「通し」にする
-  const defaultPart: CampaignPart = answer.long_day === 'yes' ? 'all' : 'full'
+  const canAll = data?.allow_all !== false
+  const defaultPart: CampaignPart = canAll && answer.long_day === 'yes' ? 'all' : 'full'
   const pickLongDay = (k: 'yes' | 'half' | 'depends') => {
     const next = answer.long_day === k ? null : k
     setA('long_day', next)
@@ -372,13 +373,13 @@ export default function CampaignAnswerPage() {
           )}
         </div>
 
-        <div>
+        {canAll && <div>
           <p className="text-sm font-bold text-gray-800">⑥ 土日・祝日に、1日通しでも入れますか？</p>
           <p className="text-xs text-gray-500 mb-1.5">昼と夜に分かれる日（開店〜閉店）のこと。日ごとの時間は下のカレンダーで選べます</p>
           <div className="grid grid-cols-3 gap-2">
             {LONG_DAY.map(o => <Chip key={o.key} on={answer.long_day === o.key} disabled={!open} onClick={() => pickLongDay(o.key)}>{o.label}</Chip>)}
           </div>
-        </div>
+        </div>}
 
         <div>
           <p className="text-sm font-bold text-gray-800">平日は何時から入れますか？</p>
@@ -534,7 +535,7 @@ export default function CampaignAnswerPage() {
             <p className="px-4 pt-3 pb-1 text-sm font-bold text-gray-800">昼夜の日の時間（{longMarked.length}日）</p>
             <div className="divide-y divide-gray-100">
               {longMarked.map(d => (
-                <PartRow key={d.date} day={d} entry={entries[d.date]} disabled={!open} allowAll={answer.long_day !== 'half'} onPick={part => setPart(d.date, part)} />
+                <PartRow key={d.date} day={d} entry={entries[d.date]} disabled={!open} allowAll={canAll && answer.long_day !== 'half'} onPick={part => setPart(d.date, part)} />
               ))}
             </div>
           </div>
@@ -550,7 +551,7 @@ export default function CampaignAnswerPage() {
                 <p className="text-sm font-bold text-gray-800">{md(focus.date)} はどの時間？</p>
                 <button onClick={() => setFocusDay(null)} className="ml-auto p-1 text-gray-400" aria-label="閉じる"><X className="w-4 h-4" /></button>
               </div>
-              <PartButtons day={focus} value={focusEntry.part || 'full'} allowAll={answer.long_day !== 'half'} onPick={part => setPart(focus.date, part)} />
+              <PartButtons day={focus} value={focusEntry.part || 'full'} allowAll={canAll && answer.long_day !== 'half'} onPick={part => setPart(focus.date, part)} />
             </div>
           )}
           <div className="px-4 py-3">

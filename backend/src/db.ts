@@ -713,6 +713,8 @@ try {
   const rcCols = db.prepare('PRAGMA table_info(request_campaigns)').all().map((c: any) => c.name);
   if (!rcCols.includes('remind_at')) db.exec('ALTER TABLE request_campaigns ADD COLUMN remind_at TEXT');
   if (!rcCols.includes('remind_user_ids')) db.exec('ALTER TABLE request_campaigns ADD COLUMN remind_user_ids TEXT');
+  // この日（JST）以降に登録した人は「1日通し」を選べない（募集のあとから入った新人は半日まで）
+  if (!rcCols.includes('allday_until')) db.exec('ALTER TABLE request_campaigns ADD COLUMN allday_until TEXT');
 } catch (e) { console.error('[migration] 希望の募集テーブルの作成に失敗', e); }
 
 // ---- 催事の在庫・補充（2026-10。クリスマスマーケットの会場在庫と、工房からの毎日の積み込み） ----
