@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { BookOpen, Store, Users, Calendar, Smartphone, MessageCircle, CreditCard, CheckCircle2, Copy, Download, Sparkles, ExternalLink, ChevronRight, Mail, HeartHandshake } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
+import { PUBLIC_APP_ORIGIN } from '../native/platform'
 
 interface Step {
   id: string
@@ -16,7 +17,7 @@ export default function SetupGuidePage() {
   const { user, selectedCompany } = useAuth()
   const [audience, setAudience] = useState<'owner' | 'staff'>('owner')
   const companyPin = (selectedCompany as any)?.company_pin || ''
-  const appUrl = 'https://shiftlog-production.up.railway.app/'
+  const appUrl = `${PUBLIC_APP_ORIGIN}/`
 
   const copy = (txt: string, label = 'コピーしました') => {
     navigator.clipboard.writeText(txt)

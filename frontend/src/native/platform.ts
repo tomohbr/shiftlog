@@ -14,6 +14,10 @@ export const isIOS = Capacitor.getPlatform() === 'ios'
 // 相対パスの /api では自分自身を指してしまう。必ず絶対URLを使う。
 const PRODUCTION_API = 'https://shiftlog-production.up.railway.app'
 
+// スタッフに配る・印刷するリンクの住所。2026-11-07 から Cloudflare 経由の独自ドメイン
+// （一部の回線が Railway の IP をブロックしているため。旧 *.up.railway.app も並行して生きている）
+export const PUBLIC_APP_ORIGIN = 'https://shiftlog.ashilog.jp'
+
 export const apiOrigin: string = isNative
   ? (import.meta.env.VITE_API_BASE_URL || PRODUCTION_API).replace(/\/$/, '')
   : ''

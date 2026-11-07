@@ -1,9 +1,10 @@
 import { QRCodeSVG } from 'qrcode.react'
+import { PUBLIC_APP_ORIGIN } from '../native/platform'
 
 // 会社PINはスタッフ全員共通のため、店舗に1枚貼っておけば全スタッフが使い回せる。
 // ?pin= を踏むとログイン画面が会社PIN入力を自動スキップし、名前選択まで進む。
 export function staffLoginUrl(companyPin: string): string {
-  return `https://shiftlog-production.up.railway.app/login?pin=${companyPin}`
+  return `${PUBLIC_APP_ORIGIN}/login?pin=${companyPin}`
 }
 
 // 会社共通QRリンクだけで完結する簡易版の案内文（オンボーディング等、個別PIN不要な場面用）

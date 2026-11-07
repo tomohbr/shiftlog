@@ -3,13 +3,12 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Printer, X, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { storesApi } from '../api/client'
-import { isNative } from '../native/platform'
+import { PUBLIC_APP_ORIGIN } from '../native/platform'
 
-// 会場QRの打刻URL。Web は今開いているサーバー、iOS アプリは本番サーバーを指す
-// （アプリ内は capacitor://localhost なので、そのままではスタッフのスマホから開けない）
+// 会場QRの打刻URL。印刷して貼るものなので、どの回線からも届く公開の住所を使う
+// （アプリ内は capacitor://localhost、旧 Railway の住所は一部の回線で届かない）
 export function storeClockUrl(token: string): string {
-  const origin = isNative ? 'https://shiftlog-production.up.railway.app' : window.location.origin
-  return `${origin}/q/${token}`
+  return `${PUBLIC_APP_ORIGIN}/q/${token}`
 }
 
 // 会場ごとの打刻用QRポスター（A4縦）。店舗管理の各店舗から新しいタブで開く独立ページ。

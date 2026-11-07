@@ -42,7 +42,7 @@ router.post('/', authenticateToken, (req: AuthRequest, res: Response): void => {
   const companyName = companyId ? ((db.prepare('SELECT name FROM companies WHERE id = ?').get(companyId) as any)?.name || '-') : '-';
   const platform = typeof req.body.platform === 'string' ? req.body.platform.slice(0, 16) : 'web';
   const subject = `【シフトログ】${CATEGORY_LABEL[safeCategory]}: ${senderName}様（${companyName}）`;
-  const body = `${senderName}様より新しいフィードバックが届きました。\n\n分類: ${CATEGORY_LABEL[safeCategory]}\n会社: ${companyName}\n連絡先: ${senderEmail}\n送信元: ${platform}${typeof req.body.path === 'string' ? ` / 画面 ${req.body.path.slice(0, 120)}` : ''}\n\n--- 本文 ---\n${message.trim()}\n---\n\n管理画面で確認・返信: https://shiftlog-production.up.railway.app/admin-hub\nフィードバックID: ${result.lastInsertRowid}`;
+  const body = `${senderName}様より新しいフィードバックが届きました。\n\n分類: ${CATEGORY_LABEL[safeCategory]}\n会社: ${companyName}\n連絡先: ${senderEmail}\n送信元: ${platform}${typeof req.body.path === 'string' ? ` / 画面 ${req.body.path.slice(0, 120)}` : ''}\n\n--- 本文 ---\n${message.trim()}\n---\n\n管理画面で確認・返信: ${process.env.APP_URL || 'https://shiftlog-production.up.railway.app'}/admin-hub\nフィードバックID: ${result.lastInsertRowid}`;
   sendMail(SUPER_ADMIN_EMAIL, subject, body).catch(() => {});
 
   res.status(201).json({ message: 'フィードバックを送信しました。ありがとうございました。' });

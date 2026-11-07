@@ -322,7 +322,7 @@ router.post('/register', (req: Request, res: Response): void => {
   try {
     const registeredAt = `${getJSTDate()} ${getJSTTime()}`;
     const subject = `【シフトログ】新規登録: ${companyName}`;
-    const body = `新しい会社が登録されました。\n\n会社名: ${companyName}\n管理者名: ${name}\nメール: ${email}\n登録時刻: ${registeredAt} (JST)\n流入元: ${acquisition.slice(0, 3).map(value => value ?? 'unknown').join('/')}\ncompany_id: ${companyId}\n\n登録当日が唯一のフォロー窓です。ウェルカムメールを検討してください。\n利用状況: https://shiftlog-production.up.railway.app/admin`;
+    const body = `新しい会社が登録されました。\n\n会社名: ${companyName}\n管理者名: ${name}\nメール: ${email}\n登録時刻: ${registeredAt} (JST)\n流入元: ${acquisition.slice(0, 3).map(value => value ?? 'unknown').join('/')}\ncompany_id: ${companyId}\n\n登録当日が唯一のフォロー窓です。ウェルカムメールを検討してください。\n利用状況: ${process.env.APP_URL || 'https://shiftlog-production.up.railway.app'}/admin`;
     sendMail(SUPER_ADMIN_EMAIL, subject, body).catch(() => {});
   } catch {}
 
