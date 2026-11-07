@@ -1656,6 +1656,8 @@ function fillOffersFor(companyId: number) {
   `).all(companyId) as { id: number; name: string; dn: string; line_user_id: string | null }[];
   const busy = new Set((db.prepare('SELECT user_id, date FROM shifts WHERE company_id = ? AND date >= ? AND date <= ?').all(companyId, from, to) as any[]).map(r => `${r.user_id}|${r.date}`));
   const reqs = new Map((db.prepare('SELECT user_id, date, availability, part FROM shift_requests WHERE company_id = ? AND date >= ? AND date <= ?').all(companyId, from, to) as any[]).map(r => [`${r.user_id}|${r.date}`, r]));
+  // 休みの連絡をくれた日は打診しない（断られた日にまた頼むことになる）
+  for (const r of db.prepare("SELECT user_id, date FROM absence_reports WHERE company_id = ? AND date >= ? AND date <= ? AND status != 'rejected'").all(companyId, from, to) as any[]) busy.add(`${r.user_id}|${r.date}`);
   const prefs = campaignPreferences(companyId, from, to);
   const RANK: Record<string, number> = { preferred: 0, available: 1 };
   return staff.map(u => {
