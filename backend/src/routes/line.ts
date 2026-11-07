@@ -11,6 +11,7 @@ import { absenceRule, phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
 import { canAddStaff } from '../utils/billing';
 import { autoDisplayName } from '../utils/displayName';
 import { pairConflict } from '../utils/pairBlocks';
+import { clampEnd } from '../utils/minor';
 import { daysLeft, forUser, isAccepting, campaignPreferences } from '../utils/requestCampaign';
 import { computeShortages } from '../utils/shortages';
 import { recordShiftChange, snapOf, pendingChanges, markNotified } from '../utils/shiftChanges';
@@ -1403,7 +1404,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     const st = storeId ? (db.prepare('SELECT name FROM stores WHERE id = ? AND company_id = ?').get(storeId, companyId) as any) : null;
     const label = `${md2(date)} ${st?.name ? st.name + ' ' : ''}${from}–${to}`;
     // 今もまだ丸ごと足りない枠か（埋まった・一部だけの枠なら、お礼だけ返す）
-    const still = computeShortages(companyId, date, date).some(x => x.kind === 'full' && (x.store_id ?? 0) === (storeId ?? 0) && x.start_time === from && x.end_time === to)
+    const still = computeShortages(companyId, date, date).some(x => x.kind === 'full' && (x.store_id ?? 0) === (storeId ?? 0) && x.start_time === from && clampEnd(companyId, me.id, x.end_time) === to)
       && !pairConflict(companyId, me.id, date, storeId, from, to);
     if (!still) {
       await replyLine(token, replyToken, `ありがとう！\n${label} は、人が足りたので大丈夫になりました。また足りない日が出たらお願いします🙏`); return;
@@ -1544,7 +1545,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
       await replyLine(token, replyToken, `${cover.name}さんは、この枠には入れられない設定になっています。シフト画面で確かめてください。`); return;
     }
     const absentUser = sh.user_id;
-    db.prepare('UPDATE shifts SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(cover.id, sh.id);
+    db.prepare('UPDATE shifts SET user_id = ?, end_time = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(cover.id, clampEnd(companyId, cover.id, sh.end_time), sh.id);
     db.prepare("UPDATE absence_reports SET status = 'covered', cover_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(cover.id, ab.id);
     await replyLine(token, replyToken, `${shiftLabel(sh)} は ${cover.name}さんに決めました。シフトを差し替えて、2人に知らせました。`);
     const coverLine = db.prepare('SELECT line_user_id FROM user_line_ids WHERE user_id = ?').get(cover.id) as any;
@@ -1695,7 +1696,7 @@ function fillOffersFor(companyId: number, fromDate: string | null = null, toDate
       for (const w of [{ from: sh.start_time, to: sh.end_time }]) {
         const part = w.from < '15:00' ? 'a' : 'b';
         if ((rq?.part === 'a' || rq?.part === 'b') && rq.part !== part) continue;
-        offers.push({ date: sh.date, store_id: sh.store_id, store_name: sh.store_name, from: w.from, to: w.to, rank: rq ? (RANK[rq.availability] ?? 2) : 2 });
+        offers.push({ date: sh.date, store_id: sh.store_id, store_name: sh.store_name, from: w.from, to: clampEnd(companyId, u.id, w.to), rank: rq ? (RANK[rq.availability] ?? 2) : 2 });
       }
     }
     // 希望で◎○を付けた日を先に、そのあと日付順。最後は日付順に並べ直す

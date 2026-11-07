@@ -8,6 +8,7 @@ import { requireProForPastMonths } from '../utils/billing';
 import { notifyShiftPublished, sendShiftChangeCard } from './line';
 import { recordShiftChange, snapOf, pendingChanges, markNotified } from '../utils/shiftChanges';
 import { pairConflict, PAIR_BLOCK_MSG, listPairBlocks, setPairBlocks } from '../utils/pairBlocks';
+import { isMinor, MINOR_END } from '../utils/minor';
 
 const router = Router();
 
@@ -172,6 +173,10 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
     res.status(409).json({ error: 'この時間帯にすでにシフトが登録されています' });
     return;
   }
+  if (isMinor(companyId, Number(user_id)) && String(end_time).slice(0, 5) > MINOR_END) {
+    res.status(400).json({ error: `18歳未満のスタッフは ${MINOR_END} までにしてください` });
+    return;
+  }
   if (pairConflict(companyId, Number(user_id), date, storeId, start_time, end_time)) {
     res.status(409).json({ error: PAIR_BLOCK_MSG });
     return;
@@ -223,6 +228,10 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
     storeId = r;
   }
 
+  if (isMinor(companyId, Number(user_id || shift.user_id)) && String(end_time || shift.end_time).slice(0, 5) > MINOR_END) {
+    res.status(400).json({ error: `18歳未満のスタッフは ${MINOR_END} までにしてください` });
+    return;
+  }
   if (pairConflict(companyId, Number(user_id || shift.user_id), date || shift.date, storeId, start_time || shift.start_time, end_time || shift.end_time, Number(req.params.id))) {
     res.status(409).json({ error: PAIR_BLOCK_MSG });
     return;

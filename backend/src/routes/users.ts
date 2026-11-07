@@ -276,6 +276,9 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
   if (canManage && display_name !== undefined) {
     db.prepare('UPDATE user_companies SET display_name = ? WHERE user_id = ? AND company_id = ?').run(String(display_name || '').trim().slice(0, 20) || null, userId, companyId);
   }
+  if (canManage && req.body.is_minor !== undefined) {
+    db.prepare('UPDATE user_companies SET is_minor = ? WHERE user_id = ? AND company_id = ?').run(req.body.is_minor ? 1 : 0, userId, companyId);
+  }
   if (canManage && sort_order !== undefined) {
     const n = sort_order === null || sort_order === '' ? null : Math.trunc(Number(sort_order));
     db.prepare('UPDATE user_companies SET sort_order = ? WHERE user_id = ? AND company_id = ?').run(n !== null && Number.isFinite(n) ? n : null, userId, companyId);
