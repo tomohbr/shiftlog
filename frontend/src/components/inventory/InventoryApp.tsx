@@ -19,7 +19,7 @@ const TABS: { id: Tab; label: string; roles: InvRole[]; web?: boolean }[] = [
   { id: 'load', label: '積み込み', roles: ['admin'] },
   { id: 'company', label: '会社在庫', roles: ['admin'] },
   { id: 'stock', label: '在庫・記録', roles: ['full', 'admin'] },
-  { id: 'master', label: '設定', roles: ['admin'], web: true },
+  { id: 'master', label: '設定', roles: ['admin'] },
 ]
 const STORE_TABS: Tab[] = ['count', 'sales', 'buy']
 
@@ -52,7 +52,7 @@ export default function InventoryApp({ api, inLine, initialTab }: { api: InvApi;
   if (!me) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
 
   if (!me.enabled) {
-    if (me.role === 'admin' && !inLine) return <div className="space-y-4"><Msg kind="info">在庫の機能はまだ有効になっていません。初期データを入れて「在庫の機能を使う」にチェックすると使えます。</Msg><MasterPanel api={api} onChanged={loadMe} /></div>
+    if (me.role === 'admin') return <div className="space-y-4"><Msg kind="info">在庫の機能はまだ有効になっていません。初期データを入れて「在庫の機能を使う」にチェックすると使えます。</Msg><MasterPanel api={api} onChanged={loadMe} /></div>
     return <Msg kind="info">在庫の機能はまだ使えるようになっていません。</Msg>
   }
 

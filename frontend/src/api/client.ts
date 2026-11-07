@@ -947,6 +947,8 @@ export interface InvPerCount { item_id: number; name: string; count_unit: string
 export interface InvSettings { company_id: number; enabled: number; store_ids: number[]; notify_user_ids: number[]; margin_pct: number; special_days: Record<string, string>; active_from: string | null; active_to: string | null }
 export interface InvReceipt { lines: { menu_id: number; qty: number; amount: number | null }[]; total_amount: number | null; unmatched: { label: string; qty: number | null; amount: number | null }[]; receipt_date: string | null; note: string | null }
 
+export interface InvPending { id: number; supplier: string; item_id: number; qty: number; note: string | null; status: 'open' | 'received' | 'cancelled'; created_at: string; received_at: string | null; name: string; count_unit: string }
+
 export function invApi(key?: string) {
   const h = key ? { headers: { 'x-inv-key': key } } : {}
   return {
@@ -965,6 +967,10 @@ export function invApi(key?: string) {
     setPerCount: (item_id: number, per_count: number) => api.post(`/inventory/items/${item_id}/per-count`, { per_count }, h),
     confirmLoad: (store_id: number, date: string, lines: { item_id: number; qty: number }[]) => api.post('/inventory/load/confirm', { store_id, date, lines }, h),
     purchase: (item_id: number, qty: number, note: string) => api.post('/inventory/purchase', { item_id, qty, note }, h),
+    pending: () => api.get<InvPending[]>('/inventory/pending', h),
+    addPending: (supplier: string, lines: { item_id: number; qty: number }[], note?: string) => api.post('/inventory/pending', { supplier, lines, note }, h),
+    receivePending: (ids: number[]) => api.post<{ ok: true; count: number }>('/inventory/pending/receive', { ids }, h),
+    deletePending: (id: number) => api.delete(`/inventory/pending/${id}`, h),
     stock: () => api.get<{ locs: { id: number; name: string }[]; items: InvItem[]; stock: Record<string, Record<string, number>>; store_items: Record<string, number[]>; reorder: InvReorder[] }>('/inventory/stock', h),
     history: (days = 14) => api.get<(InvClosing & { name: string; total_amount: number | null; lines: { menu_id: number; qty: number; amount: number | null }[] })[]>('/inventory/history', { ...h, params: { days } }),
     master: () => api.get<{ settings: InvSettings | null; stores: { id: number; name: string }[]; users: { id: number; name: string; line_linked: number }[]; items: InvItem[]; menus: InvMenu[]; baselines: { store_id: number; menu_id: number; daytype: string; qty: number }[]; has_records: boolean }>('/inventory/master', h),

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { inventoryPostback, inventoryTextReply } from '../utils/inventory-line';
+import { invRole } from '../utils/inventory';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -983,6 +984,17 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
     const what = !short ? '' : /希望/.test(text) ? 'requests' : /変更|変え|代わ|交代|相談|ずら/.test(text) ? 'consult' : /休み|欠勤|休む/.test(text) ? 'absent' : /シフト|予定/.test(text) ? 'shifts' : /打刻|出勤|退勤|QR/i.test(text) ? 'howto' : /使い方|ヘルプ|help/i.test(text) ? 'help' : '';
     // 催事の在庫（閉店の締め・積み込み）の画面を開くボタン
     if (short && /在庫|締め|残り|積み込み|積込/.test(text) && stockLiffUrl(companyId)) {
+      if (invRole(companyId, me.id) === 'admin') {
+        // 担当者: 画面の入口を全部並べる（一言でできることは「在庫の使い方」）
+        await replyLine(token, replyToken, buttonsCard('在庫の画面', '在庫（担当者）', ['入庫・注文・数の確認はトークに一言でもできます。「在庫の使い方」で一覧。'], [
+          { label: '会場の締め（数え・レジ）', uri: stockLiffUrl(companyId)!, primary: true, color: '#06C755' },
+          { label: '積み込み', uri: stockLiffUrl(companyId, 'tab=load')! },
+          { label: '会社在庫（数える・入庫・入荷待ち）', uri: stockLiffUrl(companyId, 'tab=company')! },
+          { label: '在庫・記録', uri: stockLiffUrl(companyId, 'tab=stock')! },
+          { label: '設定（品目・メニュー）', uri: stockLiffUrl(companyId, 'tab=master')! },
+        ]));
+        return;
+      }
       await replyLine(token, replyToken, buttonsCard('在庫の画面', '在庫・閉店の締め', ['残りの数え・レジ締め・買い足し・足りない連絡はここから。'], [{ label: '在庫の画面を開く', uri: stockLiffUrl(companyId)!, primary: true, color: '#06C755' }]));
       return;
     }

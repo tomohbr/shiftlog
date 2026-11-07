@@ -13,6 +13,7 @@ import {
 } from '../utils/inventory';
 import { seedHibariMarket, hasInventoryRecords } from '../utils/inventory-seed';
 import { notifyCounted } from '../utils/inventory-notify';
+import { receivePending } from '../utils/inventory-line';
 import { readReceipt, receiptOcrAvailable } from '../utils/receipt-ocr';
 import { toMinutes } from '../utils/venueSchedule';
 
@@ -318,6 +319,14 @@ router.post('/pending', enabled, need('admin'), (req: InvReq, res: Response): vo
   const note = req.body?.note ? String(req.body.note).slice(0, 200) : null;
   db.transaction(() => { for (const l of lines) ins.run(companyId, supplier, l.item_id, l.qty, note); })();
   res.json({ ok: true, count: lines.length });
+});
+
+// POST /api/inventory/pending/receive { ids } - 届いた（入荷待ちから会社在庫へ）
+router.post('/pending/receive', enabled, need('admin'), (req: InvReq, res: Response): void => {
+  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter((n: number) => n > 0);
+  const done = receivePending(req.inv!.companyId, req.inv!.userId, ids);
+  if (!done.length) { res.status(400).json({ error: 'もう入庫済みか、取り消された注文です' }); return; }
+  res.json({ ok: true, count: done.length });
 });
 
 router.delete('/pending/:id', enabled, need('admin'), (req: InvReq, res: Response): void => {
