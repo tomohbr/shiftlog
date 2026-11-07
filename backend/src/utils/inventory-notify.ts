@@ -57,6 +57,23 @@ export function loadCard(companyId: number, s: InvSettings, today: string) {
   return buttonsCard('積み込みリスト', '次の積み込み（案）', lines, url ? [{ label: '開いて数を確定する', uri: url, primary: true, color: '#06C755' }] : []);
 }
 
+/**
+ * 会場の「残りの数え」が入ったら、担当者に知らせる（その日・その会場で最初に保存したときだけ。11/7 芝原「在庫確認ができたか自分のLINEに」）。
+ * 入れた人と、記録上の数との差（あれば）を1通にまとめる。
+ */
+export async function notifyCounted(companyId: number, storeId: number, date: string, byName: string): Promise<void> {
+  const s = getSettings(companyId);
+  if (!s?.enabled || !s.store_ids.includes(storeId)) return;
+  const to = recipients(companyId, s);
+  if (!to.length || !once(companyId, `counted:${date}:${storeId}`)) return;
+  const st = closingStatus(companyId, storeId, date);
+  const lines = [`${md(date)} ${getJSTTime().slice(0, 5)}　${byName || 'スタッフ'}さんが入れました。`];
+  lines.push(st.sales_done ? 'レジ締めも済んでいます。' : 'レジ締めはまだです。');
+  if (st.diffs.length) lines.push(`記録との差: ${st.diffs.map(d => `${d.name} ${d.diff > 0 ? '+' : ''}${fmt(d.diff)}${d.count_unit}`).join('、')}`);
+  const url = stockLiffUrl(companyId);
+  await pushToUsers(companyId, to, buttonsCard('在庫確認が届きました', `${storeNames(companyId).get(storeId)}：残りの数えが届きました`, lines, url ? [{ label: '在庫の画面を開く', uri: url }] : []));
+}
+
 export async function runInventoryNotifier(): Promise<void> {
   const companies = db.prepare('SELECT company_id FROM inv_settings WHERE enabled = 1').all() as { company_id: number }[];
   for (const { company_id: cid } of companies) {

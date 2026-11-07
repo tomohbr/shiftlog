@@ -12,6 +12,7 @@ import {
   storeItemIds,
 } from '../utils/inventory';
 import { seedHibariMarket, hasInventoryRecords } from '../utils/inventory-seed';
+import { notifyCounted } from '../utils/inventory-notify';
 import { readReceipt, receiptOcrAvailable } from '../utils/receipt-ocr';
 import { toMinutes } from '../utils/venueSchedule';
 
@@ -151,6 +152,7 @@ router.post('/count', enabled, (req: InvReq, res: Response): void => {
     .filter((l: any) => known.has(l.item_id) && Number.isFinite(l.counted) && l.counted >= 0);
   if (!lines.length) { res.status(400).json({ error: '数が1つも入っていません' }); return; }
   saveCount(companyId, loc, date, lines, userId);
+  if (loc !== COMPANY_LOC) notifyCounted(companyId, loc, date, req.inv!.name).catch(e => console.error('[inventory-notify] counted', e));
   res.json({ ok: true, status: loc === COMPANY_LOC ? null : closingStatus(companyId, loc, date) });
 });
 
