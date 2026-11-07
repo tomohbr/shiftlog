@@ -261,7 +261,11 @@ router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res:
   }
 
   const beforeSnap = snapOf(shift.id);
-  db.prepare('DELETE FROM shifts WHERE id = ? AND company_id = ?').run(req.params.id, companyId);
+  // 休みの連絡がこのシフトを指していると外部キーで消せないので、連絡は残したままシフトとの紐づけだけ外す
+  db.transaction(() => {
+    db.prepare('UPDATE absence_reports SET shift_id = NULL WHERE shift_id = ? AND company_id = ?').run(shift.id, companyId);
+    db.prepare('DELETE FROM shifts WHERE id = ? AND company_id = ?').run(req.params.id, companyId);
+  })();
   recordShiftChange(companyId, shift.user_id, shift.id, beforeSnap, null);
   logAudit({ userId: req.user!.id, companyId, action: 'delete', entity: 'shift', entityId: Number(req.params.id), summary: `シフト #${req.params.id} を削除` });
   res.json({ message: 'シフトを削除しました' });
