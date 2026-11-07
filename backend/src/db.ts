@@ -886,6 +886,25 @@ try {
       sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (company_id, key)
     );
+    CREATE TABLE IF NOT EXISTS inv_pending (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      supplier TEXT NOT NULL,
+      item_id INTEGER NOT NULL,
+      qty REAL NOT NULL,
+      note TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      received_at DATETIME
+    );
+    CREATE TABLE IF NOT EXISTS inv_line_drafts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      data TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      done_at DATETIME
+    );
   `);
 } catch (e) { console.error('[migration] 在庫テーブルの作成に失敗', e); }
 

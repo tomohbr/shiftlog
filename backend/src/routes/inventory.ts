@@ -302,6 +302,29 @@ router.post('/load/confirm', enabled, need('admin'), (req: InvReq, res: Response
   res.json({ ok: true, load: buildLoad(companyId, storeId, date) });
 });
 
+// 入荷待ち（注文済みでまだ届いていない分）。LINE で「シモジマ届いた」と送ると、ここからまとめて入庫の案になる
+router.get('/pending', enabled, need('admin'), (req: InvReq, res: Response): void => {
+  res.json(db.prepare(`SELECT p.*, i.name, i.count_unit FROM inv_pending p JOIN inv_items i ON i.id = p.item_id WHERE p.company_id = ? ORDER BY p.status, p.id`).all(req.inv!.companyId));
+});
+
+// POST /api/inventory/pending { supplier, note?, lines: [{ item_id, qty }] }
+router.post('/pending', enabled, need('admin'), (req: InvReq, res: Response): void => {
+  const { companyId } = req.inv!;
+  const supplier = String(req.body?.supplier || '').trim().slice(0, 40);
+  const known = new Set(items(companyId).map(i => i.id));
+  const lines = (Array.isArray(req.body?.lines) ? req.body.lines : []).map((l: any) => ({ item_id: Number(l.item_id), qty: Number(l.qty) })).filter((l: any) => known.has(l.item_id) && l.qty > 0);
+  if (!supplier || !lines.length) { res.status(400).json({ error: '仕入れ先と品目・数を入れてください' }); return; }
+  const ins = db.prepare('INSERT INTO inv_pending (company_id, supplier, item_id, qty, note) VALUES (?, ?, ?, ?, ?)');
+  const note = req.body?.note ? String(req.body.note).slice(0, 200) : null;
+  db.transaction(() => { for (const l of lines) ins.run(companyId, supplier, l.item_id, l.qty, note); })();
+  res.json({ ok: true, count: lines.length });
+});
+
+router.delete('/pending/:id', enabled, need('admin'), (req: InvReq, res: Response): void => {
+  db.prepare("UPDATE inv_pending SET status = 'cancelled' WHERE id = ? AND company_id = ? AND status = 'open'").run(Number(req.params.id), req.inv!.companyId);
+  res.json({ ok: true });
+});
+
 // POST /api/inventory/purchase { item_id, qty, note, date? } - 会社に入庫（仕入れが届いた）
 router.post('/purchase', enabled, need('admin'), (req: InvReq, res: Response): void => {
   const { companyId, userId } = req.inv!;

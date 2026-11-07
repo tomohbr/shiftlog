@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { inventoryPostback, inventoryTextReply } from '../utils/inventory-line';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -776,6 +777,10 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
       if (event.type === 'postback' && event.replyToken) {
         const data = String(event.postback?.data || '');
         if (data.startsWith('menu=')) await replyMenu(data.replace('menu=', ''), companyId, lineUserId, s.channel_access_token, event.replyToken);
+        else if (data.startsWith('inv=')) {
+          const who = lineMember(companyId, lineUserId);
+          await replyLine(s.channel_access_token, event.replyToken, who ? inventoryPostback(companyId, who.id, new URLSearchParams(data)) : 'LINEの連携がまだです。');
+        }
         else await handleAbsencePostback(new URLSearchParams(data), companyId, lineUserId, s.channel_access_token, event.replyToken);
       } else if (event.type === 'follow' && event.replyToken) {
         const known = lineMember(companyId, lineUserId);
@@ -965,6 +970,12 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
   // 「毎回届ける」にした人（新人など）は、短い言葉でもそのまま担当者に届ける（メニューの返事はそのあと普段どおり）
   const watched = !!me && !!(db.prepare('SELECT line_watch FROM user_companies WHERE user_id = ? AND company_id = ?').get(me.id, companyId) as any)?.line_watch;
   if (me && watched && !isAdminMember(me)) await forwardToAdmins(companyId, token, me, lineUserId, 'の連絡', [text.slice(0, 400)]);
+
+  // 担当者（管理者）の「シモジマ届いた」「テイクアウトカップ 500」→ 会社在庫に入れる確認カード
+  if (me) {
+    const inv = inventoryTextReply(companyId, me.id, text);
+    if (inv) { await replyLine(token, replyToken, inv); return; }
+  }
 
   // 連携済み: 短いキーワードはメニューと同じ、それ以外は質問として店長へ
   if (me) {
