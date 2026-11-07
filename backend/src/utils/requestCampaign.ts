@@ -91,17 +91,26 @@ export function daysLeft(deadline: string | null | undefined): number | null {
 export const LATE_JOIN_DAYS = 7;
 
 /** その人にとっての締切。募集を送る前からいる人は募集の締切のまま */
-export function deadlineFor(companyId: number, c: { deadline: string | null; sent_at?: string | null; end_date?: string }, userId: number): string | null {
+// 追加募集（allday_until 以降）で入った人は、入った日から2日で締め切る（早めに組むため。2026-11-07 本人指示）
+export const NEW_RECRUIT_DAYS = 2;
+
+export function deadlineFor(companyId: number, c: { deadline: string | null; sent_at?: string | null; end_date?: string; allday_until?: string | null }, userId: number): string | null {
   if (!c.deadline || !c.sent_at) return c.deadline;
   const j = db.prepare('SELECT created_at FROM user_companies WHERE user_id = ? AND company_id = ?').get(userId, companyId) as { created_at: string | null } | undefined;
   if (!j?.created_at || j.created_at <= c.sent_at) return c.deadline;
+  const joinedJst = new Date(Date.parse(`${j.created_at.replace(' ', 'T')}Z`) + 9 * 3600 * 1000);
+  if (c.allday_until && joinedJst.toISOString().slice(0, 10) >= c.allday_until) {
+    let short = new Date(joinedJst.getTime() + NEW_RECRUIT_DAYS * 86400 * 1000).toISOString().slice(0, 10);
+    if (c.end_date && short > c.end_date) short = c.end_date;
+    return short;
+  }
   let until = new Date(Date.parse(`${j.created_at.replace(' ', 'T')}Z`) + 9 * 3600 * 1000 + LATE_JOIN_DAYS * 86400 * 1000).toISOString().slice(0, 10);
   if (c.end_date && until > c.end_date) until = c.end_date;
   return until > c.deadline ? until : c.deadline;
 }
 
 /** 締切をその人の締切に置き換えた募集 */
-export function forUser<T extends { deadline: string | null; sent_at?: string | null; end_date?: string }>(companyId: number, c: T, userId: number): T {
+export function forUser<T extends { deadline: string | null; sent_at?: string | null; end_date?: string; allday_until?: string | null }>(companyId: number, c: T, userId: number): T {
   return { ...c, deadline: deadlineFor(companyId, c, userId) };
 }
 
