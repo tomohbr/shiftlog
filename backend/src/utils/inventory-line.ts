@@ -1,6 +1,6 @@
 import db from '../db';
 import { buttonsCard } from '../routes/line';
-import { COMPANY_LOC, InvItem, addMove, businessDate, getSettings, invRole, items, stockAt, storeItemIds } from './inventory';
+import { COMPANY_LOC, InvItem, addMove, businessDate, closingStatus, getSettings, invRole, items, reviewCount, stockAt, storeItemIds } from './inventory';
 
 // LINE の一言で会社在庫に入庫する（担当者＝管理者だけ。11/7 芝原「LINEで入れたら入るように」）。
 //  - 「シモジマ届いた」… 入荷待ち（inv_pending）に登録してある注文をまとめて入庫の案にする
@@ -129,6 +129,7 @@ const HELP = `【在庫をLINEでする】（担当者だけ）
 ・注文が届いたら … 「シモジマ届いた」
 ・入荷待ちを見る … 「入荷待ち」
 ・数を見る … 「PFPの在庫」「在庫一覧」
+・差が大きくて止まっている数え … 「確認待ち」
 ・画面で数える・積み込み・設定 … 「在庫」
 どれも確認のボタンを押したときだけ記録します。`;
 
@@ -142,6 +143,17 @@ export function inventoryTextReply(companyId: number, userId: number, text: stri
   const t = text.normalize('NFKC').trim();
 
   if (/^在庫の?(使い方|ヘルプ|help)$/i.test(t)) return HELP;
+  if (/^(確認待ち|在庫の確認待ち|差の確認)$/.test(t)) {
+    const rows = db.prepare(`SELECT DISTINCT c.id, c.loc, c.date FROM inv_counts c JOIN inv_count_lines l ON l.count_id = c.id
+      WHERE c.company_id = ? AND l.review = 'hold' AND c.date >= date('now', '-30 days') ORDER BY c.date`).all(companyId) as { id: number; loc: number; date: string }[];
+    if (!rows.length) return '確認待ちはありません。';
+    const names = new Map(storeNames(companyId).map(v => [v.id, v.name]));
+    const r = rows[0];
+    const st = closingStatus(companyId, r.loc, r.date);
+    const lines = st.diffs.filter(d => d.review === 'hold').map(d => `${d.name}：数えた ${fmt(d.counted)}${d.count_unit}／あるはず ${fmt(d.expected)}（${d.diff > 0 ? '+' : ''}${fmt(d.diff)}）`);
+    return buttonsCard('在庫の確認待ち', `${names.get(r.loc) || ''} ${r.date.slice(5).replace('-', '/')}：確認待ち${st.holds}件`, [`数えた人: ${st.counted_by || '—'}さん`, ...lines, ...(rows.length > 1 ? [`ほかに${rows.length - 1}日分あります。片づけたらもう一度「確認待ち」と送ってください。`] : [])],
+      [{ label: 'この数で確定', data: `inv=hok&c=${r.id}`, primary: true }, { label: '記録の数のまま', data: `inv=hkeep&c=${r.id}` }]);
+  }
   if (/^(在庫一覧|在庫表|会社在庫|全部の在庫|在庫全部|在庫ぜんぶ)$/.test(t)) return stockReply(companyId);
 
   // 「PFPの在庫」「在庫 フォーク」「フォーク何本ある」
@@ -198,6 +210,15 @@ export function inventoryTextReply(companyId: number, userId: number, text: stri
 /** 確認カードのボタン（inv=ok / inv=no） */
 export function inventoryPostback(companyId: number, userId: number, p: URLSearchParams): string {
   if (!isAdmin(companyId, userId)) return 'この操作は担当の人だけができます。';
+  // 数えの確認待ち（hok = この数で確定 / hkeep = 記録の数のまま）
+  if (p.get('inv') === 'hok' || p.get('inv') === 'hkeep') {
+    const countId = Number(p.get('c'));
+    const n = reviewCount(companyId, countId, p.get('inv') === 'hok' ? 'approve' : 'keep', userId);
+    if (!n) return '確認待ちはもうありません（数え直しか、画面で確定済みです）。';
+    const c = db.prepare('SELECT loc, date FROM inv_counts WHERE id = ?').get(countId) as any;
+    const st = closingStatus(companyId, c.loc, c.date);
+    return `${p.get('inv') === 'hok' ? '数えた数で確定し、在庫に反映しました' : '記録の数のままにしました'}（${n}品目）。${st.holds ? `\nまだ確認待ちが${st.holds}件あります。` : ''}`;
+  }
   const id = Number(p.get('d'));
   const row = db.prepare('SELECT * FROM inv_line_drafts WHERE id = ? AND company_id = ?').get(id, companyId) as any;
   if (!row) return 'この確認は期限が切れました。もう一度送ってください。';

@@ -9,10 +9,10 @@ import {
   COMPANY_LOC, InvRole, addDays, addMove, buildLoad, businessDate, closingStatus, confirmLoad, countOf, dayTypeOf,
   DAYTYPE_LABEL, forecastMenus, getSettings, invRole, items, menus, menusForStore, nextOpenDay, openDays, perCountSuggestions,
   reorderAlerts, salesOf, saveCount, saveSales, staleItems, stockAt,
-  storeItemIds,
+  storeItemIds, reviewCount,
 } from '../utils/inventory';
 import { seedHibariMarket, hasInventoryRecords } from '../utils/inventory-seed';
-import { notifyCounted } from '../utils/inventory-notify';
+import { notifyCounted, notifyHolds } from '../utils/inventory-notify';
 import { receivePending } from '../utils/inventory-line';
 import { readReceipt, receiptOcrAvailable } from '../utils/receipt-ocr';
 import { toMinutes } from '../utils/venueSchedule';
@@ -73,6 +73,17 @@ function checkStore(req: InvReq, res: Response, storeId: number, allowCompany = 
   return false;
 }
 
+/** 締め（数え・レジ締め）を入れ直せる日: バイトは今日だけ / 社員は7日前まで / 担当者はいつでも */
+function canEditDate(req: InvReq, res: Response, date: string): boolean {
+  const { role } = req.inv!;
+  const today = businessDate();
+  if (role === 'admin') return true;
+  if (date > today) { res.status(400).json({ error: '先の日付には入れられません' }); return false; }
+  if (role === 'part' && date !== today) { res.status(403).json({ error: '今日の分だけ入れられます。前の日の分は社員さんか担当の人に伝えてください' }); return false; }
+  if (role === 'full' && date < addDays(today, -7)) { res.status(403).json({ error: '7日より前の分は担当の人が直します' }); return false; }
+  return true;
+}
+
 const validDate = (d: unknown) => (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
 
 /** 今日の自分の会場（打刻中の会場 → 今日のシフトの会場 → 最初の会場） */
@@ -128,14 +139,17 @@ router.get('/count', enabled, (req: InvReq, res: Response): void => {
     WHERE c.company_id = ? AND c.loc = ? AND c.date < ? ORDER BY c.date DESC
   `).all(companyId, loc, date) as { date: string; item_id: number; counted: number }[];
   const prevDate = prev[0]?.date || null;
-  const showExpected = role !== 'part';
+  // 会場の数えは何も見ずに数える（記録上の数・前回の数に合わせて入れてしまわないように）。担当者だけは直すために見える
+  const showExpected = role === 'admin';
+  const showPrev = role === 'admin' || loc === COMPANY_LOC;
   const stock = showExpected ? stockAt(companyId, loc) : null;
   res.json({
     loc, date, items: list,
-    lines: cur?.lines.map((l: any) => ({ item_id: l.item_id, counted: l.counted, ...(showExpected ? { expected: l.expected } : {}) })) || [],
+    lines: cur?.lines.map((l: any) => ({ item_id: l.item_id, counted: l.counted, ...(showExpected ? { expected: l.expected, review: l.review } : {}) })) || [],
     saved_at: cur?.updated_at || null,
     finalized: !!cur?.finalized,
-    previous: { date: prevDate, lines: prev.filter(p => p.date === prevDate).map(p => ({ item_id: p.item_id, counted: p.counted })) },
+    blind: !showPrev,
+    previous: showPrev ? { date: prevDate, lines: prev.filter(p => p.date === prevDate).map(p => ({ item_id: p.item_id, counted: p.counted })) } : { date: null, lines: [] },
     ...(stock ? { book: list.map(i => ({ item_id: i.id, qty: stock.get(i.id) || 0 })) } : {}),
   });
 });
@@ -147,6 +161,7 @@ router.post('/count', enabled, (req: InvReq, res: Response): void => {
   if (loc === COMPANY_LOC && role !== 'admin') { res.status(403).json({ error: '会社の在庫は担当の人だけが数えます' }); return; }
   if (!checkStore(req, res, loc, true)) return;
   const date = validDate(req.body?.date) || businessDate();
+  if (!canEditDate(req, res, date)) return;
   const known = new Set(items(companyId).map(i => i.id));
   const lines = (Array.isArray(req.body?.lines) ? req.body.lines : [])
     .map((l: any) => ({ item_id: Number(l.item_id), counted: Number(l.counted) }))
@@ -154,7 +169,19 @@ router.post('/count', enabled, (req: InvReq, res: Response): void => {
   if (!lines.length) { res.status(400).json({ error: '数が1つも入っていません' }); return; }
   saveCount(companyId, loc, date, lines, userId);
   if (loc !== COMPANY_LOC) notifyCounted(companyId, loc, date, req.inv!.name).catch(e => console.error('[inventory-notify] counted', e));
-  res.json({ ok: true, status: loc === COMPANY_LOC ? null : closingStatus(companyId, loc, date) });
+  const st = loc === COMPANY_LOC ? null : closingStatus(companyId, loc, date);
+  res.json({ ok: true, status: st && role === 'part' ? { ...st, diffs: [], holds: 0 } : st });
+});
+
+// POST /api/inventory/count/review { count_id, action: 'approve' | 'keep', item_id? } - 確認待ちを確定（担当者）
+router.post('/count/review', enabled, need('admin'), (req: InvReq, res: Response): void => {
+  const { companyId, userId } = req.inv!;
+  const action = req.body?.action === 'keep' ? 'keep' : req.body?.action === 'approve' ? 'approve' : null;
+  if (!action) { res.status(400).json({ error: 'どうするか選んでください' }); return; }
+  const n = reviewCount(companyId, Number(req.body?.count_id), action, userId, req.body?.item_id ? Number(req.body.item_id) : undefined);
+  if (!n) { res.status(400).json({ error: '確認待ちはもうありません' }); return; }
+  const c = db.prepare('SELECT loc, date FROM inv_counts WHERE id = ?').get(Number(req.body?.count_id)) as any;
+  res.json({ ok: true, status: closingStatus(companyId, c.loc, c.date) });
 });
 
 // GET /api/inventory/sales?store_id=&date= - レジ締めの画面
@@ -190,6 +217,7 @@ router.post('/sales', enabled, need('admin', 'full'), (req: InvReq, res: Respons
   const storeId = Number(req.body?.store_id);
   if (!checkStore(req, res, storeId)) return;
   const date = validDate(req.body?.date) || businessDate();
+  if (!canEditDate(req, res, date)) return;
   const known = new Set(menusForStore(menus(companyId), storeId).map(m => m.id));
   const lines = (Array.isArray(req.body?.lines) ? req.body.lines : [])
     .map((l: any) => ({ menu_id: Number(l.menu_id), qty: Math.max(0, Number(l.qty) || 0), amount: l.amount == null || l.amount === '' ? null : Number(l.amount) }))
@@ -200,6 +228,7 @@ router.post('/sales', enabled, need('admin', 'full'), (req: InvReq, res: Respons
     total: req.body?.total_amount == null || req.body.total_amount === '' ? null : Number(req.body.total_amount),
     photo, ocrRaw: req.body?.ocr_raw ? JSON.stringify(req.body.ocr_raw).slice(0, 20000) : null,
   });
+  notifyHolds(companyId, storeId, date).catch(e => console.error('[inventory-notify] holds', e));
   res.json({ ok: true, status: closingStatus(companyId, storeId, date) });
 });
 
@@ -214,7 +243,7 @@ router.get('/status', enabled, (req: InvReq, res: Response): void => {
     date,
     stores: s.store_ids.map(id => {
       const st = closingStatus(companyId, id, date);
-      return { ...st, name: nameOf(id), open_today: open.get(id)!.has(date), diffs: role === 'part' ? [] : st.diffs };
+      return { ...st, name: nameOf(id), open_today: open.get(id)!.has(date), ...(role === 'part' ? { diffs: [], holds: 0 } : {}) };
     }),
   });
 });

@@ -83,7 +83,7 @@ export default function InventoryApp({ api, inLine, initialTab }: { api: InvApi;
           <p className="text-sm text-gray-700 flex items-center gap-3">
             <span className="flex items-center gap-1">{st.counted ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-gray-400" />}残りの数え</span>
             <span className="flex items-center gap-1">{st.sales_done ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-gray-400" />}レジ締め</span>
-            {st.complete && <span className="font-bold text-green-700">締め完了</span>}
+            {st.complete && (st.holds ? <span className="font-bold text-amber-700">確認待ち{st.holds}件</span> : <span className="font-bold text-green-700">締め完了</span>)}
             {st.open_today === false && <span className="text-gray-500">（この日は休み）</span>}
           </p>
         )}

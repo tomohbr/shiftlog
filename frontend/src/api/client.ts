@@ -938,8 +938,8 @@ export interface InvMe {
   enabled: boolean; role: InvRole; name: string; date?: string
   stores?: { id: number; name: string }[]; my_store?: number | null; ocr?: boolean; items?: InvItem[]; menus?: InvMenu[]; store_items?: Record<string, number[]>
 }
-export interface InvDiff { item_id: number; name: string; count_unit: string; counted: number; expected: number; diff: number }
-export interface InvClosing { store_id: number; date: string; name?: string; open_today?: boolean; counted: boolean; counted_at: string | null; sales_done: boolean; sales_at: string | null; complete: boolean; diffs: InvDiff[] }
+export interface InvDiff { item_id: number; name: string; count_unit: string; counted: number; expected: number; diff: number; review?: 'hold' | 'approved' | 'kept' | null }
+export interface InvClosing { store_id: number; date: string; name?: string; open_today?: boolean; count_id?: number | null; counted: boolean; counted_at: string | null; counted_by?: string | null; sales_by?: string | null; holds?: number; sales_done: boolean; sales_at: string | null; complete: boolean; diffs: InvDiff[] }
 export interface InvLoadLine { item_id: number; name: string; count_unit: string; category: string; need: number; stock: number; request: number; suggested: number; qty: number; capped: boolean; company_stock: number | null }
 export interface InvLoad { store_id: number; name: string; date: string | null; status: string; confirmed_at: string | null; daytype?: string; forecast?: { menu_id: number; name: string; qty: number; basis: string }[]; stale?: { name: string; since: string; days: number }[]; lines: InvLoadLine[] }
 export interface InvReorder { item_id: number; name: string; count_unit: string; total: number; per_day: number; days_left: number; lead_days: number }
@@ -954,7 +954,8 @@ export function invApi(key?: string) {
   return {
     me: () => api.get<InvMe>('/inventory/me', h),
     status: (date?: string) => api.get<{ date: string; stores: InvClosing[] }>('/inventory/status', { ...h, params: { date } }),
-    getCount: (loc: number, date?: string) => api.get<{ loc: number; date: string; items: InvItem[]; lines: { item_id: number; counted: number; expected?: number | null }[]; saved_at: string | null; finalized: boolean; previous: { date: string | null; lines: { item_id: number; counted: number }[] }; book?: { item_id: number; qty: number }[] }>('/inventory/count', { ...h, params: { loc, date } }),
+    getCount: (loc: number, date?: string) => api.get<{ loc: number; date: string; items: InvItem[]; lines: { item_id: number; counted: number; expected?: number | null; review?: string | null }[]; saved_at: string | null; finalized: boolean; blind?: boolean; previous: { date: string | null; lines: { item_id: number; counted: number }[] }; book?: { item_id: number; qty: number }[] }>('/inventory/count', { ...h, params: { loc, date } }),
+    reviewCount: (count_id: number, action: 'approve' | 'keep', item_id?: number) => api.post<{ ok: true; status: InvClosing }>('/inventory/count/review', { count_id, action, item_id }, h),
     saveCount: (loc: number, date: string, lines: { item_id: number; counted: number }[]) => api.post<{ ok: true; status: InvClosing | null }>('/inventory/count', { loc, date, lines }, h),
     getSales: (store_id: number, date?: string) => api.get<{ store_id: number; date: string; menus: InvMenu[]; sales: { source: string; total_amount: number | null; updated_at: string; lines: { menu_id: number; qty: number; amount: number | null }[] } | null; ocr: boolean }>('/inventory/sales', { ...h, params: { store_id, date } }),
     readReceipt: (store_id: number, image: string, media_type: string) => api.post<InvReceipt>('/inventory/sales/read', { store_id, image, media_type }, { ...h, timeout: 120000 }),

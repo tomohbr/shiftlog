@@ -905,8 +905,20 @@ try {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       done_at DATETIME
     );
+    CREATE TABLE IF NOT EXISTS inv_count_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      count_id INTEGER NOT NULL,
+      user_id INTEGER,
+      action TEXT NOT NULL DEFAULT 'save',
+      lines TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 } catch (e) { console.error('[migration] 在庫テーブルの作成に失敗', e); }
+// 数えの「確認待ち」（11/7）: review = NULL（そのまま反映）/ 'hold'（大きい差・確認待ち）/ 'approved'（この数で確定）/ 'kept'（記録の数のまま）
+try { db.exec('ALTER TABLE inv_count_lines ADD COLUMN review TEXT'); } catch { /* 既にある */ }
+try { db.exec('ALTER TABLE inv_count_lines ADD COLUMN reviewed_by INTEGER'); } catch { /* 既にある */ }
 
 export const SUPER_ADMIN_EMAIL = 'shibahara.724@gmail.com';
 

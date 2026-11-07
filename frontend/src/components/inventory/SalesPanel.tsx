@@ -130,7 +130,7 @@ export default function SalesPanel({ ctx }: { ctx: InvCtx }) {
 
       {msg && <Msg kind={msg.kind}>{msg.text}</Msg>}
       {status && (status.complete
-        ? (status.diffs.length ? <Msg kind="warn">締めがそろいました。計算と合わない品目：{status.diffs.map(d => `${d.name} ${d.diff > 0 ? '+' : ''}${fmt(d.diff)}${d.count_unit}`).join('、')}</Msg> : <Msg kind="ok">締めがそろいました。残りの数は計算どおりでした</Msg>)
+        ? (status.diffs.length ? <Msg kind="warn">締めがそろいました。計算と合わない品目：{status.diffs.map(d => `${d.name} ${d.diff > 0 ? '+' : ''}${fmt(d.diff)}${d.count_unit}${d.review === 'hold' ? '（確認待ち）' : ''}`).join('、')}{status.holds ? `。差が大きい${status.holds}件は担当の人が確かめるまで在庫に反映しません` : ''}</Msg> : <Msg kind="ok">締めがそろいました。残りの数は計算どおりでした</Msg>)
         : <Msg kind="info">あとは「残りの数え」が済めば、この会場の締めは完了です</Msg>)}
 
       <div className="sticky bottom-0 -mx-4 px-4 py-3 bg-gray-50/95 border-t border-gray-200 z-10">

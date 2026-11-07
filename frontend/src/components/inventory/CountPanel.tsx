@@ -19,6 +19,7 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [status, setStatus] = useState<InvClosing | null>(null)
+  const [blind, setBlind] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -29,7 +30,9 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
       setPrev({ date: r.data.previous.date, map: new Map(r.data.previous.lines.map(l => [l.item_id, l.counted])) })
       setBook(r.data.book ? new Map(r.data.book.map(b => [b.item_id, b.qty])) : null)
       setSavedAt(r.data.saved_at)
+      setBlind(!!r.data.blind)
       setMsg(null)
+      if (!isCompany && r.data.saved_at) api.status(countDate).then(x => setStatus(x.data.stores.find(s => s.store_id === loc) || null)).catch(() => {})
     } catch (e) { setMsg({ kind: 'err', text: errText(e, '読み込めませんでした') }) }
     setLoading(false)
   }
@@ -71,7 +74,7 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
       <Msg kind="info">
         {isCompany
           ? <>会社（工房）に置いてある数を数えて入れてください。「記録上」は、入庫と積み込みから計算した数です。</>
-          : <>{md(countDate)}の閉店後に、ヒュッテに<b>残っている数</b>を入れてください。開けた袋は 0.5 と数えます。</>}
+          : <>{md(countDate)}の閉店後に、ヒュッテに<b>残っている数</b>を入れてください。開けた袋は 0.5 と数えます。{blind && <span className="block mt-1">前の数は見えないようにしています。見たままの数を入れてください。</span>}</>}
         {savedAt && <span className="block mt-1 font-bold">保存済み（{hm(savedAt)}）。直して保存し直せます。</span>}
       </Msg>
 
@@ -106,8 +109,9 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
       {status && !isCompany && (
         <Card title="今日の締め">
           <p className="text-sm">残りの数え {status.counted ? <CheckCircle2 className="inline w-4 h-4 text-green-600" /> : 'まだ'}　レジ締め {status.sales_done ? <CheckCircle2 className="inline w-4 h-4 text-green-600" /> : 'まだ'}</p>
+          {status.counted_by && <p className="text-xs text-gray-500">数えた人 {status.counted_by}さん{status.sales_by ? `／レジ締め ${status.sales_by}さん` : ''}</p>}
           {me.role !== 'part' && status.complete && (status.diffs.length
-            ? <Msg kind="warn">計算と合わない品目：{status.diffs.map(d => `${d.name} ${d.diff > 0 ? '+' : ''}${fmt(d.diff)}${d.count_unit}`).join('、')}</Msg>
+            ? <DiffList ctx={ctx} status={status} onChange={setStatus} />
             : <p className="text-sm text-green-700 font-bold">計算どおりでした</p>)}
         </Card>
       )}
@@ -117,6 +121,37 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
           {busy ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : savedAt ? '直して保存する' : '保存する'}
         </button>
       </div>
+    </div>
+  )
+}
+
+/** 記録との差。大きい差（確認待ち）は担当者が「この数で確定」か「記録の数のまま」を選ぶまで在庫に反映しない */
+function DiffList({ ctx, status, onChange }: { ctx: InvCtx; status: InvClosing; onChange: (s: InvClosing) => void }) {
+  const [err, setErr] = useState('')
+  const admin = ctx.me.role === 'admin'
+  const review = async (action: 'approve' | 'keep', itemId: number) => {
+    try { const r = await ctx.api.reviewCount(status.count_id!, action, itemId); onChange(r.data.status); ctx.onSaved(); setErr('') } catch (e) { setErr(errText(e, 'できませんでした')) }
+  }
+  const holds = status.diffs.filter(d => d.review === 'hold')
+  const rest = status.diffs.filter(d => d.review !== 'hold')
+  return (
+    <div className="space-y-2">
+      {holds.length > 0 && (
+        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
+          <p className="text-sm font-bold text-amber-900">差が大きいので確認待ち（まだ在庫に反映していません）</p>
+          {holds.map(d => (
+            <div key={d.item_id} className="text-sm">
+              <p><b>{d.name}</b>　数えた {fmt(d.counted)}{d.count_unit}／あるはず {fmt(d.expected)}（{d.diff > 0 ? '+' : ''}{fmt(d.diff)}）</p>
+              {admin
+                ? <div className="flex gap-2 mt-1"><button onClick={() => review('approve', d.item_id)} className="flex-1 py-2 rounded-lg bg-gray-900 text-white text-xs font-bold">この数で確定</button><button onClick={() => review('keep', d.item_id)} className="flex-1 py-2 rounded-lg border border-gray-400 text-xs font-bold">記録の数のまま</button></div>
+                : null}
+            </div>
+          ))}
+          <p className="text-xs text-amber-900">{admin ? '本当に減っていたら「この数で確定」、打ち間違いなら「記録の数のまま」。' : '担当の人が確かめます。'}数え直したときは、直して保存し直せばもう一度比べます。</p>
+        </div>
+      )}
+      {rest.length > 0 && <Msg kind="warn">記録との差：{rest.map(d => `${d.name} ${d.diff > 0 ? '+' : ''}${fmt(d.diff)}${d.count_unit}${d.review === 'kept' ? '（記録の数のまま）' : d.review === 'approved' ? '（確定済み）' : ''}`).join('、')}</Msg>}
+      {err && <Msg kind="err">{err}</Msg>}
     </div>
   )
 }

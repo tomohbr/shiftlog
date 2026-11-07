@@ -53,7 +53,7 @@ export default function StockPanel({ ctx }: { ctx: InvCtx }) {
                 <p className="font-bold">{md(h.date)} {h.name}　{h.total_amount != null && <span className="tabular-nums">{h.total_amount.toLocaleString()}円</span>}
                   {!h.complete && <span className="ml-2 text-amber-700">{!h.counted ? '数えがまだ' : 'レジ締めがまだ'}</span>}</p>
                 {h.lines.length > 0 && <p className="text-xs text-gray-600">{h.lines.map(l => `${menuName.get(l.menu_id) || ''} ${fmt(l.qty)}`).join('、')}</p>}
-                {h.diffs.length > 0 && <p className="text-xs text-amber-700">差：{h.diffs.map(d => `${d.name} ${d.diff > 0 ? '+' : ''}${fmt(d.diff)}${d.count_unit}`).join('、')}</p>}
+                {h.diffs.length > 0 && <p className="text-xs text-amber-700">差：{h.diffs.map(d => `${d.name} ${d.diff > 0 ? '+' : ''}${fmt(d.diff)}${d.count_unit}${d.review === 'hold' ? '（確認待ち）' : d.review === 'kept' ? '（記録のまま）' : ''}`).join('、')}{h.counted_by ? `　数えた人 ${h.counted_by}さん` : ''}</p>}
               </li>
             ))}
           </ul>

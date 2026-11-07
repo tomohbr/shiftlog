@@ -69,9 +69,39 @@ export async function notifyCounted(companyId: number, storeId: number, date: st
   const st = closingStatus(companyId, storeId, date);
   const lines = [`${md(date)} ${getJSTTime().slice(0, 5)}　${byName || 'スタッフ'}さんが入れました。`];
   lines.push(st.sales_done ? 'レジ締めも済んでいます。' : 'レジ締めはまだです。');
-  if (st.diffs.length) lines.push(`記録との差: ${st.diffs.map(d => `${d.name} ${d.diff > 0 ? '+' : ''}${fmt(d.diff)}${d.count_unit}`).join('、')}`);
+  const small = st.diffs.filter(d => d.review !== 'hold');
+  if (small.length) lines.push(`記録との差（反映済み）: ${small.map(d => `${d.name} ${d.diff > 0 ? '+' : ''}${fmt(d.diff)}${d.count_unit}`).join('、')}`);
   const url = stockLiffUrl(companyId);
+  // 確認待ちがあれば同じ1通に載せて、確定のボタンを付ける（もう一度は送らない）
+  if (st.holds && st.count_id && once(companyId, `holds:${date}:${storeId}`)) {
+    lines.push(...holdLines(st));
+    await pushToUsers(companyId, to, buttonsCard('在庫の確認待ち', `${storeNames(companyId).get(storeId)}：残りの数えが届きました（確認待ち${st.holds}件）`, lines, holdButtons(st.count_id, url)));
+    return;
+  }
   await pushToUsers(companyId, to, buttonsCard('在庫確認が届きました', `${storeNames(companyId).get(storeId)}：残りの数えが届きました`, lines, url ? [{ label: '在庫の画面を開く', uri: url }] : []));
+}
+
+type St = ReturnType<typeof closingStatus>;
+const holdLines = (st: St) => [
+  '■ 差が大きいので、まだ在庫に反映していません',
+  ...st.diffs.filter(d => d.review === 'hold').map(d => `${d.name}：数えた ${fmt(d.counted)}${d.count_unit}／あるはず ${fmt(d.expected)}（${d.diff > 0 ? '+' : ''}${fmt(d.diff)}）`),
+  '本当に減っていたら「この数で確定」、打ち間違いなら「記録の数のまま」。数え直してもらう場合は、保存し直せば自動でもう一度比べます。',
+];
+const holdButtons = (countId: number, url: string | null) => [
+  { label: 'この数で確定', data: `inv=hok&c=${countId}`, primary: true },
+  { label: '記録の数のまま', data: `inv=hkeep&c=${countId}` },
+  ...(url ? [{ label: '画面で1つずつ見る', uri: url }] : []),
+];
+
+/** レジ締めが後から入って確認待ちが出たとき（数えたときの通知にまだ載っていなければ）1通だけ送る */
+export async function notifyHolds(companyId: number, storeId: number, date: string): Promise<void> {
+  const s = getSettings(companyId);
+  if (!s?.enabled || !s.store_ids.includes(storeId)) return;
+  const st = closingStatus(companyId, storeId, date);
+  if (!st.holds || !st.count_id) return;
+  const to = recipients(companyId, s);
+  if (!to.length || !once(companyId, `holds:${date}:${storeId}`)) return;
+  await pushToUsers(companyId, to, buttonsCard('在庫の確認待ち', `${storeNames(companyId).get(storeId)}：確認待ちが${st.holds}件あります`, [`${md(date)}　数えた人: ${st.counted_by || '—'}さん`, ...holdLines(st)], holdButtons(st.count_id, stockLiffUrl(companyId))));
 }
 
 export async function runInventoryNotifier(): Promise<void> {

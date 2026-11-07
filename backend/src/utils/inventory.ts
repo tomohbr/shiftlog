@@ -203,11 +203,17 @@ export function saveCount(companyId: number, loc: number, date: string, lines: {
       ON CONFLICT(company_id, loc, date) DO UPDATE SET user_id = excluded.user_id, updated_at = CURRENT_TIMESTAMP
     `).run(companyId, loc, date, userId);
     const c = db.prepare('SELECT id FROM inv_counts WHERE company_id = ? AND loc = ? AND date = ?').get(companyId, loc, date) as { id: number };
+    // 数が変わった品目は確認をやり直す（数え直し）
     const up = db.prepare(`
       INSERT INTO inv_count_lines (count_id, item_id, counted) VALUES (?, ?, ?)
-      ON CONFLICT(count_id, item_id) DO UPDATE SET counted = excluded.counted
+      ON CONFLICT(count_id, item_id) DO UPDATE SET counted = excluded.counted,
+        review = CASE WHEN inv_count_lines.counted = excluded.counted THEN inv_count_lines.review ELSE NULL END,
+        reviewed_by = CASE WHEN inv_count_lines.counted = excluded.counted THEN inv_count_lines.reviewed_by ELSE NULL END
     `);
-    for (const l of lines) if (Number.isFinite(l.counted) && l.counted >= 0) up.run(c.id, l.item_id, l.counted);
+    const ok = lines.filter(l => Number.isFinite(l.counted) && l.counted >= 0);
+    for (const l of ok) up.run(c.id, l.item_id, l.counted);
+    // 誰が・いつ・どの数を入れたかを全部残す（上書きしても前の数が追える）
+    db.prepare('INSERT INTO inv_count_log (company_id, count_id, user_id, action, lines) VALUES (?, ?, ?, ?, ?)').run(companyId, c.id, userId, 'save', JSON.stringify(ok.map(l => [l.item_id, l.counted])));
     finalizeFrom(companyId, loc, date);
     return c.id;
   });
@@ -217,8 +223,35 @@ export function saveCount(companyId: number, loc: number, date: string, lines: {
 export function countOf(companyId: number, loc: number, date: string) {
   const c = db.prepare('SELECT * FROM inv_counts WHERE company_id = ? AND loc = ? AND date = ?').get(companyId, loc, date) as any;
   if (!c) return null;
-  const lines = db.prepare('SELECT item_id, counted, expected FROM inv_count_lines WHERE count_id = ?').all(c.id) as { item_id: number; counted: number; expected: number | null }[];
+  const lines = db.prepare('SELECT item_id, counted, expected, review FROM inv_count_lines WHERE count_id = ?').all(c.id) as { item_id: number; counted: number; expected: number | null; review: string | null }[];
   return { ...c, lines };
+}
+
+/**
+ * 大きい差か（確認待ちにするか）。使う単位（食・本・g）で、あるはずの数の2割以上かつ2以上ずれていたら。
+ * 半分で数える品目の0.5や、品目ごとの「差の許容」以内は差にしない。
+ */
+export function bigDiff(it: InvItem | undefined, counted: number, expected: number): boolean {
+  const d = Math.abs(counted - expected);
+  if (d <= Math.max(0.01, it?.tolerance || 0, it?.half_ok ? 0.5 : 0)) return false;
+  const per = it?.per_count || 1;
+  return d * per >= Math.max(0.2 * Math.max(counted, expected) * per, 2);
+}
+
+/** 確認待ちを片づける（担当者）。approve = この数で確定 / keep = 記録の数のまま。itemId を省くとその日の全部 */
+export function reviewCount(companyId: number, countId: number, action: 'approve' | 'keep', userId: number, itemId?: number): number {
+  const c = db.prepare('SELECT * FROM inv_counts WHERE id = ? AND company_id = ?').get(countId, companyId) as any;
+  if (!c) return 0;
+  const tx = db.transaction(() => {
+    const r = db.prepare(`UPDATE inv_count_lines SET review = ?, reviewed_by = ? WHERE count_id = ? AND review = 'hold' ${itemId ? 'AND item_id = ?' : ''}`)
+      .run(action === 'approve' ? 'approved' : 'kept', userId, countId, ...(itemId ? [itemId] : []));
+    if (r.changes) {
+      db.prepare('INSERT INTO inv_count_log (company_id, count_id, user_id, action, lines) VALUES (?, ?, ?, ?, ?)').run(companyId, countId, userId, action, itemId ? JSON.stringify([itemId]) : null);
+      finalizeFrom(companyId, c.loc, c.date);
+    }
+    return r.changes;
+  });
+  return tx();
 }
 
 /**
@@ -236,10 +269,19 @@ export function finalizeFrom(companyId: number, loc: number, fromDate: string) {
       continue;
     }
     const expected = stockAt(companyId, loc, { upTo: c.date, exceptRef: ref });
-    const lines = db.prepare('SELECT item_id, counted FROM inv_count_lines WHERE count_id = ?').all(c.id) as { item_id: number; counted: number }[];
-    const setExp = db.prepare('UPDATE inv_count_lines SET expected = ? WHERE count_id = ? AND item_id = ?');
-    for (const l of lines) setExp.run(expected.get(l.item_id) || 0, c.id, l.item_id);
-    writeMoves(companyId, ref, lines.map(l => ({ date: c.date, loc, item_id: l.item_id, qty: l.counted - (expected.get(l.item_id) || 0), type: 'adjust' })), null);
+    const lines = db.prepare('SELECT item_id, counted, review FROM inv_count_lines WHERE count_id = ?').all(c.id) as { item_id: number; counted: number; review: string | null }[];
+    const setExp = db.prepare('UPDATE inv_count_lines SET expected = ?, review = ? WHERE count_id = ? AND item_id = ?');
+    const itemMap = new Map(items(companyId, true).map(i => [i.id, i]));
+    const apply: typeof lines = [];
+    for (const l of lines) {
+      const exp = expected.get(l.item_id) || 0;
+      let review = l.review;
+      // 会場の大きい差は担当者が確かめるまで反映しない（打ち間違いで在庫と積み込みがずれないように）
+      if (loc !== COMPANY_LOC && review !== 'approved' && review !== 'kept') review = bigDiff(itemMap.get(l.item_id), l.counted, exp) ? 'hold' : null;
+      setExp.run(exp, review, c.id, l.item_id);
+      if (review !== 'hold' && review !== 'kept') apply.push(l);
+    }
+    writeMoves(companyId, ref, apply.map(l => ({ date: c.date, loc, item_id: l.item_id, qty: l.counted - (expected.get(l.item_id) || 0), type: 'adjust' })), null);
     db.prepare('UPDATE inv_counts SET finalized = 1 WHERE id = ?').run(c.id);
   }
 }
@@ -387,16 +429,20 @@ export function closingStatus(companyId: number, storeId: number, date: string) 
   const count = countOf(companyId, storeId, date);
   const sales = salesOf(companyId, storeId, date);
   const itemMap = new Map(items(companyId, true).map(i => [i.id, i]));
-  type Diff = { item_id: number; name: string; count_unit: string; counted: number; expected: number; diff: number };
+  type Diff = { item_id: number; name: string; count_unit: string; counted: number; expected: number; diff: number; review: string | null };
   const diffs: Diff[] = count?.finalized
     ? count.lines
-        .map((l: any) => ({ item_id: l.item_id, name: itemMap.get(l.item_id)?.name || '', count_unit: itemMap.get(l.item_id)?.count_unit || '', counted: l.counted, expected: round2(l.expected ?? 0), diff: round2(l.counted - (l.expected ?? 0)) }))
+        .map((l: any) => ({ item_id: l.item_id, name: itemMap.get(l.item_id)?.name || '', count_unit: itemMap.get(l.item_id)?.count_unit || '', counted: l.counted, expected: round2(l.expected ?? 0), diff: round2(l.counted - (l.expected ?? 0)), review: l.review || null }))
         // 半分で数える品目（開封済み＝0.5袋）は 0.5 未満のずれを差にしない
         .filter((d: any) => { const it = itemMap.get(d.item_id); return Math.abs(d.diff) > Math.max(0.01, it?.tolerance || 0, it?.half_ok ? 0.5 : 0); })
     : [];
+  const nameOf = (id: number | null) => (id ? (db.prepare('SELECT COALESCE(uc.display_name, u.name) AS n FROM users u LEFT JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ? WHERE u.id = ?').get(companyId, id) as any)?.n || null : null);
   return {
     store_id: storeId, date,
-    counted: !!count, counted_at: count?.updated_at || null,
+    count_id: count?.id || null,
+    counted: !!count, counted_at: count?.updated_at || null, counted_by: nameOf(count?.user_id || null),
+    sales_by: nameOf(sales?.user_id || null),
+    holds: diffs.filter(d => d.review === 'hold').length,
     sales_done: !!sales, sales_at: sales?.updated_at || null,
     complete: !!count && !!sales,
     diffs,
