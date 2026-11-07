@@ -10,7 +10,7 @@ import {
   DAYTYPE_LABEL, forecastMenus, getSettings, invRole, items, menus, menusForStore, nextOpenDay, openDays, perCountSuggestions,
   reorderAlerts, salesOf, saveCount, saveSales, staleItems, stockAt,
 } from '../utils/inventory';
-import { seedHibariMarket } from '../utils/inventory-seed';
+import { seedHibariMarket, hasInventoryRecords } from '../utils/inventory-seed';
 import { readReceipt, receiptOcrAvailable } from '../utils/receipt-ocr';
 import { toMinutes } from '../utils/venueSchedule';
 
@@ -366,11 +366,12 @@ router.get('/master', need('admin'), (req: InvReq, res: Response): void => {
     items: items(companyId, true),
     menus: menus(companyId, true),
     baselines: db.prepare('SELECT store_id, menu_id, daytype, qty FROM inv_baselines WHERE company_id = ?').all(companyId),
+    has_records: hasInventoryRecords(companyId),
   });
 });
 
 router.post('/seed', need('admin'), (req: InvReq, res: Response): void => {
-  try { res.json(seedHibariMarket(req.inv!.companyId)); } catch (e: any) { res.status(400).json({ error: e.message }); }
+  try { res.json(seedHibariMarket(req.inv!.companyId, !!req.body?.replace)); } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 router.put('/settings', need('admin'), (req: InvReq, res: Response): void => {

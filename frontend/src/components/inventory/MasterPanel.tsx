@@ -152,16 +152,25 @@ export default function MasterPanel({ api, onChanged }: { api: InvApi; onChanged
   const reload = () => { load(); onChanged() }
   if (err) return <Msg kind="err">{err}</Msg>
   if (!m) return <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 animate-spin text-gray-400" /></div>
-  const seed = async () => {
-    if (!confirm('クリスマスマーケット用の初期データ（品目16・メニュー9・去年の1日平均）を入れます。よろしいですか？')) return
-    try { await api.seed(); reload() } catch (e) { alert(errText(e, '入れられませんでした')) }
+  const seed = async (replace = false) => {
+    const msg = replace
+      ? '今の品目・メニュー・去年の1日平均をいったん消して、11/7時点のメニュー（駅・光の森・花畑）で入れ直します。画面で直した内容も消えます。よろしいですか？'
+      : 'クリスマスマーケット用の初期データ（品目21・メニュー11・去年の1日平均）を入れます。よろしいですか？'
+    if (!confirm(msg)) return
+    try { await api.seed(replace); reload() } catch (e) { alert(errText(e, '入れられませんでした')) }
   }
   return (
     <div className="space-y-4">
       {m.items.length === 0 && (
         <Card title="はじめに">
-          <p className="text-sm">品目がまだありません。2026年クリスマスマーケットの初期データ（熊本駅・花畑、2025年の実績から作った予想の土台つき）を入れられます。会場の名前に「駅」「花畑」を含む店舗に割り当てます。</p>
-          <button onClick={seed} className="px-5 py-2 rounded-lg bg-[#06C755] text-white font-bold">初期データを入れる</button>
+          <p className="text-sm">品目がまだありません。2026年クリスマスマーケットの初期データ（熊本駅・光の森・花畑のメニューと容器、2025年の実績から作った予想の土台つき）を入れられます。会場の名前に「駅」「光の森」「花畑」を含む店舗に割り当てます。</p>
+          <button onClick={() => seed()} className="px-5 py-2 rounded-lg bg-[#06C755] text-white font-bold">初期データを入れる</button>
+        </Card>
+      )}
+      {m.items.length > 0 && !m.has_records && (
+        <Card title="初期データの入れ直し">
+          <p className="text-sm">締めや積み込みの記録がまだないので、品目・メニューを11/7時点の内容（駅＝ひばり・カレー・ライダードッグ／光の森＝ひばり・ライダードッグ／花畑＝チキン・プレート・ひばりロック）で入れ直せます。記録が1件でも入ると、このボタンは消えます。</p>
+          <button onClick={() => seed(true)} className="px-5 py-2 rounded-lg border border-gray-300 font-bold">今のメニューで入れ直す</button>
         </Card>
       )}
       <SettingsForm api={api} m={m} onSaved={reload} />
