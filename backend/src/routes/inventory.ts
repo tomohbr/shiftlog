@@ -9,6 +9,7 @@ import {
   COMPANY_LOC, InvRole, addDays, addMove, buildLoad, businessDate, closingStatus, confirmLoad, countOf, dayTypeOf,
   DAYTYPE_LABEL, forecastMenus, getSettings, invRole, items, menus, menusForStore, nextOpenDay, openDays, perCountSuggestions,
   reorderAlerts, salesOf, saveCount, saveSales, staleItems, stockAt,
+  storeItemIds,
 } from '../utils/inventory';
 import { seedHibariMarket, hasInventoryRecords } from '../utils/inventory-seed';
 import { readReceipt, receiptOcrAvailable } from '../utils/receipt-ocr';
@@ -106,6 +107,7 @@ router.get('/me', (req: InvReq, res: Response): void => {
     ocr: receiptOcrAvailable(),
     items: items(companyId),
     menus: menus(companyId),
+    store_items: Object.fromEntries(s.store_ids.map(id => [id, storeItemIds(companyId, id)])),
   });
 });
 
@@ -116,7 +118,8 @@ router.get('/count', enabled, (req: InvReq, res: Response): void => {
   if (loc === COMPANY_LOC && role !== 'admin') { res.status(403).json({ error: '会社の在庫は担当の人だけが数えます' }); return; }
   if (!checkStore(req, res, loc, true)) return;
   const date = validDate(req.query.date) || businessDate();
-  const list = items(companyId).filter(i => loc !== COMPANY_LOC || i.track_company);
+  const here = loc === COMPANY_LOC ? null : new Set(storeItemIds(companyId, loc));
+  const list = items(companyId).filter(i => (loc === COMPANY_LOC ? i.track_company : here!.has(i.id)));
   const cur = countOf(companyId, loc, date);
   const prev = db.prepare(`
     SELECT c.date, l.item_id, l.counted FROM inv_counts c JOIN inv_count_lines l ON l.count_id = c.id
@@ -316,6 +319,7 @@ router.get('/stock', enabled, need('admin', 'full'), (req: InvReq, res: Response
     locs: locs.map(l => ({ id: l, name: nameOf(l) })),
     items: items(companyId),
     stock: Object.fromEntries(locs.map(l => [l, Object.fromEntries(stockAt(companyId, l))])),
+    store_items: Object.fromEntries(s.store_ids.map(id => [id, storeItemIds(companyId, id)])),
     reorder: reorderAlerts(companyId, businessDate()),
   });
 });

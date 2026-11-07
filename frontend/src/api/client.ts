@@ -936,7 +936,7 @@ export interface InvItem {
 export interface InvMenu { id: number; name: string; register_label: string | null; store_ids: number[] | null; price: number | null; sort: number; active: number; parts: { item_id: number; qty: number }[] }
 export interface InvMe {
   enabled: boolean; role: InvRole; name: string; date?: string
-  stores?: { id: number; name: string }[]; my_store?: number | null; ocr?: boolean; items?: InvItem[]; menus?: InvMenu[]
+  stores?: { id: number; name: string }[]; my_store?: number | null; ocr?: boolean; items?: InvItem[]; menus?: InvMenu[]; store_items?: Record<string, number[]>
 }
 export interface InvDiff { item_id: number; name: string; count_unit: string; counted: number; expected: number; diff: number }
 export interface InvClosing { store_id: number; date: string; name?: string; open_today?: boolean; counted: boolean; counted_at: string | null; sales_done: boolean; sales_at: string | null; complete: boolean; diffs: InvDiff[] }
@@ -965,7 +965,7 @@ export function invApi(key?: string) {
     setPerCount: (item_id: number, per_count: number) => api.post(`/inventory/items/${item_id}/per-count`, { per_count }, h),
     confirmLoad: (store_id: number, date: string, lines: { item_id: number; qty: number }[]) => api.post('/inventory/load/confirm', { store_id, date, lines }, h),
     purchase: (item_id: number, qty: number, note: string) => api.post('/inventory/purchase', { item_id, qty, note }, h),
-    stock: () => api.get<{ locs: { id: number; name: string }[]; items: InvItem[]; stock: Record<string, Record<string, number>>; reorder: InvReorder[] }>('/inventory/stock', h),
+    stock: () => api.get<{ locs: { id: number; name: string }[]; items: InvItem[]; stock: Record<string, Record<string, number>>; store_items: Record<string, number[]>; reorder: InvReorder[] }>('/inventory/stock', h),
     history: (days = 14) => api.get<(InvClosing & { name: string; total_amount: number | null; lines: { menu_id: number; qty: number; amount: number | null }[] })[]>('/inventory/history', { ...h, params: { days } }),
     master: () => api.get<{ settings: InvSettings | null; stores: { id: number; name: string }[]; users: { id: number; name: string; line_linked: number }[]; items: InvItem[]; menus: InvMenu[]; baselines: { store_id: number; menu_id: number; daytype: string; qty: number }[]; has_records: boolean }>('/inventory/master', h),
     seed: (replace = false) => api.post('/inventory/seed', { replace }, h),

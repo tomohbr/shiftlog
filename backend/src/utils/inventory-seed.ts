@@ -6,7 +6,8 @@ import db from '../db';
 //   光の森＝ひばりドッグ・ライダードッグ＋セット／花畑＝チキン単品・チキンプレート・ひばりロック（スープ付き1,200、頼まれたら単品1,000）。
 // 容器（11/1〜11/5 芝原）: 蓋付きはやめ、チキン単品・プレートは店内も持ち帰りも茶皿（在庫2,000）→ 深型L。ひばりロックは PFP-350＋フォーク＋ナイフ。
 //   ドッグはスリーブ。スープは店内が二重断熱カップ、テイクアウトだけ蓋付きカップ（駅・光の森2割、花畑1割）。ドッグ・スープ・ひばりロックにおしぼり。
-// 「仮」: ライダードッグの中身（ソーセージ1・バンズ1で計算）と値段、カレー・冷凍野菜の1袋あたり、ブロッコリー・キャロットの袋の入り数。
+// 野菜（11/7 芝原）: 温野菜はやめ、プレートもブロッコリーとキャロット（ひばりロックと同じ品目）。
+// 「仮」: ライダードッグの中身（ソーセージ1・バンズ1で計算）と値段、カレーの1袋あたり、プレートのブロッコリー・キャロットの数（各1）、袋の入り数。
 
 type ItemSeed = {
   key: string; name: string; category: 'food' | 'container'; count_unit: string; use_unit: string; per_count?: number;
@@ -22,11 +23,10 @@ const ITEMS: ItemSeed[] = [
   { key: 'frank', name: 'フランクフルト（プレート用）', category: 'food', count_unit: '本', use_unit: '本' },
   { key: 'yamauchi', name: 'ヤマウチ（ハム）', category: 'food', count_unit: '袋', use_unit: '枚', per_count: 100, half_ok: true, note: '1袋100枚。催事専用で商品登録なし' },
   { key: 'bacon', name: 'ベーコンスライス（プレート用）', category: 'food', count_unit: 'パック', use_unit: '枚', per_count: 16, tolerance: 1, note: '1パック16〜17枚。1パック分のずれは差にしない' },
-  { key: 'veg', name: '温野菜（冷凍・プレート用）', category: 'food', count_unit: '袋', use_unit: '食', per_count: 20, half_ok: true, source: 'purchase', lead_days: 7, note: '発注は1週間前。1袋の食数は仮。足りなければ業務スーパー' },
   { key: 'rock_bacon', name: 'ベーコン（ひばりロック用）', category: 'food', count_unit: 'kg', use_unit: 'g', per_count: 1000, half_ok: true, note: '工房で作る。1食100g。重さ（kg）で数える' },
   { key: 'cheese', name: 'ミックスチーズ（ひばりロック用）', category: 'food', count_unit: 'kg', use_unit: 'g', per_count: 1000, half_ok: true, source: 'purchase', lead_days: 7, note: '1食20g。重さ（kg）で数える' },
-  { key: 'broc', name: '冷凍ブロッコリー（ひばりロック用）', category: 'food', count_unit: '房', use_unit: '房', source: 'purchase', lead_days: 7, note: '西原商会。1食1房。袋の入り数が分かったら「袋」に直す' },
-  { key: 'carrot', name: '冷凍キャロット（ひばりロック用）', category: 'food', count_unit: '本', use_unit: '本', source: 'purchase', lead_days: 7, note: '西原商会。1食1本。袋の入り数が分かったら「袋」に直す' },
+  { key: 'broc', name: '冷凍ブロッコリー', category: 'food', count_unit: '房', use_unit: '房', source: 'purchase', lead_days: 7, note: '西原商会。花畑のプレートとひばりロックに1房ずつ（プレートの数は仮）。袋の入り数が分かったら「袋」に直す。足りなければ業務スーパー' },
+  { key: 'carrot', name: '冷凍キャロット', category: 'food', count_unit: '本', use_unit: '本', source: 'purchase', lead_days: 7, note: '西原商会。花畑のプレートとひばりロックに1本ずつ（プレートの数は仮）。袋の入り数が分かったら「袋」に直す。足りなければ業務スーパー' },
   { key: 'dish', name: 'チキン用の皿（茶皿→深型L）', category: 'container', count_unit: '枚', use_unit: '枚', source: 'purchase', lead_days: 7, note: '在庫の耐油茶皿2,000を先に使い、なくなったら HEIKO クラフトフードトレー深型L（シモジマ・100枚/袋）。蓋なし・持ち帰りも同じ' },
   { key: 'pfp', name: 'フードパック PFP-350（ひばりロック用）', category: 'container', count_unit: '個', use_unit: '個', source: 'purchase', lead_days: 7, note: 'シモジマ・50個/袋' },
   { key: 'sleeve', name: 'ホットドッグスリーブL', category: 'container', count_unit: '枚', use_unit: '枚', source: 'purchase', lead_days: 7, note: 'シモジマ・100枚/袋。ひばり・カレー・ライダーとも' },
@@ -65,7 +65,7 @@ const MENUS: MenuSeed[] = [
   { key: 'chicken', name: 'チキン単品', label: 'チキン', stores: ['hanabata'], price: 900, parts: [['chicken', 1], ['dish', 1], ['fork', 1]],
     base: { hanabata: [53.4, 89.4, 149.0] } },
   { key: 'plate', name: 'チキンプレート', label: 'チキンプレート', stores: ['hanabata'], price: 1300,
-    parts: [['chicken', 1], ['veg', 1], ['frank', 1], ['yamauchi', 2], ['bacon', 1], ['dish', 1], ['fork', 1]],
+    parts: [['chicken', 1], ['broc', 1], ['carrot', 1], ['frank', 1], ['yamauchi', 2], ['bacon', 1], ['dish', 1], ['fork', 1]],
     base: { hanabata: [49.4, 143.6, 170.3] } },
   { key: 'rock_set', name: 'ひばりロック（スープ付き）', label: 'ひばりロック', stores: ['hanabata'], price: 1200,
     parts: [...ROCK, ['soup', 1], ['cup', 0.9], ['lid', 0.1]],

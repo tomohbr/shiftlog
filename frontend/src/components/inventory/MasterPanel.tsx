@@ -155,7 +155,7 @@ export default function MasterPanel({ api, onChanged }: { api: InvApi; onChanged
   const seed = async (replace = false) => {
     const msg = replace
       ? '今の品目・メニュー・去年の1日平均をいったん消して、11/7時点のメニュー（駅・光の森・花畑）で入れ直します。画面で直した内容も消えます。よろしいですか？'
-      : 'クリスマスマーケット用の初期データ（品目21・メニュー11・去年の1日平均）を入れます。よろしいですか？'
+      : 'クリスマスマーケット用の初期データ（品目20・メニュー11・去年の1日平均）を入れます。よろしいですか？'
     if (!confirm(msg)) return
     try { await api.seed(replace); reload() } catch (e) { alert(errText(e, '入れられませんでした')) }
   }

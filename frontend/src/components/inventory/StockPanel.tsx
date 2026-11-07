@@ -8,7 +8,7 @@ import { Card, InvCtx, ItemSelect, Msg, Stepper, errText, fmt, md } from './comm
 // 在庫一覧（置き場所ごと）と締めの記録（社員以上）
 
 export default function StockPanel({ ctx }: { ctx: InvCtx }) {
-  const [stock, setStock] = useState<{ locs: { id: number; name: string }[]; items: InvItem[]; stock: Record<string, Record<string, number>>; reorder: InvReorder[] } | null>(null)
+  const [stock, setStock] = useState<{ locs: { id: number; name: string }[]; items: InvItem[]; stock: Record<string, Record<string, number>>; store_items?: Record<string, number[]>; reorder: InvReorder[] } | null>(null)
   const [hist, setHist] = useState<Awaited<ReturnType<InvCtx['api']['history']>>['data'] | null>(null)
   const [err, setErr] = useState('')
   useEffect(() => {
@@ -35,7 +35,7 @@ export default function StockPanel({ ctx }: { ctx: InvCtx }) {
                   <td className="py-1.5">{i.name}<span className="text-xs text-gray-500">（{i.count_unit}）</span></td>
                   {stock.locs.map(l => {
                     const v = stock.stock[l.id]?.[i.id] ?? 0
-                    const hide = l.id === 0 && !i.track_company
+                    const hide = l.id === 0 ? !i.track_company : !!stock.store_items && !stock.store_items[l.id]?.includes(i.id)
                     return <td key={l.id} className={`text-center tabular-nums ${v < 0 ? 'text-red-600 font-bold' : ''}`}>{hide ? '' : fmt(v)}</td>
                   })}
                 </tr>
@@ -43,7 +43,7 @@ export default function StockPanel({ ctx }: { ctx: InvCtx }) {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-500">会社の欄が空の品目は、工房で作るので会社の在庫を追っていない品目です。マイナスは入庫の記録漏れです。</p>
+        <p className="text-xs text-gray-500">会社の欄が空の品目は、工房で作るので会社の在庫を追っていない品目です。会場の欄が空なのは、その会場では使わない品目です。マイナスは入庫の記録漏れです。</p>
       </Card>
       <Card title="締めの記録（14日分）">
         {hist.length === 0 ? <p className="text-sm text-gray-500">まだありません</p> : (

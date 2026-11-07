@@ -73,3 +73,9 @@ export function ItemSelect({ items, value, onChange }: { items: InvItem[]; value
     </select>
   )
 }
+
+/** その会場で扱う品目だけ（駅にプレート用・ひばりロック用を出さない）。会場の情報がなければ全部 */
+export const itemsAt = (ctx: InvCtx, storeId = ctx.storeId) => {
+  const ids = ctx.me.store_items?.[storeId]
+  return ids ? ctx.me.items.filter(i => ids.includes(i.id)) : ctx.me.items
+}

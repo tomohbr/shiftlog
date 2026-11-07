@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
-import { Card, InvCtx, ItemSelect, Msg, Stepper, errText, fmt } from './common'
+import { Card, InvCtx, ItemSelect, Msg, Stepper, errText, fmt, itemsAt } from './common'
 
 // 会場で買い足した（業務スーパーなど）／足りないので次に持ってきてほしい、の2つ。誰でも使える。
 
@@ -29,7 +29,7 @@ function QtyForm({ ctx, kind, onDone }: { ctx: InvCtx; kind: 'buy' | 'request'; 
 
   return (
     <div className="space-y-3">
-      <ItemSelect items={ctx.me.items} value={itemId} onChange={setItemId} />
+      <ItemSelect items={itemsAt(ctx)} value={itemId} onChange={setItemId} />
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm text-gray-600">数{item ? `（${item.count_unit}）` : ''}</span>
         <Stepper value={qty} onChange={setQty} step={item?.half_ok ? 0.5 : 1} big />

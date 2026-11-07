@@ -89,7 +89,7 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
                 <div className="min-w-0">
                   <p className="font-bold text-gray-900 leading-tight">{i.name}</p>
                   <p className="text-xs text-gray-500">
-                    {i.count_unit}で数える{i.half_ok ? '（開封済み＝0.5）' : ''}
+                    {i.count_unit === 'kg' ? 'kgで量る（1.2 のように小数で入れられます）' : `${i.count_unit}で数える${i.half_ok ? '（開封済み＝0.5）' : ''}`}
                     {prev.map.has(i.id) && <button type="button" onClick={() => setVals(v => ({ ...v, [i.id]: prev.map.get(i.id)! }))} className="ml-2 underline text-blue-600">前回 {fmt(prev.map.get(i.id))}</button>}
                     {book && <span className="ml-2">記録上 {fmt(book.get(i.id) || 0)}</span>}
                   </p>

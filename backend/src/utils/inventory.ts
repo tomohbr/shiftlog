@@ -94,6 +94,17 @@ export function menus(companyId: number, includeInactive = false): MenuWithParts
 
 export const menusForStore = (all: MenuWithParts[], storeId: number) => all.filter(m => !m.store_ids || m.store_ids.includes(storeId));
 
+/**
+ * その会場で扱う品目のID（その会場のメニューで使う品目＋記録上その会場に残っている品目）。
+ * 駅にプレート用・ひばりロック用の品目を出さないため（11/7 芝原）。
+ */
+export function storeItemIds(companyId: number, storeId: number): number[] {
+  const ids = new Set<number>();
+  for (const m of menusForStore(menus(companyId), storeId)) for (const p of m.parts) if (p.qty > 0) ids.add(p.item_id);
+  for (const [id, q] of stockAt(companyId, storeId)) if (Math.abs(q) > 1e-9) ids.add(id);
+  return items(companyId).filter(i => ids.has(i.id)).map(i => i.id);
+}
+
 /** 1つ売ったときに減る数（数え単位）。品目ID → 数 */
 export function usagePerMenu(menu: MenuWithParts, itemMap: Map<number, InvItem>): Map<number, number> {
   const out = new Map<number, number>();
