@@ -1644,8 +1644,8 @@ db.exec(`
 `);
 const MAX_OFFERS = 10;
 interface FillOffer { date: string; store_id: number | null; store_name: string; from: string; to: string; rank: number }
-function fillOffersFor(companyId: number) {
-  const from = plusDays(1), to = plusDays(60);
+function fillOffersFor(companyId: number, fromDate: string | null = null, toDate: string | null = null) {
+  const from = fromDate && fromDate > plusDays(1) ? fromDate : plusDays(1), to = toDate || plusDays(60);
   const shorts = computeShortages(companyId, from, to);
   const staff = db.prepare(`
     SELECT u.id, u.name, COALESCE(NULLIF(uc.display_name, ''), u.name) AS dn, uli.line_user_id FROM users u
@@ -1693,7 +1693,11 @@ router.post('/fill-offers', authenticateToken, requireCompany, async (req: AuthR
   if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   const companyId = req.companyId!;
   const only: number[] | null = Array.isArray(req.body?.user_ids) ? req.body.user_ids.map(Number) : null;
-  const list = fillOffersFor(companyId).filter(x => !only || only.includes(x.user_id));
+  // from / to（YYYY-MM-DD）を渡すと、その期間の枠だけ打診する
+  const DRE = /^\d{4}-\d{2}-\d{2}$/;
+  const fFrom = DRE.test(String(req.body?.from || '')) ? String(req.body.from) : null;
+  const fTo = DRE.test(String(req.body?.to || '')) ? String(req.body.to) : null;
+  const list = fillOffersFor(companyId, fFrom, fTo).filter(x => !only || only.includes(x.user_id));
   if (!req.body?.send) {
     res.json({ people: list.map(x => ({ user_id: x.user_id, name: x.display_name, linked: x.linked, total: x.total, offers: x.offers.map(fillLabel) })) });
     return;
