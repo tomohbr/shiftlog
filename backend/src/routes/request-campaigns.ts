@@ -4,7 +4,7 @@ import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { requireEventMode } from '../utils/billing';
 import { logAudit } from '../utils/audit';
-import { sendCampaignLinks, W, notifyCampaignSubmitted } from './line';
+import { sendCampaignLinks, W, notifyCampaignSubmitted, sendCampaignFollowups } from './line';
 import {
   CampaignDay, Part, PARTS, PART_LABEL, LONG_DAY, LONG_DAY_LABEL, REFERRAL, REFERRAL_LABEL, DAYS_PER_WEEK, DAYS_PER_WEEK_LABEL, TRANSPORTS,
   campaignDays, daysLeft, forUser, isAccepting, parseVenues, partTimes,
@@ -253,6 +253,8 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   res.json({ message: '希望を提出しました', count: entries.length });
   // 運営者の LINE に知らせる（失敗しても提出はそのまま）
   notifyCampaignSubmitted(companyId, userId, c.title, resubmit, entries, openParts).catch(() => {});
+  // 「希望が届いたら送る」と予約してあるメッセージ（友達紹介のお願いなど）。少し間をあけて送る
+  setTimeout(() => { sendCampaignFollowups(companyId, userId, c.id).catch(() => {}); }, 30 * 1000);
 });
 
 // ---------------------------------------------------------------- 管理者

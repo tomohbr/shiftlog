@@ -125,10 +125,10 @@ export function notifyShiftPublished(companyId: number, year: number, month: num
 
 function linkedMembers(companyId: number) {
   return db.prepare(`
-    SELECT uli.user_id, uli.line_user_id, u.name FROM user_line_ids uli
+    SELECT uli.user_id, uli.line_user_id, u.name, uc.display_name FROM user_line_ids uli
     JOIN user_companies uc ON uc.user_id = uli.user_id AND uc.company_id = ?
     JOIN users u ON u.id = uli.user_id AND u.is_active = 1
-  `).all(companyId) as { user_id: number; line_user_id: string; name: string }[];
+  `).all(companyId) as { user_id: number; line_user_id: string; name: string; display_name: string | null }[];
 }
 
 const jstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -381,7 +381,7 @@ export async function sendCampaignLinks(
   const failed: string[] = [];
   for (const r of rows) {
     // 締切は本人の締切（あとから入った人は延びている）で出す
-    if (await sendLineMessage(settings.channel_access_token, r.line_user_id, campaignCard(companyId, r.user_id, r.name, forUser(companyId, c, r.user_id), kind))) sent++;
+    if (await sendLineMessage(settings.channel_access_token, r.line_user_id, campaignCard(companyId, r.user_id, callName(r), forUser(companyId, c, r.user_id), kind))) sent++;
     else failed.push(r.name);
   }
   return { sent, targets: rows.length, failed };
@@ -657,6 +657,75 @@ router.get('/inbox', authenticateToken, requireCompany, (req: AuthRequest, res: 
   res.json({ messages: rows });
 });
 
+// 呼び名（なければ氏名の空白の後ろ＝下の名前、区切りが無ければ氏名のまま）
+function callName(r: { name: string; display_name?: string | null }): string {
+  if (r.display_name && r.display_name.trim()) return r.display_name.trim();
+  const parts = r.name.trim().split(/[\s　]+/).filter(Boolean);
+  return parts.length >= 2 ? parts[parts.length - 1] : r.name.trim();
+}
+
+// 「希望が届いたら送る」予約メッセージ。本人が募集の希望を出した直後に1回だけ送る
+db.exec(`
+  CREATE TABLE IF NOT EXISTS line_followups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    campaign_id INTEGER,
+    texts TEXT NOT NULL,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    sent_at DATETIME,
+    canceled_at DATETIME
+  );
+  CREATE INDEX IF NOT EXISTS idx_line_followups_user ON line_followups(company_id, user_id);
+`);
+
+export async function sendCampaignFollowups(companyId: number, userId: number, campaignId: number): Promise<void> {
+  const rows = db.prepare(`SELECT * FROM line_followups WHERE company_id = ? AND user_id = ? AND (campaign_id IS NULL OR campaign_id = ?)
+    AND sent_at IS NULL AND canceled_at IS NULL ORDER BY id`).all(companyId, userId, campaignId) as any[];
+  if (!rows.length) return;
+  const settings = db.prepare('SELECT channel_access_token FROM line_settings WHERE company_id = ?').get(companyId) as any;
+  const m = linkedMembers(companyId).find(r => r.user_id === userId);
+  if (!settings?.channel_access_token || !m) return;
+  for (const f of rows) {
+    // 先に送信済みにする（二重送信を防ぐ）
+    if (db.prepare('UPDATE line_followups SET sent_at = CURRENT_TIMESTAMP WHERE id = ? AND sent_at IS NULL').run(f.id).changes === 0) continue;
+    let texts: string[] = [];
+    try { texts = (JSON.parse(f.texts) as unknown[]).map(t => String(t ?? '').trim()).filter(Boolean).slice(0, 5); } catch { /* 空 */ }
+    if (!texts.length) continue;
+    try {
+      const out = await lineApi(settings.channel_access_token, '/v2/bot/message/push', {
+        method: 'POST',
+        body: { to: m.line_user_id, messages: texts.map(t => ({ type: 'text', text: t.replace(/\{名前\}/g, callName(m)).slice(0, 5000) })) },
+      });
+      if (!out.ok) { db.prepare('UPDATE line_followups SET sent_at = NULL WHERE id = ?').run(f.id); console.error('[followup] 送信失敗', f.id); }
+      else console.log(`[followup] ${f.id} を ${m.name} に送信`);
+    } catch (e) { db.prepare('UPDATE line_followups SET sent_at = NULL WHERE id = ?').run(f.id); console.error('[followup]', e); }
+  }
+}
+
+// GET /api/line/followups  予約メッセージの一覧 / POST { user_id, campaign_id?, texts } 予約 / DELETE /:id 取り消し
+router.get('/followups', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  res.json({ followups: db.prepare(`SELECT f.*, u.name FROM line_followups f JOIN users u ON u.id = f.user_id WHERE f.company_id = ? ORDER BY f.id DESC LIMIT 100`).all(req.companyId!) });
+});
+router.post('/followups', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  const companyId = req.companyId!;
+  const userId = Number(req.body?.user_id);
+  const texts = (Array.isArray(req.body?.texts) ? req.body.texts : []).map((t: unknown) => String(t ?? '').trim()).filter(Boolean).slice(0, 5);
+  if (!linkedMembers(companyId).some(r => r.user_id === userId)) { res.status(400).json({ error: 'LINEがつながっているスタッフを選んでください' }); return; }
+  if (!texts.length) { res.status(400).json({ error: '文章を入れてください' }); return; }
+  const cid = req.body?.campaign_id == null ? null : Number(req.body.campaign_id);
+  const id = db.prepare('INSERT INTO line_followups (company_id, user_id, campaign_id, texts, created_by) VALUES (?, ?, ?, ?, ?)').run(companyId, userId, cid, JSON.stringify(texts), req.user!.id).lastInsertRowid;
+  res.json({ id });
+});
+router.delete('/followups/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  const r = db.prepare('UPDATE line_followups SET canceled_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ? AND sent_at IS NULL').run(Number(req.params.id), req.companyId!);
+  res.json({ canceled: r.changes > 0 });
+});
+
 // POST /api/line/message  { user_ids, texts }  管理者から選んだ人へ、文章を1人ずつ送る（最大5通。{名前} はその人の名前に置き換える）
 router.post('/message', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
@@ -670,7 +739,7 @@ router.post('/message', authenticateToken, requireCompany, async (req: AuthReque
   let sent = 0;
   const failed: string[] = [];
   for (const r of rows) {
-    const given = r.name.split(/[\s　]/)[0];
+    const given = callName(r);
     try {
       const out = await lineApi(settings.channel_access_token, '/v2/bot/message/push', {
         method: 'POST',
