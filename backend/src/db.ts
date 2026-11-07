@@ -707,6 +707,8 @@ try {
   if (!rcaCols.includes('referral_note')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN referral_note TEXT');
   // 紹介で来た人の「紹介してくれた人」（自動作成で同じ会場・時間に入れる）
   if (!rcaCols.includes('referred_by')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN referred_by INTEGER');
+  // 平日は何時から入れるか（学校帰りなど。'16:30' など。空＝最初から）
+  if (!rcaCols.includes('weekday_from')) db.exec('ALTER TABLE request_campaign_answers ADD COLUMN weekday_from TEXT');
   // 催促の予約（JST 'YYYY-MM-DD HH:MM'）。その時刻を過ぎたら、まだ答えていない人へ1回だけ送る
   const rcCols = db.prepare('PRAGMA table_info(request_campaigns)').all().map((c: any) => c.name);
   if (!rcCols.includes('remind_at')) db.exec('ALTER TABLE request_campaigns ADD COLUMN remind_at TEXT');

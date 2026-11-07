@@ -22,6 +22,9 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_DAYS = 92;
 const WD = '日月火水木金土';
 
+// 平日に「何時から入れるか」の選択肢（学校・仕事帰りの人向け）
+const WEEKDAY_FROM = ['16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00'];
+
 function adminOnly(req: AuthRequest, res: Response): boolean {
   if (isAdmin(req)) return true;
   res.status(403).json({ error: '管理者権限が必要です' });
@@ -94,6 +97,7 @@ function answerView(a: any, storeNames: Map<number, string>) {
     other_job: a.other_job || null,
     long_day: a.long_day || null,
     long_day_label: a.long_day ? LONG_DAY_LABEL[a.long_day] || null : null,
+    weekday_from: a.weekday_from || null,
     referral: a.referral || null,
     referral_label: a.referral ? REFERRAL_LABEL[a.referral] || null : null,
     referral_note: a.referral_note || '',
@@ -191,6 +195,7 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const clip = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n) || null;
   const otherJob = a.other_job === 'yes' ? 'yes' : a.other_job === 'none' ? 'none' : null;
   const longDay = (LONG_DAY as readonly string[]).includes(a.long_day) ? a.long_day : null;
+  const weekdayFrom = WEEKDAY_FROM.includes(String(a.weekday_from)) ? String(a.weekday_from) : null;
   const referral = (REFERRAL as readonly string[]).includes(a.referral) ? a.referral : null;
   const referredBy = Number(a.referred_by) && Number(a.referred_by) !== userId && campaignStaff(companyId).some(s => s.id === Number(a.referred_by)) ? Number(a.referred_by) : null;
 
@@ -236,18 +241,20 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
     for (const e of entries) {
       // 昼／夜は時間にも直して入れる（自動作成は preferred_start/end を見る）。通し・短い日は時間なし
       const t = partTimes(dayOf.get(e.date), e.part);
-      upsert.run(companyId, userId, e.date, e.availability, t.start, t.end, e.part);
+      // 平日（昼夜に分かれない日）で「○時から」と答えた人は、開始の希望をその時刻にする
+      const start = !dayOf.get(e.date)!.long && weekdayFrom && e.availability !== 'unavailable' ? weekdayFrom : t.start;
+      upsert.run(companyId, userId, e.date, e.availability, start, t.end, e.part);
     }
     db.prepare(`
-      INSERT INTO request_campaign_answers (campaign_id, company_id, user_id, venues, days_per_week, ng_weekdays, transport, transport_note, other_job, other_job_note, long_day, referral, referral_note, referred_by, comment, submitted_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT INTO request_campaign_answers (campaign_id, company_id, user_id, venues, days_per_week, ng_weekdays, transport, transport_note, other_job, other_job_note, long_day, referral, referral_note, referred_by, comment, weekday_from, submitted_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(campaign_id, user_id) DO UPDATE SET
         venues = excluded.venues, days_per_week = excluded.days_per_week, ng_weekdays = excluded.ng_weekdays,
         transport = excluded.transport, transport_note = excluded.transport_note,
-        other_job = excluded.other_job, other_job_note = excluded.other_job_note, long_day = excluded.long_day, referral = excluded.referral, referral_note = excluded.referral_note, referred_by = excluded.referred_by, comment = excluded.comment,
+        other_job = excluded.other_job, other_job_note = excluded.other_job_note, long_day = excluded.long_day, referral = excluded.referral, referral_note = excluded.referral_note, referred_by = excluded.referred_by, comment = excluded.comment, weekday_from = excluded.weekday_from,
         submitted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
     `).run(c.id, companyId, userId, venues, dpw, ng, JSON.stringify(transport), clip(a.transport_note, 100),
-      otherJob, otherJob === 'yes' ? clip(a.other_job_note, 100) : null, longDay, referral, referral && referral !== 'no' ? clip(a.referral_note, 100) : null, referredBy, clip(a.comment, 300));
+      otherJob, otherJob === 'yes' ? clip(a.other_job_note, 100) : null, longDay, referral, referral && referral !== 'no' ? clip(a.referral_note, 100) : null, referredBy, clip(a.comment, 300), weekdayFrom);
   })();
 
   res.json({ message: '希望を提出しました', count: entries.length });
@@ -479,7 +486,8 @@ router.get('/:id/summary', authenticateToken, requireCompany, requireEventMode, 
         if (!r || r.availability === 'unavailable') return [];
         const vs = venueSet.get(s.id);
         if (vs && v.store_id != null && !vs.has(v.store_id)) return [];
-        return [{ user_id: s.id, name: nameOf.get(s.id)!, availability: r.availability, part: r.part, part_label: r.part ? PART_LABEL[r.part] : null }];
+        const wf = !d.long ? (answers.get(s.id)?.weekday_from || null) : null;
+        return [{ user_id: s.id, name: nameOf.get(s.id)!, availability: r.availability, part: r.part, part_label: r.part ? PART_LABEL[r.part] : (wf ? `${wf}〜` : null) }];
       }).sort((a, b) => (a.availability === b.availability ? 0 : a.availability === 'preferred' ? -1 : 1));
       // 枠ごとに足りるか（昼の枠は 昼・どちらでも・1日通し・指定なし の人、夜も同じ）
       const slots = v.slots.map(s => {

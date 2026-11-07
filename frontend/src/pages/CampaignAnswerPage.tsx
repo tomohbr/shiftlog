@@ -34,6 +34,8 @@ const REFERRAL: { key: 'yes' | 'ask' | 'no'; label: string }[] = [
 const LONG_DAY: { key: 'yes' | 'half' | 'depends'; label: string }[] = [
   { key: 'yes', label: '入れる' }, { key: 'half', label: '半日まで' }, { key: 'depends', label: '日による' },
 ]
+// 平日に何時から入れるか（'' = 最初から）
+const WEEKDAY_FROM = ['', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00']
 const DPW: { key: '1-2' | '3-4' | '5+'; label: string }[] = [
   { key: '1-2', label: '1〜2日' }, { key: '3-4', label: '3〜4日' }, { key: '5+', label: '5日以上' },
 ]
@@ -74,7 +76,7 @@ function partRange(day: CampaignDay, part: 'a' | 'b' | 'all') {
 
 const emptyAnswer: CampaignAnswerInput = {
   venues: [], days_per_week: null, ng_weekdays: [], transport: [], transport_note: '',
-  other_job: null, other_job_note: '', long_day: null, referral: null, referral_note: '', referred_by: null, comment: '',
+  other_job: null, other_job_note: '', long_day: null, weekday_from: null, referral: null, referral_note: '', referred_by: null, comment: '',
 }
 
 export default function CampaignAnswerPage() {
@@ -98,7 +100,7 @@ export default function CampaignAnswerPage() {
       const ans: CampaignAnswerInput = a ? {
         venues: a.venues_any ? 'any' : a.venue_ids,
         days_per_week: a.days_per_week, ng_weekdays: a.ng_weekdays, transport: a.transport,
-        transport_note: a.transport_note, other_job: a.other_job, other_job_note: a.other_job_note, long_day: a.long_day, referral: a.referral, referral_note: a.referral_note, referred_by: a.referred_by, comment: a.comment,
+        transport_note: a.transport_note, other_job: a.other_job, other_job_note: a.other_job_note, long_day: a.long_day, weekday_from: a.weekday_from ?? null, referral: a.referral, referral_note: a.referral_note, referred_by: a.referred_by, comment: a.comment,
       } : emptyAnswer
       setAnswer(ans)
       setEntries(r.data.entries)
@@ -375,6 +377,16 @@ export default function CampaignAnswerPage() {
           <p className="text-xs text-gray-500 mb-1.5">昼と夜に分かれる日（開店〜閉店）のこと。日ごとの時間は下のカレンダーで選べます</p>
           <div className="grid grid-cols-3 gap-2">
             {LONG_DAY.map(o => <Chip key={o.key} on={answer.long_day === o.key} disabled={!open} onClick={() => pickLongDay(o.key)}>{o.label}</Chip>)}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-bold text-gray-800">平日は何時から入れますか？</p>
+          <p className="text-xs text-gray-500 mb-1.5">学校やお仕事のあとから入る人は、入れる時間を選んでください（最初から入れる人は「最初から」）</p>
+          <div className="grid grid-cols-4 gap-2">
+            {WEEKDAY_FROM.map(t => (
+              <Chip key={t || 'start'} on={(answer.weekday_from || '') === t} disabled={!open} onClick={() => setA('weekday_from', t || null)}>{t ? `${hm(t)}から` : '最初から'}</Chip>
+            ))}
           </div>
         </div>
 

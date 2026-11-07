@@ -703,6 +703,7 @@ export interface CampaignAnswerInput {
   other_job: 'none' | 'yes' | null
   other_job_note: string
   long_day: 'yes' | 'half' | 'depends' | null
+  weekday_from?: string | null
   referral: 'yes' | 'ask' | 'no' | null
   referral_note: string
   referred_by: number | null
@@ -722,6 +723,7 @@ export interface CampaignAnswerView {
   other_job_note: string
   long_day: 'yes' | 'half' | 'depends' | null
   long_day_label: string | null
+  weekday_from?: string | null
   referral: 'yes' | 'ask' | 'no' | null
   referral_label: string | null
   referral_note: string
