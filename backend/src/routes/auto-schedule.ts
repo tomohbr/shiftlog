@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import db from '../db';
+import { pairConflict } from '../utils/pairBlocks';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { logAudit } from '../utils/audit';
 
@@ -128,6 +129,7 @@ router.post('/apply', authenticateToken, requireCompany, (req: AuthRequest, res:
         'SELECT id FROM shifts WHERE company_id = ? AND user_id = ? AND date = ? AND start_time = ? AND end_time = ?'
       ).get(companyId, a.user_id, a.date, a.start_time, a.end_time);
       if (exists) { skipped++; continue; }
+      if (pairConflict(companyId, a.user_id, a.date, null, a.start_time, a.end_time)) { skipped++; continue; }
       db.prepare(
         'INSERT INTO shifts (company_id, user_id, date, start_time, end_time, break_minutes, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(companyId, a.user_id, a.date, a.start_time, a.end_time, a.break_minutes || 0, a.notes || null, 'confirmed');

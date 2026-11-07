@@ -10,6 +10,7 @@ import { authenticateToken, requireCompany, AuthRequest, JWT_SECRET } from '../m
 import { absenceRule, phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
 import { canAddStaff } from '../utils/billing';
 import { autoDisplayName } from '../utils/displayName';
+import { pairConflict } from '../utils/pairBlocks';
 import { daysLeft, forUser, isAccepting, campaignPreferences } from '../utils/requestCampaign';
 import { computeShortages } from '../utils/shortages';
 import { recordShiftChange, snapOf, pendingChanges, markNotified } from '../utils/shiftChanges';
@@ -1402,7 +1403,8 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     const st = storeId ? (db.prepare('SELECT name FROM stores WHERE id = ? AND company_id = ?').get(storeId, companyId) as any) : null;
     const label = `${md2(date)} ${st?.name ? st.name + ' ' : ''}${from}–${to}`;
     // 今もまだ丸ごと足りない枠か（埋まった・一部だけの枠なら、お礼だけ返す）
-    const still = computeShortages(companyId, date, date).some(x => x.kind === 'full' && (x.store_id ?? 0) === (storeId ?? 0) && x.start_time === from && x.end_time === to);
+    const still = computeShortages(companyId, date, date).some(x => x.kind === 'full' && (x.store_id ?? 0) === (storeId ?? 0) && x.start_time === from && x.end_time === to)
+      && !pairConflict(companyId, me.id, date, storeId, from, to);
     if (!still) {
       await replyLine(token, replyToken, `ありがとう！\n${label} は、人が足りたので大丈夫になりました。また足りない日が出たらお願いします🙏`); return;
     }
@@ -1425,6 +1427,10 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     if (db.prepare('SELECT 1 FROM shifts WHERE company_id = ? AND user_id = ? AND date = ?').get(companyId, o.user_id, o.date)) {
       db.prepare("UPDATE fill_offers SET status = 'skipped' WHERE id = ?").run(o.id);
       await replyLine(token, replyToken, `${o.name}さんは ${md2(o.date)} にもう別のシフトが入っています。シフト画面で確かめてください。`); return;
+    }
+    if (pairConflict(companyId, o.user_id, o.date, o.store_id, o.start_time, o.end_time)) {
+      db.prepare("UPDATE fill_offers SET status = 'skipped' WHERE id = ?").run(o.id);
+      await replyLine(token, replyToken, `${o.name}さんは、この枠には入れられない設定になっています。シフト画面で確かめてください。`); return;
     }
     const r = db.prepare("INSERT INTO shifts (company_id, user_id, date, start_time, end_time, break_minutes, status, store_id) VALUES (?, ?, ?, ?, ?, 0, 'confirmed', ?)")
       .run(companyId, o.user_id, o.date, o.start_time, o.end_time, o.store_id);
@@ -1502,6 +1508,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
         AND NOT EXISTS (SELECT 1 FROM shift_requests r WHERE r.company_id = uc.company_id AND r.user_id = u.id AND r.date = ? AND r.availability = 'unavailable')
       ORDER BY u.name
     `).all(companyId, sh.user_id, sh.date, sh.start_time, sh.end_time, sh.date) as any[];
+    for (let i = cands.length - 1; i >= 0; i--) if (pairConflict(companyId, cands[i].id, sh.date, sh.store_id ?? null, sh.start_time, sh.end_time, sh.id)) cands.splice(i, 1);
     if (cands.length === 0) { await replyLine(token, replyToken, `${shiftLabel(sh)} に入れそうな人（LINE連携済み・その日空いている人）がいません。電話などで探してください。`); return; }
     db.prepare("UPDATE absence_reports SET status = 'recruiting', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(ab.id);
     const card = buttonsCard('代わりに入れる人を探しています', '代わりに入れる人を探しています', [shiftLabel(sh), `入れる場合はボタンを押してください。${W(companyId)}が決めたらお知らせします。`],
@@ -1533,6 +1540,9 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
     const cover = db.prepare('SELECT u.id, u.name FROM users u JOIN user_companies uc ON uc.user_id = u.id AND uc.company_id = ? WHERE u.id = ?').get(companyId, Number(q.get('u'))) as any;
     if (!ab || !sh || !cover) { await replyLine(token, replyToken, '見つかりませんでした。'); return; }
     if (ab.status === 'covered') { await replyLine(token, replyToken, 'もう代わりが決まっています。'); return; }
+    if (pairConflict(companyId, cover.id, sh.date, sh.store_id ?? null, sh.start_time, sh.end_time, sh.id)) {
+      await replyLine(token, replyToken, `${cover.name}さんは、この枠には入れられない設定になっています。シフト画面で確かめてください。`); return;
+    }
     const absentUser = sh.user_id;
     db.prepare('UPDATE shifts SET user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(cover.id, sh.id);
     db.prepare("UPDATE absence_reports SET status = 'covered', cover_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(cover.id, ab.id);
@@ -1678,6 +1688,7 @@ function fillOffersFor(companyId: number, fromDate: string | null = null, toDate
     for (const sh of shorts.filter(x => x.kind === 'full')) {
       const k = `${u.id}|${sh.date}`;
       if (busy.has(k)) continue;
+      if (pairConflict(companyId, u.id, sh.date, sh.store_id ?? null, sh.start_time, sh.end_time)) continue;
       const rq = reqs.get(k);
       if (rq?.availability === 'unavailable') continue;
       if (!prefs.venueOk(u.id, sh.date, sh.store_id)) continue;

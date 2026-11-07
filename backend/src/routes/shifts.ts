@@ -7,6 +7,7 @@ import { pushToCompanyAsync, pushToUsersAsync } from '../utils/apns';
 import { requireProForPastMonths } from '../utils/billing';
 import { notifyShiftPublished, sendShiftChangeCard } from './line';
 import { recordShiftChange, snapOf, pendingChanges, markNotified } from '../utils/shiftChanges';
+import { pairConflict, PAIR_BLOCK_MSG, listPairBlocks, setPairBlocks } from '../utils/pairBlocks';
 
 const router = Router();
 
@@ -94,6 +95,18 @@ router.post('/changes/notify', authenticateToken, requireCompany, async (req: Au
 });
 
 // GET /api/shifts/:id
+// GET/PUT /api/shifts/pair-blocks  一緒にしない組み合わせ（管理者だけ。スタッフには見せない）
+router.get('/pair-blocks', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!['admin', 'super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
+  res.json({ pairs: listPairBlocks(req.companyId!) });
+});
+router.put('/pair-blocks', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (req.user!.role !== 'super_admin') { res.status(403).json({ error: '権限がありません' }); return; }
+  const pairs = (Array.isArray(req.body?.pairs) ? req.body.pairs : []).map((p: any) => [Number(p?.[0]), Number(p?.[1])] as [number, number]);
+  setPairBlocks(req.companyId!, pairs);
+  res.json({ pairs: listPairBlocks(req.companyId!) });
+});
+
 router.get('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
 
@@ -159,6 +172,10 @@ router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Resp
     res.status(409).json({ error: 'この時間帯にすでにシフトが登録されています' });
     return;
   }
+  if (pairConflict(companyId, Number(user_id), date, storeId, start_time, end_time)) {
+    res.status(409).json({ error: PAIR_BLOCK_MSG });
+    return;
+  }
 
   const result = db.prepare(
     'INSERT INTO shifts (company_id, user_id, date, start_time, end_time, break_minutes, notes, status, store_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -204,6 +221,11 @@ router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Re
       return;
     }
     storeId = r;
+  }
+
+  if (pairConflict(companyId, Number(user_id || shift.user_id), date || shift.date, storeId, start_time || shift.start_time, end_time || shift.end_time, Number(req.params.id))) {
+    res.status(409).json({ error: PAIR_BLOCK_MSG });
+    return;
   }
 
   db.prepare(`

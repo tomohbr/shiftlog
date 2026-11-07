@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import db from '../db';
+import { pairConflict } from '../utils/pairBlocks';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { requireEventMode } from '../utils/billing';
 import { logAudit } from '../utils/audit';
@@ -629,6 +630,10 @@ router.post('/drafts/:id/commit', authenticateToken, requireCompany, requireEven
       const k = `${r.user_id}:${r.date}`;
       if ((busy.get(k) || []).some(b => b.start < iv.end && iv.start < b.end)) {
         skipped.push({ user_name: r.user_name, date: r.date, start_time: r.start_time, end_time: r.end_time, reason: '同じ時間に別のシフトあり' });
+        continue;
+      }
+      if (pairConflict(companyId, r.user_id, r.date, storeId, r.start_time, r.end_time)) {
+        skipped.push({ user_name: r.user_name, date: r.date, start_time: r.start_time, end_time: r.end_time, reason: 'この時間には入れられない設定' });
         continue;
       }
       const id = Number(ins.run(companyId, r.user_id, r.date, r.start_time, r.end_time, r.break_minutes || 0, storeId).lastInsertRowid);

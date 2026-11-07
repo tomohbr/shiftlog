@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import db from '../db';
+import { pairConflict } from '../utils/pairBlocks';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
 import { pushToCompanyAsync, pushToUsersAsync } from '../utils/apns';
 import { phoneOnly, phoneOnlyMessage } from '../utils/absenceRule';
@@ -67,6 +68,12 @@ router.post('/:id/cover', authenticateToken, requireCompany, (req: AuthRequest, 
   ).get(req.params.id, req.companyId!) as any;
   if (!report) { res.status(404).json({ error: '見つかりません' }); return; }
   if (report.status !== 'pending') { res.status(400).json({ error: '既に対応済みです' }); return; }
+  if (report.shift_id) {
+    const sh = db.prepare('SELECT * FROM shifts WHERE id = ?').get(report.shift_id) as any;
+    if (sh && pairConflict(req.companyId!, req.user!.id, sh.date, sh.store_id ?? null, sh.start_time, sh.end_time, sh.id)) {
+      res.status(400).json({ error: 'この募集はもう締め切られました' }); return;
+    }
+  }
 
   db.prepare(
     'UPDATE absence_reports SET cover_user_id = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
