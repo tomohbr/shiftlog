@@ -643,13 +643,15 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_line_inbox_company ON line_inbox(company_id, created_at);
 `);
+// 「シフトの相談」「質問・連絡」のあとに来た文は、どのシフトの何の相談かも控える（転送カードにしか残らなかった）
+if (!(db.prepare('PRAGMA table_info(line_inbox)').all() as any[]).some(c => c.name === 'context')) db.exec('ALTER TABLE line_inbox ADD COLUMN context TEXT');
 
 // GET /api/line/inbox?days=14  届いたメッセージ（新しい順・最大200件）
 router.get('/inbox', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!isAdmin(req)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }
   const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 120);
   const rows = db.prepare(`
-    SELECT i.id, i.user_id, COALESCE(u.name, i.name) AS name, i.text, i.created_at FROM line_inbox i
+    SELECT i.id, i.user_id, COALESCE(u.name, i.name) AS name, i.text, i.context, i.created_at FROM line_inbox i
     LEFT JOIN users u ON u.id = i.user_id
     WHERE i.company_id = ? AND i.created_at >= datetime('now', ?)
     ORDER BY i.id DESC LIMIT 200
@@ -785,8 +787,10 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
       } else if (event.type === 'message' && event.message?.type === 'text' && event.replyToken) {
         const text = String(event.message.text);
         const who = lineMember(companyId, lineUserId);
-        db.prepare('INSERT INTO line_inbox (company_id, line_user_id, user_id, name, text) VALUES (?, ?, ?, ?, ?)')
-          .run(companyId, lineUserId, who?.id ?? null, who?.name ?? null, text.slice(0, 2000));
+        const cons = db.prepare("SELECT topic, label FROM line_consults WHERE company_id = ? AND line_user_id = ? AND expires_at >= datetime('now')").get(companyId, lineUserId) as any;
+        const ctx = cons ? `【${(CONSULT_TOPIC[cons.topic] || CONSULT_TOPIC.other).name}】${cons.label ? ` ${cons.label}` : ''}` : null;
+        db.prepare('INSERT INTO line_inbox (company_id, line_user_id, user_id, name, text, context) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(companyId, lineUserId, who?.id ?? null, who?.name ?? null, text.slice(0, 2000), ctx);
         const m = text.match(/\d{6}/);
         if (!m) {
           await handleText(text.trim(), companyId, lineUserId, s.channel_access_token, event.replyToken);
