@@ -419,8 +419,10 @@ router.get('/shortages', authenticateToken, requireCompany, requireEventMode, (r
   const from = DATE_RE.test(String(req.query.from || '')) ? String(req.query.from) : today;
   const to = DATE_RE.test(String(req.query.to || '')) ? String(req.query.to)
     : new Date(Date.parse(from) + 61 * 86400 * 1000).toISOString().slice(0, 10);
-  const out = computeShortages(companyId, from, to);
-  res.json({ from, to, shortages: out });
+  const withDraft = req.query.with_draft === '1';
+  const out = computeShortages(companyId, from, to, { withDraft });
+  const drafts = withDraft ? (db.prepare(`SELECT COUNT(*) AS n FROM schedule_draft_assignments a JOIN schedule_drafts d ON d.id = a.draft_id AND d.company_id = ? AND d.status = 'draft'`).get(companyId) as any).n : 0;
+  res.json({ from, to, shortages: out, draft_count: drafts });
 });
 
 router.get('/apart', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {

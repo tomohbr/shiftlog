@@ -26,13 +26,16 @@ export default function ShortagesCard({ stores, venue, reloadKey, onPick }: {
 }) {
   const [items, setItems] = useState<Shortage[] | null>(null)
   const [showAll, setShowAll] = useState(false)
+  // 仮（下書き）も「入っている」として数えるか。下書きがあるときは最初から含めて見せる
+  const [withDraft, setWithDraft] = useState(true)
+  const [draftCount, setDraftCount] = useState(0)
   const colorOf = storeColorMap(stores)
 
   useEffect(() => {
-    api.get<{ shortages: Shortage[] }>('/venue-schedule/shortages')
-      .then(r => setItems(r.data.shortages || []))
+    api.get<{ shortages: Shortage[]; draft_count?: number }>('/venue-schedule/shortages', { params: withDraft ? { with_draft: '1' } : {} })
+      .then(r => { setItems(r.data.shortages || []); if (withDraft) setDraftCount(r.data.draft_count || 0) })
       .catch(() => setItems([]))
-  }, [reloadKey])
+  }, [reloadKey, withDraft])
 
   if (!items) return null
   const list = items.filter(x => !venue || x.store_id === venue)
@@ -54,6 +57,12 @@ export default function ShortagesCard({ stores, venue, reloadKey, onPick }: {
               {partialCount > 0 && <>・<span className="font-bold text-amber-600">一部だけ {partialCount}枠</span></>}
               <span className="text-gray-400">（{list.length - partialCount}枠・{dates.length}日）</span>
             </span>}
+        {draftCount > 0 && (
+          <span className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs font-bold">
+            <button onClick={() => setWithDraft(true)} className={`px-2.5 py-1 ${withDraft ? 'bg-gray-800 text-white' : 'bg-white text-gray-600'}`}>仮も入れて計算</button>
+            <button onClick={() => setWithDraft(false)} className={`px-2.5 py-1 ${!withDraft ? 'bg-gray-800 text-white' : 'bg-white text-gray-600'}`}>確定だけ</button>
+          </span>
+        )}
         <span className="ml-auto text-xs text-gray-400">管理者だけに表示</span>
       </div>
       {list.length > 0 && (

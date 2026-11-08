@@ -12,7 +12,8 @@ export interface Shortage {
   partial_people: { name: string; start_time: string; end_time: string }[]
 }
 
-export function computeShortages(companyId: number, from: string, to: string): Shortage[] {
+// withDraft: 確定前の下書き（schedule_drafts.status = 'draft'）の割り当ても「入っている」として数える（管理者の見通し用）
+export function computeShortages(companyId: number, from: string, to: string, opts: { withDraft?: boolean } = {}): Shortage[] {
   const days = campaignDays(companyId, from, to);
   const shifts = db.prepare(`
     SELECT s.date, s.store_id, s.start_time, s.end_time, COALESCE(NULLIF(uc.display_name, ''), u.name) AS name
@@ -21,6 +22,18 @@ export function computeShortages(companyId: number, from: string, to: string): S
     WHERE s.company_id = ? AND s.date >= ? AND s.date <= ?
       AND uc.role = 'staff' AND u.role NOT IN ('admin', 'super_admin')
   `).all(companyId, from, to) as { date: string; store_id: number | null; start_time: string; end_time: string; name: string }[];
+  if (opts.withDraft) {
+    shifts.push(...db.prepare(`
+      SELECT ds.date, ds.store_id, COALESCE(a.start_time, ds.start_time) AS start_time, COALESCE(a.end_time, ds.end_time) AS end_time,
+             COALESCE(NULLIF(uc.display_name, ''), u.name) AS name
+      FROM schedule_draft_assignments a
+      JOIN schedule_draft_slots ds ON ds.id = a.slot_id
+      JOIN schedule_drafts d ON d.id = a.draft_id AND d.company_id = ? AND d.status = 'draft'
+      JOIN users u ON u.id = a.user_id
+      JOIN user_companies uc ON uc.user_id = a.user_id AND uc.company_id = d.company_id
+      WHERE ds.date >= ? AND ds.date <= ?
+    `).all(companyId, from, to) as any[]);
+  }
   const storeName = new Map((db.prepare('SELECT id, name FROM stores WHERE company_id = ?').all(companyId) as any[]).map(r => [r.id, r.name]));
   const out: Shortage[] = [];
   for (const d of days) {
