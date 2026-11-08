@@ -12,7 +12,7 @@ import ShiftModal from '../components/ShiftModal'
 import MonthNavigator from '../components/MonthNavigator'
 import PublicationBar from '../components/PublicationBar'
 import StaffLoginQR from '../components/StaffLoginQR'
-import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, storesApi, timecardsApi, Shift, User, Store } from '../api/client'
+import { shiftsApi, usersApi, laborApi, swapsApi, seedApi, storesApi, timecardsApi, venueScheduleApi, Shift, User, Store } from '../api/client'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -21,6 +21,8 @@ export default function DashboardPage() {
   const vw = venueWord(selectedCompany)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [shifts, setShifts] = useState<Shift[]>([])
+  // 確定前の下書き（「仮」としてカレンダーにだけ重ねる。スタッフには見えない）
+  const [draftShifts, setDraftShifts] = useState<Shift[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -55,6 +57,11 @@ export default function DashboardPage() {
       ])
 
       setShifts(shiftsRes.data.shifts)
+      if (isEventMode(selectedCompany)) {
+        const last = new Date(year, month, 0).getDate()
+        const mm = String(month).padStart(2, '0')
+        venueScheduleApi.draftOverlay(`${year}-${mm}-01`, `${year}-${mm}-${last}`).then(r => setDraftShifts(r.data.shifts)).catch(() => setDraftShifts([]))
+      } else setDraftShifts([])
       setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
       setIsPublished(pubRes.data.publication?.is_published === 1)
       setStoreCount((storesRes.data as any)?.stores?.length || 0)
@@ -293,7 +300,7 @@ export default function DashboardPage() {
           <TeamCalendar
             year={currentDate.getFullYear()}
             month={currentDate.getMonth() + 1}
-            shifts={venue ? shifts.filter(x => x.store_id === venue) : shifts}
+            shifts={(venue ? [...shifts, ...draftShifts].filter(x => x.store_id === venue) : [...shifts, ...draftShifts])}
             stores={stores}
             today={new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)}
             onPick={setDayOpen}

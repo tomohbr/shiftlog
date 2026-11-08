@@ -462,6 +462,28 @@ router.get('/drafts', authenticateToken, requireCompany, requireEventMode, (req:
 });
 
 // GET /api/venue-schedule/drafts/:id
+// GET /api/venue-schedule/drafts/overlay?from=&to=  まだ確定していない下書きの割り当てを、シフトと同じ形で返す（管理者のダッシュボードで「仮」として重ねる）
+router.get('/drafts/overlay', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+  if (!adminOnly(req, res)) return;
+  const companyId = req.companyId!;
+  const from = DATE_RE.test(String(req.query.from || '')) ? String(req.query.from) : '0000-01-01';
+  const to = DATE_RE.test(String(req.query.to || '')) ? String(req.query.to) : '9999-12-31';
+  const rows = db.prepare(`
+    SELECT a.id AS aid, a.user_id, s.date, COALESCE(a.start_time, s.start_time) AS start_time, COALESCE(a.end_time, s.end_time) AS end_time,
+           s.store_id, st.name AS store_name, COALESCE(NULLIF(uc.display_name, ''), u.name) AS user_name, u.name AS user_full_name,
+           uc.sort_order AS user_order, uc.color AS user_color
+    FROM schedule_draft_assignments a
+    JOIN schedule_draft_slots s ON s.id = a.slot_id
+    JOIN schedule_drafts d ON d.id = a.draft_id AND d.company_id = ? AND d.status = 'draft'
+    JOIN users u ON u.id = a.user_id
+    LEFT JOIN user_companies uc ON uc.user_id = a.user_id AND uc.company_id = d.company_id
+    LEFT JOIN stores st ON st.id = s.store_id
+    WHERE s.date >= ? AND s.date <= ?
+    ORDER BY s.date, s.start_time
+  `).all(companyId, from, to) as any[];
+  res.json({ shifts: rows.map(r => ({ ...r, id: -r.aid, company_id: companyId, break_minutes: 0, status: 'draft' })) });
+});
+
 router.get('/drafts/:id', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const view = buildView(req.companyId!, Number(req.params.id));

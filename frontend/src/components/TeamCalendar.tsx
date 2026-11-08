@@ -85,11 +85,13 @@ export default function TeamCalendar({ year, month, shifts, stores, today, onPic
                   <span className={`mx-1 mt-1 -mb-0.5 text-[10px] font-bold leading-none ${PART_TONE[s.part]}`}>{PART_ICON[s.part]}{PART_SHORT[s.part]}</span>
                 )}
                 <span
-                  title={`${s.user_name} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}${s.store_name ? ` ${s.store_name}` : ''}`}
-                  className="mx-[2px] sm:mx-1 mt-[3px] rounded-[5px] px-0.5 sm:px-1 text-[12px] leading-[21px] font-bold text-white flex items-center justify-center sm:justify-between gap-1 overflow-hidden"
-                  style={{ backgroundColor: s.store_id ? colorOf(s.store_id).solid : '#4C6EF5' }}
+                  title={`${s.status === 'draft' ? '【仮・下書き】' : ''}${s.user_name} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}${s.store_name ? ` ${s.store_name}` : ''}`}
+                  className={`mx-[2px] sm:mx-1 mt-[3px] rounded-[5px] px-0.5 sm:px-1 text-[12px] leading-[19px] font-bold flex items-center justify-center sm:justify-between gap-1 overflow-hidden ${s.status === 'draft' ? 'border-2 border-dashed bg-white' : 'text-white leading-[21px]'}`}
+                  style={s.status === 'draft'
+                    ? { borderColor: s.store_id ? colorOf(s.store_id).solid : '#4C6EF5', color: s.store_id ? colorOf(s.store_id).solid : '#4C6EF5' }
+                    : { backgroundColor: s.store_id ? colorOf(s.store_id).solid : '#4C6EF5' }}
                 >
-                  <span className="whitespace-nowrap overflow-hidden text-clip tracking-tighter sm:tracking-normal">{label(s.user_name)}</span>
+                  <span className="whitespace-nowrap overflow-hidden text-clip tracking-tighter sm:tracking-normal">{s.status === 'draft' ? '仮 ' : ''}{label(s.user_name)}</span>
                   <span className="text-[10px] font-semibold opacity-90 tabular-nums shrink-0 hidden xl:inline">{s.start_time.slice(0, 5).replace(/^0/, '')}</span>
                 </span>
                 </Fragment>
@@ -101,6 +103,9 @@ export default function TeamCalendar({ year, month, shifts, stores, today, onPic
       </div>
       {stores.length > 1 && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-gray-600">
+          {shifts.some(s => s.status === 'draft') && (
+            <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm border-2 border-dashed border-gray-500 bg-white" />仮（下書き・スタッフには見えない）</span>
+          )}
           {sorted.map(st => (
             <span key={st.id} className="inline-flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: colorOf(st.id).solid }} />{st.name}

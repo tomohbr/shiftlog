@@ -570,6 +570,7 @@ export const venueScheduleApi = {
   createDraft: (data: { start_date: string; end_date: string; include_unsubmitted?: boolean }) =>
     api.post<DraftView>('/venue-schedule/drafts', data),
   getDraft: (id: number) => api.get<DraftView>(`/venue-schedule/drafts/${id}`),
+  draftOverlay: (from: string, to: string) => api.get<{ shifts: Shift[] }>('/venue-schedule/drafts/overlay', { params: { from, to } }),
   candidates: (draftId: number, slotId: number) =>
     api.get<{ candidates: DraftCandidate[] }>(`/venue-schedule/drafts/${draftId}/slots/${slotId}/candidates`),
   assign: (draftId: number, data: { slot_id: number; user_id: number; replace_assignment_id?: number }) =>
