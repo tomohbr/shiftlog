@@ -744,6 +744,7 @@ router.post('/message', authenticateToken, requireCompany, async (req: AuthReque
   const rows = linkedMembers(companyId).filter(r => ids.has(r.user_id));
   let sent = 0;
   const failed: string[] = [];
+  const errors: string[] = [];
   for (const r of rows) {
     const given = callName(r);
     try {
@@ -751,10 +752,15 @@ router.post('/message', authenticateToken, requireCompany, async (req: AuthReque
         method: 'POST',
         body: { to: r.line_user_id, messages: texts.map((t: string) => ({ type: 'text', text: t.replace(/\{名前\}/g, given).slice(0, 5000) })) },
       });
-      if (out.ok) sent++; else failed.push(r.name);
-    } catch { failed.push(r.name); }
+      if (out.ok) sent++;
+      else {
+        failed.push(r.name);
+        errors.push(`${r.name}: ${out.status} ${String(out.data?.message || '').slice(0, 120)}`);
+        console.error('[line] message push 失敗', r.user_id, out.status, JSON.stringify(out.data).slice(0, 200));
+      }
+    } catch (e) { failed.push(r.name); errors.push(`${r.name}: ${String(e).slice(0, 120)}`); }
   }
-  res.json({ sent, targets: rows.length, failed });
+  res.json({ sent, targets: rows.length, failed, errors });
 });
 
 // POST /api/line/webhook/:companyId - お店ごとの LINE 公式アカウントからのイベント
