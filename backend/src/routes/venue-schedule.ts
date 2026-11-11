@@ -419,6 +419,9 @@ router.get('/shortages', authenticateToken, requireCompany, (req: AuthRequest, r
   const to = DATE_RE.test(String(req.query.to || '')) ? String(req.query.to)
     : new Date(Date.parse(from) + 61 * 86400 * 1000).toISOString().slice(0, 10);
   const withDraft = req.query.with_draft === '1';
+  // 必要人数をまだ決めていない会社は、比べる相手が無いので「足りない／埋まっている」を出さない
+  const hasRules = !!db.prepare('SELECT 1 FROM venue_slot_rules WHERE company_id = ? LIMIT 1').get(companyId);
+  if (!hasRules) { res.json({ from, to, shortages: [], draft_count: 0, no_rules: true }); return; }
   const out = computeShortages(companyId, from, to, { withDraft });
   const drafts = withDraft ? (db.prepare(`SELECT COUNT(*) AS n FROM schedule_draft_assignments a JOIN schedule_drafts d ON d.id = a.draft_id AND d.company_id = ? AND d.status = 'draft'`).get(companyId) as any).n : 0;
   res.json({ from, to, shortages: out, draft_count: drafts });

@@ -159,7 +159,7 @@ export default function VenueSchedulePage() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Sparkles className="w-6 h-6 text-purple-600" />
-            希望から自動で作る
+            シフト自動作成
           </h2>
           <p className="text-sm text-gray-500 mt-1">
             {V}ごとの必要人数と、スタッフの希望から下書きを作ります。確定するまでスタッフには見えません。

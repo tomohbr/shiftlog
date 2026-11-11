@@ -297,7 +297,7 @@ export default function CampaignAnswerPage() {
         ) : (
           <p className="mt-3 text-base font-semibold text-gray-700">
             {c.status === 'draft'
-              ? 'まだ募集前です。始まったらLINEでお知らせするので、それまでお待ちください。'
+              ? 'まだ受付が始まっていません。始まったらこの画面から出せます。'
               : `締め切りました。${submitted ? '出した希望は下のとおりです。' : ''}変更したいときは、${data.contact}にLINEで連絡してください。`}
           </p>
         )}

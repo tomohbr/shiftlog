@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BookOpen, Store, Users, Calendar, Smartphone, MessageCircle, CreditCard, CheckCircle2, Copy, Download, Sparkles, ExternalLink, ChevronRight, Mail, HeartHandshake } from 'lucide-react'
+import { BookOpen, Store, Users, Calendar, Smartphone, MessageCircle, CreditCard, CheckCircle2, Copy, Download, Sparkles, ExternalLink, ChevronRight, Mail, HeartHandshake, ClipboardList, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
 import { PUBLIC_APP_ORIGIN } from '../native/platform'
@@ -27,38 +27,35 @@ export default function SetupGuidePage() {
   const ownerSteps: Step[] = [
     {
       id: 'store',
-      title: '1. 店舗を追加',
+      title: '1. 店舗を確かめる',
       icon: Store,
       owner: true,
       body: (
         <div>
-          <p>左メニュー「店舗管理」→「+ 店舗追加」から店舗を1つ追加します。店舗名のみ必須。</p>
-          <p className="text-xs text-gray-500 mt-1">無料プランでは1店舗まで。2店舗目以降は月額¥980/店舗のアップグレードが必要です。</p>
-          <Link to="/stores" className="inline-flex items-center gap-1 mt-2 text-blue-600 hover:underline text-sm">
-            店舗管理へ <ChevronRight className="w-3 h-3" />
+          <p>登録のときに入れた名前で店舗が1つできています。名前を直したいときや、店舗を増やしたいときだけ「会社・店舗」を開いてください。</p>
+          <p className="text-xs text-gray-500 mt-1">無料で使えるのは1店舗・スタッフ5名までです。</p>
+          <Link to="/organization" className="inline-flex items-center gap-1 mt-2 text-blue-600 hover:underline text-sm">
+            会社・店舗へ <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
       ),
     },
     {
       id: 'staff',
-      title: '2. スタッフを登録（3つの方法から選べます）',
+      title: '2. スタッフを登録する',
       icon: Users,
       owner: true,
       body: (
         <div className="space-y-2">
           <div className="bg-gray-50 rounded p-3">
-            <p className="font-semibold text-sm">A. 1人ずつ追加（少人数向け）</p>
-            <p className="text-xs text-gray-600">スタッフ管理 →「+ スタッフ追加」で氏名を入力。時給などは必要に応じて設定</p>
+            <p className="font-semibold text-sm">A. 1人ずつ（少人数のお店）</p>
+            <p className="text-xs text-gray-600">スタッフ管理 →「スタッフ追加」。<b>名前だけ</b>で登録できます。時給は後からで大丈夫です</p>
           </div>
           <div className="bg-gray-50 rounded p-3">
-            <p className="font-semibold text-sm">B. CSV一括登録（複数名をまとめて登録する場合）</p>
-            <p className="text-xs text-gray-600">スタッフ管理 →「CSV一括登録」→ テンプレートをダウンロード → Excel編集 → アップロード</p>
+            <p className="font-semibold text-sm">B. まとめて（何人もいるお店）</p>
+            <p className="text-xs text-gray-600">スタッフ管理 →「一括登録」。名前を改行で貼り付けるか、表の形（CSV）で読み込めます</p>
           </div>
-          <div className="bg-gray-50 rounded p-3">
-            <p className="font-semibold text-sm">C. 既存スタッフにログイン案内を送る</p>
-            <p className="text-xs text-gray-500">ログイン案内文をコピーして、LINEやメールで共有</p>
-          </div>
+          <p className="text-xs text-gray-500">無料のままで登録できるのは5名までです。6名以上はPro（月額¥980／年額¥9,800）になります。</p>
           <Link to="/staff" className="inline-flex items-center gap-1 mt-1 text-blue-600 hover:underline text-sm">
             スタッフ管理へ <ChevronRight className="w-3 h-3" />
           </Link>
@@ -67,12 +64,17 @@ export default function SetupGuidePage() {
     },
     {
       id: 'invite',
-      title: '3. スタッフに使い方を共有（いちばん大事）',
+      title: '3. スタッフに入り口を渡す（いちばん大事）',
       icon: MessageCircle,
       owner: true,
       body: (
         <div className="space-y-2">
-          <p className="text-sm">スタッフが登録されても、<b>本人に使い方が伝わらないと利用されません</b>。下のメッセージをLINEやメールでスタッフに送ってください:</p>
+          <p className="text-sm">登録しただけでは、スタッフはまだ何も見られません。<b>入り口を渡すところまで</b>やってください。</p>
+          <div className="bg-gray-50 rounded p-3">
+            <p className="font-semibold text-sm">おすすめ: QRコード</p>
+            <p className="text-xs text-gray-600">スタッフ管理 →「QR」。印刷してレジ横やバックヤードに貼ると、スマホをかざすだけで入れます（会社PINの入力も要りません）</p>
+          </div>
+          <p className="text-sm">離れている人には、下の案内文をLINEやメールで送ってください。</p>
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 relative">
             <button
               onClick={() => copy(staffInvitationMessage({ companyName: selectedCompany?.name || '', companyPin, appUrl }), 'LINE用メッセージをコピーしました')}
@@ -81,52 +83,94 @@ export default function SetupGuidePage() {
               <Copy className="w-3 h-3" /> コピー
             </button>
             <pre className="text-xs text-gray-800 whitespace-pre-wrap pr-20 font-sans">
-{staffInvitationMessage({ companyName: selectedCompany?.name || '○○○', companyPin: companyPin || '(会社管理画面で確認)', appUrl })}
+{staffInvitationMessage({ companyName: selectedCompany?.name || '○○○', companyPin: companyPin || '(会社・店舗の画面で確認)', appUrl })}
             </pre>
           </div>
         </div>
       ),
     },
     {
+      id: 'collect',
+      title: '4. 希望を集める（手で作るなら飛ばしてOK）',
+      icon: ClipboardList,
+      owner: true,
+      body: (
+        <div className="space-y-2 text-sm">
+          <p>「希望を集める」で期間と締切を決めて受付を始めると、スタッフが自分のスマホから ◎入りたい／○入れる／×無理 を出せます。</p>
+          <p className="text-xs text-gray-600">LINE通知を設定していれば1人1通で届きます。設定していなくても、スタッフの「シフト希望提出」の画面に出ます。</p>
+          <Link to="/request-campaigns" className="inline-flex items-center gap-1 text-blue-600 hover:underline text-sm">
+            希望を集めるへ <ChevronRight className="w-3 h-3" />
+          </Link>
+        </div>
+      ),
+    },
+    {
       id: 'shift',
-      title: '4. シフトを作成（2通り）',
+      title: '5. シフトを作る（3通り）',
       icon: Calendar,
       owner: true,
       body: (
         <div className="space-y-2">
           <div className="bg-gray-50 rounded p-3">
-            <p className="font-semibold text-sm">A. 手動作成（少人数・シンプル）</p>
-            <p className="text-xs text-gray-600">ダッシュボードのカレンダーで日付をクリック → スタッフ/時間を指定</p>
+            <p className="font-semibold text-sm">A. 手で入れる（少人数・シンプル）</p>
+            <p className="text-xs text-gray-600">シフト管理の表で「＋」を押して、スタッフと時間を決めます</p>
           </div>
           <div className="bg-purple-50 rounded p-3">
-            <p className="font-semibold text-sm flex items-center gap-1"><Sparkles className="w-3 h-3 text-purple-600" /> B. 自動生成（スタッフ多数）</p>
-            <p className="text-xs text-gray-600">左メニュー「シフト自動生成」→ 必要な日時・人数を入力 → 希望シフトとスキルを考慮して自動で割り当て</p>
+            <p className="font-semibold text-sm flex items-center gap-1"><Sparkles className="w-3 h-3 text-purple-600" /> B. 希望から自動で作る（人数が多いお店）</p>
+            <p className="text-xs text-gray-600">「シフト自動作成」で、曜日ごとの必要人数（例：平日 17:00-22:00 2人）を決めると、集まった希望から下書きができます。表で手直しして確定します</p>
           </div>
-          <p className="text-xs text-gray-500">作成したら「シフト公開」ボタンでスタッフに通知されます。</p>
+          <div className="bg-gray-50 rounded p-3">
+            <p className="font-semibold text-sm">C. 先月をコピーする</p>
+            <p className="text-xs text-gray-600">「テンプレート」から、よく使う形を保存して使い回せます</p>
+          </div>
+          <Link to="/auto-schedule" className="inline-flex items-center gap-1 text-blue-600 hover:underline text-sm">
+            シフト自動作成へ <ChevronRight className="w-3 h-3" />
+          </Link>
+        </div>
+      ),
+    },
+    {
+      id: 'publish',
+      title: '6. スタッフに公開する（ここまでやらないと届きません）',
+      icon: Send,
+      owner: true,
+      body: (
+        <div className="space-y-2 text-sm">
+          <p>作っただけのシフトは<b>下書き</b>です。スタッフの画面には何も出ていません。</p>
+          <p>シフト管理かダッシュボードの<b>「スタッフに公開する」</b>を押すと、その月のシフトがスタッフの「シフト」画面に出ます。LINE通知を設定していれば、そのときにお知らせも届きます。</p>
+          <p className="text-xs text-gray-500">直したいときは、公開したまま直して大丈夫です（変更はスタッフにも知らせます）。</p>
+          <Link to="/shifts" className="inline-flex items-center gap-1 text-blue-600 hover:underline text-sm">
+            シフト管理へ <ChevronRight className="w-3 h-3" />
+          </Link>
         </div>
       ),
     },
     {
       id: 'timecard',
-      title: '5. 出退勤打刻を運用',
+      title: '7. 出退勤の打刻を始める',
       icon: Smartphone,
       owner: true,
       body: (
         <div className="space-y-1 text-sm">
-          <p>スタッフは各自のスマホから「タイムカード」画面で出退勤を打刻します。</p>
-          <p>店舗共用タブレットを置く場合は、ログイン画面「出退勤タイムレコーダー」から会社PINでキオスクモード起動。</p>
-          <p className="text-xs text-gray-500 mt-2">打刻データは「勤務集計」「給与エクスポート」で月次集計・CSV出力可能。freee/MoneyForward/KING OF TIME形式に対応。</p>
+          <p>スタッフは自分のスマホの「タイムカード」で出勤・退勤を押します。</p>
+          <p>お店のタブレットを1台置くなら、ログイン画面の「出退勤タイムレコーダー」を開いて会社PINを入れておきます。</p>
+          <p className="text-xs text-gray-500 mt-2">打刻は「勤務集計」でその月の合計が見られます。給与ソフト向けのCSV（freee・マネーフォワード・KING OF TIME）はProで出せます。</p>
         </div>
       ),
     },
     {
       id: 'billing',
-      title: '6. 店舗を増やす場合（月額¥980/店舗）',
+      title: '8. 料金',
       icon: CreditCard,
       owner: true,
       body: (
-        <div className="text-sm">
-          <p>店舗管理画面の「アップグレード」から Stripe Checkout で決済。いつでもキャンセル可能、解約は次回更新時に無料プランに戻ります。</p>
+        <div className="text-sm space-y-1">
+          <p><b>無料</b>：1店舗・スタッフ5名まで。打刻もシフトもずっと無料で使えます。</p>
+          <p><b>Pro（月額¥980／年額¥9,800）</b>：スタッフ6名以上、過去の月やこれから先の月の集計、給与ソフト向けCSV。登録から30日はProの機能をそのまま試せます。</p>
+          <p className="text-xs text-gray-500">クレジットカードの登録は、Proにするときだけです。勝手に課金されることはありません。</p>
+          <Link to="/settings" className="inline-flex items-center gap-1 text-blue-600 hover:underline text-sm">
+            プランを見る <ChevronRight className="w-3 h-3" />
+          </Link>
         </div>
       ),
     },

@@ -174,8 +174,8 @@ export default function TimecardPage() {
     }
   }
 
-  const handleClockIn = () => doPunch('clock_in', `${selectedStaff?.name || ''}出勤しました`)
-  const handleClockOut = () => doPunch('clock_out', `${selectedStaff?.name || ''}退勤しました`)
+  const handleClockIn = () => doPunch('clock_in', selectedStaff ? `${selectedStaff.name}さんが出勤しました` : '出勤しました')
+  const handleClockOut = () => doPunch('clock_out', selectedStaff ? `${selectedStaff.name}さんが退勤しました` : '退勤しました')
   const handleBreakStart = () => doPunch('break_start', '休憩開始')
   const handleBreakEnd = () => doPunch('break_end', '休憩終了')
 
@@ -327,7 +327,7 @@ export default function TimecardPage() {
           <p className="text-gray-500 text-sm mb-1">
             {currentTime.getFullYear()}年{currentTime.getMonth() + 1}月{currentTime.getDate()}日（{'日月火水木金土'[currentTime.getDay()]}）
           </p>
-          <p className="text-gray-400 text-sm mt-4">← 左のリストから名前を選んでください</p>
+          <p className="text-gray-400 text-sm mt-4">左上のメニューから、打刻する人の名前を選んでください</p>
         </div>
       </div>
     )

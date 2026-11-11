@@ -25,6 +25,8 @@ export default function ShortagesCard({ stores, venue, reloadKey, onPick }: {
   stores: Store[]; venue: number | null; reloadKey?: unknown; onPick: (date: string) => void
 }) {
   const [items, setItems] = useState<Shortage[] | null>(null)
+  // 必要人数をまだ決めていないお店では、このカード自体を出さない
+  const [noRules, setNoRules] = useState(false)
   const [showAll, setShowAll] = useState(false)
   // 仮（下書き）も「入っている」として数えるか。下書きがあるときは最初から含めて見せる
   const [withDraft, setWithDraft] = useState(true)
@@ -32,12 +34,12 @@ export default function ShortagesCard({ stores, venue, reloadKey, onPick }: {
   const colorOf = storeColorMap(stores)
 
   useEffect(() => {
-    api.get<{ shortages: Shortage[]; draft_count?: number }>('/venue-schedule/shortages', { params: withDraft ? { with_draft: '1' } : {} })
-      .then(r => { setItems(r.data.shortages || []); if (withDraft) setDraftCount(r.data.draft_count || 0) })
+    api.get<{ shortages: Shortage[]; draft_count?: number; no_rules?: boolean }>('/venue-schedule/shortages', { params: withDraft ? { with_draft: '1' } : {} })
+      .then(r => { setNoRules(!!r.data.no_rules); setItems(r.data.shortages || []); if (withDraft) setDraftCount(r.data.draft_count || 0) })
       .catch(() => setItems([]))
   }, [reloadKey, withDraft])
 
-  if (!items) return null
+  if (!items || noRules) return null
   const list = items.filter(x => !venue || x.store_id === venue)
   const dates = [...new Set(list.map(x => x.date))]
   const shownDates = showAll ? dates : dates.slice(0, 8)
