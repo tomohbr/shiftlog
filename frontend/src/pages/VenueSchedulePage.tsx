@@ -4,11 +4,13 @@ import { Sparkles, Send, Trash2, RefreshCw, CheckCircle2, ClipboardList, ArrowRi
 import toast from 'react-hot-toast'
 import { venueScheduleApi, storesApi, SlotRule, DraftView, DraftSummary, Store } from '../api/client'
 import { storeColorMap } from '../lib/storeColors'
+import { useAuth } from '../contexts/AuthContext'
+import { venueWord } from '../lib/terms'
 import SlotRulesEditor from '../components/venue-schedule/SlotRulesEditor'
 import DraftBoard from '../components/venue-schedule/DraftBoard'
 
 // 希望から自動でシフトを作る。
-//  ① 会場ごとの必要人数（枠）を登録 → ② 期間を決めて下書きを作る → ③ 表で手直しして確定
+//  ① 店舗（催事モードでは会場）ごとの必要人数（枠）を登録 → ② 期間を決めて下書きを作る → ③ 表で手直しして確定
 // 下書きは確定するまで shifts に入らない（スタッフには見えない）。
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -17,6 +19,9 @@ const monthRange = (y: number, m: number) => [ymd(new Date(y, m - 1, 1)), ymd(ne
 const md = (date: string) => { const [, m, d] = date.split('-').map(Number); return `${m}/${d}` }
 
 export default function VenueSchedulePage() {
+  const { selectedCompany } = useAuth()
+  // ふだんのお店は「店舗」、催事モード（マーケット）の会社だけ「会場」
+  const V = venueWord(selectedCompany)
   const [params] = useSearchParams()
   const [stores, setStores] = useState<Store[]>([])
   const [rules, setRules] = useState<SlotRule[]>([])
@@ -44,10 +49,10 @@ export default function VenueSchedulePage() {
   const colorOf = storeColorMap(stores)
   const venues = useMemo(() => {
     const sorted = [...stores].sort((a, b) => a.id - b.id)
-    // 会場を登録していないお店は「会場指定なし」1つで使える
+    // 店舗を登録していないお店は「指定なし」1つで使える
     return sorted.length > 0
       ? sorted.map(s => ({ id: s.id as number | null, name: s.name, color: colorOf(s.id) }))
-      : [{ id: null as number | null, name: '会場指定なし', color: colorOf(null) }]
+      : [{ id: null as number | null, name: `${V}の指定なし`, color: colorOf(null) }]
   }, [stores])
 
   const loadRules = useCallback(async () => {
@@ -157,7 +162,7 @@ export default function VenueSchedulePage() {
             希望から自動で作る
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            会場ごとの必要人数と、スタッフの希望から下書きを作ります。確定するまでスタッフには見えません。
+            {V}ごとの必要人数と、スタッフの希望から下書きを作ります。確定するまでスタッフには見えません。
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -165,14 +170,14 @@ export default function VenueSchedulePage() {
             <ClipboardList className="w-4 h-4" />希望の集まり具合を見る
           </Link>
           <Link to="/request-campaigns" className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1">
-            <Megaphone className="w-4 h-4" />マーケットなどの期間で募集
+            <Megaphone className="w-4 h-4" />期間をまとめて希望を集める
           </Link>
         </div>
       </div>
 
       {/* 手順のタブ */}
       <div className="flex gap-1 border-b border-gray-200">
-        {([['rules', '① 会場ごとの必要人数'], ['draft', '② 下書きを確認して確定']] as const).map(([k, label]) => (
+        {([['rules', `① ${V}ごとの必要人数`], ['draft', '② 下書きを確認して確定']] as const).map(([k, label]) => (
           <button key={k} onClick={() => (k === 'rules' || view) && setTab(k)} disabled={k === 'draft' && !view}
             className={`px-4 py-2 text-sm font-bold border-b-2 -mb-px ${tab === k ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-800 disabled:text-gray-300'}`}>
             {label}
@@ -214,13 +219,13 @@ export default function VenueSchedulePage() {
               <p>・希望の時間帯があれば、枠と合う人を優先します（一部だけ合う人は、足りないときだけ・印付き）</p>
               <p>・同じ日に時間の重なる2か所には入れません。勤務日数と時間がなるべく均等になるようにします</p>
               <p>・すでに入っている確定シフトは消さず、その分を差し引いて空いている枠だけ埋めます</p>
-              <p>・期間の募集で答えた「入りたい会場」以外の会場には入れません。「週に入りたい日数」の上限も超えません（足りない枠は手で入れてください）</p>
+              <p>・希望の募集で答えた「入りたい{V}」以外の{V}には入れません。「週に入りたい日数」の上限も超えません（足りない枠は手で入れてください）</p>
             </div>
             <button onClick={generate} disabled={generating || rules.length === 0}
               className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white font-bold px-5 py-2.5 rounded-lg text-sm flex items-center gap-2">
               <Sparkles className="w-4 h-4" />{generating ? '作成中...' : '希望から下書きを作る'}
             </button>
-            {rules.length === 0 && <p className="text-xs text-amber-700">先に上で会場ごとの枠を登録してください</p>}
+            {rules.length === 0 && <p className="text-xs text-amber-700">先に上で{V}ごとの必要人数を登録してください</p>}
           </div>
 
           {drafts.length > 0 && (

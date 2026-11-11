@@ -3,8 +3,10 @@ import { Plus, Trash2, Pencil, X, CalendarDays } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { venueScheduleApi, SlotRule, SlotRuleInput } from '../../api/client'
 import { StoreColor } from '../../lib/storeColors'
+import { useAuth } from '../../contexts/AuthContext'
+import { venueWord } from '../../lib/terms'
 
-// 会場ごとの必要人数（枠）の登録。
+// 店舗（催事モードでは会場）ごとの必要人数（枠）の登録。
 // 「平日 10:00-18:00 2人」のような曜日ルールと、「12/24 は 10:00-21:00 3人」のような日付指定の上書きを持てる。
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
@@ -50,7 +52,9 @@ export default function SlotRulesEditor({ venues, rules, onChange }: {
   rules: SlotRule[]
   onChange: () => void
 }) {
-  // どの会場のフォームを開いているか（会場指定なしは 0）
+  const { selectedCompany } = useAuth()
+  const V = venueWord(selectedCompany)
+  // どの店舗のフォームを開いているか（指定なしは 0）
   const [openFor, setOpenFor] = useState<number | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm())
   const [saving, setSaving] = useState(false)
@@ -177,7 +181,7 @@ export default function SlotRulesEditor({ venues, rules, onChange }: {
                 ) : (
                   <div>
                     <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="input-field py-1.5" />
-                    <p className="text-[11px] text-gray-500 mt-1">この日はこの会場の曜日の枠を使わず、ここで決めた枠だけにします。人数0で「この日は休み」。</p>
+                    <p className="text-[11px] text-gray-500 mt-1">この日はこの{V}の曜日の枠を使わず、ここで決めた枠だけにします。人数0で「この日は休み」。</p>
                   </div>
                 )}
 

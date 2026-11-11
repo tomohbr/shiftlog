@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { venueWord, isEventMode } from '../lib/terms'
+import { venueWord } from '../lib/terms'
 import { format, addMonths, subMonths, getDaysInMonth, startOfMonth, getDay } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Plus, Trash2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
@@ -145,8 +145,8 @@ export default function ShiftEditPage() {
             ))}
           </select>
 
-          {/* 1マスずつ入れる代わりに、会場ごとの必要人数と希望から下書きを作る */}
-          {isEventMode(selectedCompany) && <Link
+          {/* 1マスずつ入れる代わりに、必要人数と希望から下書きを作る */}
+          {<Link
             to={`/auto-schedule?month=${format(currentDate, 'yyyy-MM')}`}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100"
           >

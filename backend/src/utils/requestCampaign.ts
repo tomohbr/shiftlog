@@ -1,5 +1,5 @@
 import db from '../db';
-import { SlotRule, expandRules, toHHMM, weekdayOf } from './venueSchedule';
+import { SlotRule, datesBetween, expandRules, toHHMM, weekdayOf } from './venueSchedule';
 
 // 期間をまたぐ希望の募集（request_campaigns）の共通ロジック。
 // 候補日は保存せず、会場ごとの枠（venue_slot_rules）から毎回出す。
@@ -40,7 +40,25 @@ export const weeklyCapOf = (v: string | null | undefined): number | null => (v =
 
 export const TRANSPORTS = ['徒歩・自転車', '車', 'バイク', '電車・バス', '送迎が必要'];
 
-export function campaignDays(companyId: number, start: string, end: string): CampaignDay[] {
+// 必要人数をまだ決めていない会社の候補日（期間のすべての日）。
+// 枠が無いので needed は 0。昼夜に分ける質問も出さない（long = false）。
+function everyDay(companyId: number, start: string, end: string): CampaignDay[] {
+  const storeIds = (db.prepare('SELECT id FROM stores WHERE company_id = ? ORDER BY id').all(companyId) as any[]).map(s => s.id);
+  const venues = [{ store_id: storeIds.length === 1 ? storeIds[0] : null, slots: [] as CampaignSlot[], needed: 0 }];
+  return datesBetween(start, end).map(date => ({
+    date, weekday: weekdayOf(date), venues, long: false,
+    times: { a: { start: toHHMM(DAY_FROM), end: toHHMM(SPLIT) }, b: { start: toHHMM(SPLIT), end: toHHMM(NIGHT_TO) } },
+  }));
+}
+
+/**
+ * 募集の候補日。
+ * 必要人数（venue_slot_rules）を登録している会社は、枠がある日だけが候補になる。
+ * まだ登録していない会社（ふだんのお店は最初これ）は、期間のすべての日を候補にする＝
+ * 「来月の希望を出してください」だけで使える。足りない人数の判定には使わないので、
+ * 枠のない日を「人が足りない日」として数えてしまうことはない。
+ */
+export function campaignDays(companyId: number, start: string, end: string, opts: { everyDayIfNoRules?: boolean } = {}): CampaignDay[] {
   const rules = db.prepare('SELECT * FROM venue_slot_rules WHERE company_id = ?').all(companyId) as SlotRule[];
   // 消された会場のルールは使わない
   const storeIds = new Set((db.prepare('SELECT id FROM stores WHERE company_id = ?').all(companyId) as any[]).map(s => s.id));
@@ -52,6 +70,8 @@ export function campaignDays(companyId: number, start: string, end: string): Cam
     if (!byDate.has(e.date)) byDate.set(e.date, []);
     byDate.get(e.date)!.push(e);
   }
+  if (expanded.length === 0 && opts.everyDayIfNoRules) return everyDay(companyId, start, end);
+
   const days: CampaignDay[] = [];
   for (const [date, list] of [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const venueMap = new Map<number | null, CampaignDay['venues'][number]>();

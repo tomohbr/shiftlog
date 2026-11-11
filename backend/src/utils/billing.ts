@@ -38,12 +38,16 @@ export function isOperatorCompany(companyId: number): boolean {
 }
 
 // 催事モード（クリスマスマーケットなど複数ブースの運用）。
-// 会場ごとの必要人数からの自動下書き・期間で希望を募集・催事の在庫は、運営者の自社だけで使う。
-// 販売用のお客様には出さない（2026-10-25 本人指示）。画面側は companies[].event_mode で出し分ける。
+// 2026-11-11 に見直し：必要人数からの自動作成・希望の募集は全社で使えるようにした（どの店でも要る機能のため）。
+// 催事モードが変えるのは次の2つだけ。
+//   - 用語：「会場」（ふだんの店は「店舗」）
+//   - 催事の在庫（食材・容器の数え）を出す ＝ 飲食の催事に寄りすぎているので他社には出さない
+// 画面側は companies[].event_mode で出し分ける。
 export function isEventModeCompany(companyId: number): boolean {
   return isOperatorCompany(companyId);
 }
 
+/** 催事モードの会社だけが使える機能（いまは催事の在庫だけ）に付ける */
 export function requireEventMode(req: any, res: any, next: any): void {
   const companyId = Number(req.companyId || req.inv?.companyId || req.headers?.['x-company-id']);
   if (!companyId || !isEventModeCompany(companyId)) {

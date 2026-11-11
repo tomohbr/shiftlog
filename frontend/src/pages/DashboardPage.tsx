@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { venueWord, isEventMode } from '../lib/terms'
+import { venueWord } from '../lib/terms'
 import { format, addMonths, subMonths } from 'date-fns'
 import { Users, Calendar, Clock, CheckCircle, AlertTriangle, DollarSign, Repeat, Store as StoreIcon, ArrowRight, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -57,11 +57,11 @@ export default function DashboardPage() {
       ])
 
       setShifts(shiftsRes.data.shifts)
-      if (isEventMode(selectedCompany)) {
+      if (storesRes.data) {
         const last = new Date(year, month, 0).getDate()
         const mm = String(month).padStart(2, '0')
         venueScheduleApi.draftOverlay(`${year}-${mm}-01`, `${year}-${mm}-${last}`).then(r => setDraftShifts(r.data.shifts)).catch(() => setDraftShifts([]))
-      } else setDraftShifts([])
+      }
       setUsers(usersRes.data.users.filter((u: User) => u.company_role === 'staff' || u.role === 'staff'))
       setIsPublished(pubRes.data.publication?.is_published === 1)
       setStoreCount((storesRes.data as any)?.stores?.length || 0)
@@ -293,7 +293,7 @@ export default function DashboardPage() {
           {shifts.length === 0 && (
             <div className="mx-4 mt-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 flex flex-wrap items-center gap-3">
               <p className="text-sm text-blue-900 flex-1 min-w-[200px]"><b>{currentDate.getMonth() + 1}月のシフトはまだありません。</b>シフト管理で入れると、ここに出ます。</p>
-              {isEventMode(selectedCompany) && <Link to="/auto-schedule" className="btn-secondary">希望から自動で作る</Link>}
+              <Link to="/auto-schedule" className="btn-secondary">希望から自動で作る</Link>
               <Link to="/shifts" className="btn-primary">シフト管理で作る</Link>
             </div>
           )}
@@ -310,7 +310,7 @@ export default function DashboardPage() {
       </div>
 
       {/* 人が足りないところ（管理者だけ）。押すとその日の顔ぶれ */}
-      {isEventMode(selectedCompany) && stores.length > 0 && (
+      {stores.length > 0 && (
         <ShortagesCard stores={stores} venue={venue} reloadKey={shifts} onPick={d => { setCurrentDate(new Date(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, 1)); setDayOpen(d) }} />
       )}
 

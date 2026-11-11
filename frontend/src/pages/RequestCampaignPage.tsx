@@ -7,8 +7,10 @@ import {
 import toast from 'react-hot-toast'
 import { campaignsApi, Campaign, CampaignSummary } from '../api/client'
 import { storeColorMap } from '../lib/storeColors'
+import { useAuth } from '../contexts/AuthContext'
+import { venueWord } from '../lib/terms'
 
-// 期間をまたぐ希望の募集（マーケットなど）の管理者画面。
+// 希望の募集（来月ぶん・マーケットの期間など）の管理者画面。
 // 管理者が知りたい順に並べる: 「いま何人答えたか・誰がまだか」→「足りない日はどこか」→「一人ひとりの答え」。
 //   ① 募集を作る（タイトル・期間・締切）→ 下書き（スタッフには見えない・何も送らない）
 //   ② 「LINEで募集を送る」→ 確認 → 連携済みのスタッフに本人専用リンクのカードを1人1通
@@ -32,6 +34,7 @@ type Form = { title: string; start_date: string; end_date: string; deadline: str
 const emptyForm: Form = { title: '', start_date: '', end_date: '', deadline: '' }
 
 export default function RequestCampaignPage() {
+  const { selectedCompany } = useAuth()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [selected, setSelected] = useState<number | null>(null)
   const [summary, setSummary] = useState<CampaignSummary | null>(null)
@@ -62,7 +65,7 @@ export default function RequestCampaignPage() {
   }, [])
   useEffect(() => { if (selected) loadSummary(selected); else setSummary(null) }, [selected])
 
-  // 期間を入れたら、候補日が何日あるかをすぐ見せる（会場の枠が無い期間で募集してしまわないように）
+  // 期間を入れたら、候補日が何日あるかをすぐ見せる
   useEffect(() => {
     if (!form?.start_date || !form?.end_date || form.start_date > form.end_date) { setPreview(null); return }
     const t = setTimeout(() => {
@@ -72,7 +75,7 @@ export default function RequestCampaignPage() {
   }, [form?.start_date, form?.end_date])
 
   const colorOf = useMemo(() => storeColorMap(summary?.stores || []), [summary])
-  const storeName = (id: number | null) => summary?.stores.find(s => s.id === id)?.name || '会場指定なし'
+  const storeName = (id: number | null) => summary?.stores.find(s => s.id === id)?.name || `${venueWord(null)}の指定なし`
 
   const save = async () => {
     if (!form) return
@@ -138,6 +141,7 @@ export default function RequestCampaignPage() {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
   }
 
+  const V = venueWord(selectedCompany)
   const c = summary?.campaign
   const pending = summary ? summary.staff.filter(s => !s.answered) : []
   const days = summary ? (onlyShort ? summary.days.filter(d => d.short) : summary.days) : []
@@ -146,8 +150,8 @@ export default function RequestCampaignPage() {
     <div className="space-y-4 max-w-3xl">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Megaphone className="w-6 h-6 text-green-600" />期間で希望を募集</h2>
-          <p className="text-sm text-gray-500 mt-1">マーケットなど、月をまたぐ期間の希望を1回で集めます。候補日は「希望から自動作成」の会場の枠で営業している日です。</p>
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Megaphone className="w-6 h-6 text-green-600" />希望を集める</h2>
+          <p className="text-sm text-gray-500 mt-1">来月ぶん・マーケットの期間など、好きな期間の希望を1回で集めます。LINEがつながっていれば1人1通で送り、つながっていなければスタッフが「シフト希望提出」から出せます。</p>
         </div>
         {!form && (
           <button onClick={() => { setForm(emptyForm); setEditingId(null) }} className="btn-primary text-sm py-2 flex items-center gap-1.5">
@@ -165,7 +169,7 @@ export default function RequestCampaignPage() {
           </div>
           <label className="block">
             <span className="text-sm font-bold text-gray-700">タイトル</span>
-            <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} maxLength={30} placeholder="例：クリスマスマーケット"
+            <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} maxLength={30} placeholder="例：12月のシフト希望"
               className="input-field mt-1" />
             <span className="text-xs text-gray-500">LINEでは「【{form.title || 'タイトル'}】シフトの希望を教えてください」と届きます</span>
           </label>
@@ -179,8 +183,8 @@ export default function RequestCampaignPage() {
             <input type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className="input-field mt-1" /></label>
           {preview && (
             preview.count > 0
-              ? <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">候補日 <b>{preview.count}日</b>（うち昼・夜に分かれる日 {preview.long}日）。会場が休みの日は出ません。</p>
-              : <p className="text-sm text-amber-800 bg-amber-50 rounded-lg px-3 py-2 flex items-start gap-1.5"><AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" /><span>この期間には会場の枠がありません。先に<Link to="/auto-schedule" className="underline font-bold">希望から自動作成</Link>の①で会場ごとの必要人数を登録してください。</span></p>
+              ? <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">候補日 <b>{preview.count}日</b>（うち昼・夜に分かれる日 {preview.long}日）。必要人数を決めていれば、{V}が休みの日は出ません。</p>
+              : <p className="text-sm text-amber-800 bg-amber-50 rounded-lg px-3 py-2 flex items-start gap-1.5"><AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" /><span>この期間に候補日がありません。期間の日付を確かめてください。</span></p>
           )}
           <button onClick={save} disabled={saving || !form.title || !form.start_date || !form.end_date} className="btn-primary w-full py-2.5 disabled:opacity-50">
             {saving ? '保存中…' : editingId ? '直す' : '下書きで保存（まだ送りません）'}
@@ -366,7 +370,7 @@ export default function RequestCampaignPage() {
                       )
                     })}
                   </div>
-                  <p className="text-xs text-gray-500">「入れる人」は、その日に ◎○ を付けて、入りたい会場にその会場を選んだ（または「どこでも」）人です。昼の枠は昼・どちらか・通しの人、夜の枠は夜・どちらか・通しの人で数えます（「どちらか」の人は1日に片方しか入れないので、足りない数はそれも考えて出します）。同じ人が2つの会場に数えられることがあります。</p>
+                  <p className="text-xs text-gray-500">「入れる人」は、その日に ◎○ を付けて、入りたい{V}にその{V}を選んだ（または「どこでも」）人です。昼の枠は昼・どちらか・通しの人、夜の枠は夜・どちらか・通しの人で数えます（「どちらか」の人は1日に片方しか入れないので、足りない数はそれも考えて出します）。同じ人が2つの{V}に数えられることがあります。</p>
                 </>
               )}
 
@@ -388,7 +392,7 @@ export default function RequestCampaignPage() {
                       </div>
                       {s.answer && (
                         <dl className="mt-2 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1 text-sm">
-                          <dt className="text-gray-500">会場</dt>
+                          <dt className="text-gray-500">{V}</dt>
                           <dd className="font-bold text-gray-900">{s.answer.venues_any ? 'どこでも' : s.answer.venue_names.join('・')}</dd>
                           <dt className="text-gray-500">週の日数</dt><dd className="text-gray-900">{s.answer.days_per_week_label || '—'}</dd>
                           <dt className="text-gray-500">入れない曜日</dt><dd className="text-gray-900">{s.answer.ng_label || 'なし'}</dd>

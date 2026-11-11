@@ -6,9 +6,11 @@ import {
   campaignsApi, CampaignMine, CampaignAnswerInput, CampaignAvailability, CampaignPart, CampaignDay,
 } from '../api/client'
 import { storeColorMap, storeShortNames } from '../lib/storeColors'
+import { useAuth } from '../contexts/AuthContext'
+import { venueWord } from '../lib/terms'
 
 // 期間の募集（マーケットなど）にスタッフが答える画面。LINE の本人専用リンクから開く前提でスマホ向け。
-// 上から「何の募集か・いつまでか」→「最初の質問（必須は会場と日数だけ）」→「カレンダーで ◎○×」→ 画面下の提出ボタン。
+// 上から「何の募集か・いつまでか」→「最初の質問（必須は店舗と日数だけ）」→「カレンダーで ◎○×」→ 画面下の提出ボタン。
 // カレンダーは希望を出す画面（StaffRequestView）と同じペン方式・月曜はじまり。候補日（どこかの会場が開く日）だけ押せる。
 // 昼と夜に分かれる長い日は、◎○ を付けると「昼／夜／どちらか／1日通し」を選ぶ欄が出る（何も選ばなければ どちらか）。
 
@@ -80,6 +82,8 @@ const emptyAnswer: CampaignAnswerInput = {
 }
 
 export default function CampaignAnswerPage() {
+  const { selectedCompany } = useAuth()
+  const V = venueWord(selectedCompany)
   const { id } = useParams()
   const campaignId = Number(id)
   const [data, setData] = useState<CampaignMine | null>(null)
@@ -144,7 +148,8 @@ export default function CampaignAnswerPage() {
   const filled = days.filter(d => entries[d.date]).length
   const count = (a: CampaignAvailability) => days.filter(d => entries[d.date]?.availability === a).length
   const left = days.length - filled
-  const hasStores = data.stores.length > 0
+  // 店舗（会場）が2つ以上あるときだけ「どこに入りたいか」を聞く。1店舗のお店には出さない
+  const hasStores = data.stores.length > 1
   // 期間中に開く日がある会場（光の森のように日程が決まっていない会場は、会場の希望だけ聞く）
   const scheduled = new Set(days.flatMap(d => d.venues.map(v => v.store_id)))
 
@@ -228,7 +233,7 @@ export default function CampaignAnswerPage() {
   const submit = async () => {
     const venueMissing = hasStores && answer.venues !== 'any' && answer.venues.length === 0
     if (venueMissing || !answer.days_per_week) {
-      toast.error(venueMissing ? '①入りたい会場を選んでください' : '②週に入りたい日数を選んでください')
+      toast.error(venueMissing ? `①入りたい${V}を選んでください` : '②週に入りたい日数を選んでください')
       questionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       return
     }
@@ -277,7 +282,7 @@ export default function CampaignAnswerPage() {
         <p className="text-xs font-bold text-green-700">シフトの希望を教えてください</p>
         <h1 className="text-2xl font-black text-gray-900 leading-tight">{c.title}</h1>
         <p className="text-base font-bold text-gray-800 mt-1">{md(c.start_date)} 〜 {md(c.end_date)}</p>
-        <p className="text-xs text-gray-500">このうち会場が開く {days.length}日 が候補日です</p>
+        <p className="text-xs text-gray-500">このうち {days.length}日 が候補日です</p>
         {open ? (
           <div className="flex flex-wrap items-center gap-2 mt-2">
             {c.deadline && (
@@ -305,7 +310,7 @@ export default function CampaignAnswerPage() {
 
         {hasStores && (
           <div>
-            <p className="text-sm font-bold text-gray-800 mb-1.5">① 入りたい会場 <span className="text-xs text-red-600">必須</span><span className="text-xs font-normal text-gray-500 ml-1">（いくつでも）</span></p>
+            <p className="text-sm font-bold text-gray-800 mb-1.5">① 入りたい{V} <span className="text-xs text-red-600">必須</span><span className="text-xs font-normal text-gray-500 ml-1">（いくつでも）</span></p>
             <div className="flex flex-wrap gap-2">
               {data.stores.map(s => {
                 const on = answer.venues !== 'any' && answer.venues.includes(s.id)
@@ -354,7 +359,7 @@ export default function CampaignAnswerPage() {
         </div>
 
         <div>
-          <p className="text-sm font-bold text-gray-800 mb-1.5">④ 会場までの交通手段 <span className="text-xs font-normal text-gray-500">（いくつでも）</span></p>
+          <p className="text-sm font-bold text-gray-800 mb-1.5">④ {V}までの交通手段 <span className="text-xs font-normal text-gray-500">（いくつでも）</span></p>
           <div className="flex flex-wrap gap-2">
             {data.transports.map(t => <Chip key={t} on={answer.transport.includes(t)} disabled={!open} onClick={() => toggleTransport(t)}>{t}</Chip>)}
           </div>
@@ -405,7 +410,7 @@ export default function CampaignAnswerPage() {
 
         <div>
           <p className="text-sm font-bold text-gray-800">⑧ だれかの紹介で来ましたか？</p>
-          <p className="text-xs text-gray-500 mb-1.5">紹介してくれた人と、なるべく同じ日・同じ会場にします</p>
+          <p className="text-xs text-gray-500 mb-1.5">紹介してくれた人と、なるべく同じ日・同じ{V}にします</p>
           <select value={answer.referred_by ?? ''} disabled={!open}
             onChange={e => setA('referred_by', e.target.value ? Number(e.target.value) : null)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base bg-white disabled:bg-gray-50">

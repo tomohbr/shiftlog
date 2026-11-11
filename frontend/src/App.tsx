@@ -195,7 +195,7 @@ function AppRoutes() {
           <Route path="/companies" element={<CompanyPage />} />
           <Route path="/timecards" element={<TimecardPage />} />
           <Route path="/shift-requests" element={<ShiftRequestPage />} />
-          <Route path="/request-campaigns" element={isEventMode(selectedCompany) ? <RequestCampaignPage /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/request-campaigns" element={<RequestCampaignPage />} />
           <Route path="/campaign/:id" element={<CampaignAnswerPage />} />
           <Route path="/labor" element={(selectedCompany as any)?.can_see_wages ? <LaborPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/absence" element={<AbsencePage />} />
@@ -208,7 +208,7 @@ function AppRoutes() {
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/swaps" element={<SwapsPage />} />
           <Route path="/payroll" element={(selectedCompany as any)?.can_see_wages ? <PayrollPage /> : <Navigate to="/dashboard" replace />} />
-          <Route path="/auto-schedule" element={isEventMode(selectedCompany) ? <VenueSchedulePage /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/auto-schedule" element={<VenueSchedulePage />} />
           <Route path="/inventory" element={isEventMode(selectedCompany) ? <InventoryPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/admin-hub" element={<AdminHubPage />} />
           <Route path="/setup-guide" element={<SetupGuidePage />} />

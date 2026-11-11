@@ -84,7 +84,7 @@ export default function ShortagesCard({ stores, venue, reloadKey, onPick }: {
                         {isDay(x)
                           ? <span className="inline-flex items-center gap-0.5 w-12 justify-center rounded-md py-0.5 text-xs font-bold bg-amber-100 text-amber-800"><Sun className="w-3.5 h-3.5" />昼</span>
                           : <span className="inline-flex items-center gap-0.5 w-12 justify-center rounded-md py-0.5 text-xs font-bold bg-indigo-100 text-indigo-800"><Moon className="w-3.5 h-3.5" />夜</span>}
-                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ backgroundColor: c.soft, color: c.text }}>{x.store_name || '会場'}</span>
+                        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ backgroundColor: c.soft, color: c.text }}>{x.store_name || '店舗'}</span>
                         {x.kind === 'full' ? (
                           <>
                             <span className="text-sm tabular-nums text-gray-700">{x.start_time}–{x.end_time}</span>

@@ -58,6 +58,8 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/shifts', label: 'シフト管理', icon: Calendar },
     { path: '/timecards', label: 'タイムカード', icon: Clock },
     { path: '/staff', label: 'スタッフ管理', icon: Users },
+    { path: '/request-campaigns', label: '希望を集める', icon: Megaphone },
+    { path: '/auto-schedule', label: 'シフト自動作成', icon: Sparkles },
     { path: '/report', label: '勤務集計', icon: BarChart2 },
     { path: '/setup-guide', label: '導入手順書', icon: BookOpen },
     { path: '/help', label: '使い方ヘルプ', icon: HelpCircle },
@@ -71,13 +73,12 @@ export default function Layout({ children }: LayoutProps) {
   }, [isAdminRole, selectedCompany?.id])
 
   // 使い込むほど使う詳細機能（デフォルトは折りたたみ）
-  // 催事モード（運営者の自社）だけに出す機能。お客様の会社には見せない
+  // 催事モード（運営者の自社）だけに出すのは「催事の在庫」だけ。
+  // 希望を集める・シフト自動作成は 2026-11-11 から全社に出している
   const eventMode = isEventMode(selectedCompany)
   const adminNavMore = [
     ...(eventMode && (invOn || user?.role === 'super_admin') ? [{ path: '/inventory', label: '催事の在庫', icon: Package }] : []),
-    ...(eventMode ? [{ path: '/auto-schedule', label: '希望から自動作成', icon: Sparkles }] : []),
-    { path: '/shift-requests', label: '希望シフト収集', icon: ClipboardList },
-    ...(eventMode ? [{ path: '/request-campaigns', label: '期間で希望を募集', icon: Megaphone }] : []),
+    { path: '/shift-requests', label: '希望シフト収集（月ごと）', icon: ClipboardList },
     { path: '/templates', label: 'テンプレート', icon: Copy },
     // 時給・人件費は「時給を見られる人」だけ
     ...((selectedCompany as any)?.can_see_wages ? [

@@ -2,7 +2,6 @@ import { openByDate, openFor } from '../utils/shortages';
 import { Router, Response } from 'express';
 import db from '../db';
 import { authenticateToken, requireCompany, AuthRequest } from '../middleware/auth';
-import { requireEventMode } from '../utils/billing';
 import { logAudit } from '../utils/audit';
 import { sendCampaignLinks, W, notifyCampaignSubmitted, sendCampaignFollowups } from './line';
 import {
@@ -118,7 +117,7 @@ function answerView(a: any, storeNames: Map<number, string>) {
 // ---------------------------------------------------------------- スタッフ
 
 // GET /api/request-campaigns/open  受付中の募集（スタッフの希望シフト画面に案内を出す用）
-router.get('/open', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.get('/open', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const rows = (db.prepare("SELECT * FROM request_campaigns WHERE company_id = ? AND status = 'open' ORDER BY start_date").all(companyId) as CampaignRow[])
     .map(c => forUser(companyId, c, req.user!.id)).filter(isAccepting);
@@ -129,7 +128,7 @@ router.get('/open', authenticateToken, requireCompany, requireEventMode, (req: A
 });
 
 // GET /api/request-campaigns/:id/mine  回答画面に必要なものを全部
-router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.get('/:id/mine', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
   // 下書きの募集はスタッフには見せない（管理者は確認のために開ける）
@@ -140,7 +139,7 @@ router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const userId = req.user!.id;
   const st = stores(companyId);
   const names = new Map(st.map(s => [s.id, s.name]));
-  const days = campaignDays(companyId, c.start_date, c.end_date);
+  const days = campaignDays(companyId, c.start_date, c.end_date, { everyDayIfNoRules: true });
   const answer = db.prepare('SELECT * FROM request_campaign_answers WHERE campaign_id = ? AND user_id = ?').get(c.id, userId);
   const reqs = db.prepare(`
     SELECT date, availability, part FROM shift_requests WHERE company_id = ? AND user_id = ? AND date >= ? AND date <= ?
@@ -180,7 +179,7 @@ router.get('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
 
 // PUT /api/request-campaigns/:id/mine  { answer, entries: [{ date, availability, part? }] }
 // 候補日のうち entries に無い日は「希望なし」として消す（提出し直しで ◎ を消せるように）
-router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.put('/:id/mine', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   const companyId = req.companyId!;
   const userId = req.user!.id;
   const c = getCampaign(companyId, req.params.id);
@@ -209,7 +208,7 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
   const referral = (REFERRAL as readonly string[]).includes(a.referral) ? a.referral : null;
   const referredBy = Number(a.referred_by) && Number(a.referred_by) !== userId && campaignStaff(companyId).some(s => s.id === Number(a.referred_by)) ? Number(a.referred_by) : null;
 
-  const days = campaignDays(companyId, c.start_date, c.end_date);
+  const days = campaignDays(companyId, c.start_date, c.end_date, { everyDayIfNoRules: true });
   const dayOf = new Map<string, CampaignDay>(days.map(d => [d.date, d]));
   // 埋まった日（公開後に足りない部がない日）は、送られてきても変えない（前の答えはそのまま残す）
   // 送られてきた「行ける会場」で、足りない部を見る
@@ -277,7 +276,7 @@ router.put('/:id/mine', authenticateToken, requireCompany, requireEventMode, (re
 // ---------------------------------------------------------------- 管理者
 
 // GET /api/request-campaigns  募集の一覧（新しい順）
-router.get('/', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.get('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const staffCount = campaignStaff(companyId).length;
@@ -289,16 +288,16 @@ router.get('/', authenticateToken, requireCompany, requireEventMode, (req: AuthR
 });
 
 // GET /api/request-campaigns/preview-days?start_date=&end_date=  作る前に「候補日が何日あるか」を見せる
-router.get('/preview-days', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.get('/preview-days', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const s = String(req.query.start_date || ''), e = String(req.query.end_date || '');
   if (!DATE_RE.test(s) || !DATE_RE.test(e) || s > e) { res.json({ count: 0, long: 0 }); return; }
-  const days = campaignDays(req.companyId!, s, e);
+  const days = campaignDays(req.companyId!, s, e, { everyDayIfNoRules: true });
   res.json({ count: days.length, long: days.filter(d => d.long).length, first: days[0]?.date || null, last: days[days.length - 1]?.date || null });
 });
 
 // POST /api/request-campaigns  { title, start_date, end_date, deadline }  下書きで作る（まだ誰にも送らない）
-router.post('/', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.post('/', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const b = parseBody(req.body);
@@ -311,7 +310,7 @@ router.post('/', authenticateToken, requireCompany, requireEventMode, (req: Auth
 });
 
 // PUT /api/request-campaigns/:id  タイトル・期間・締切を直す
-router.put('/:id', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.put('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
@@ -324,7 +323,7 @@ router.put('/:id', authenticateToken, requireCompany, requireEventMode, (req: Au
 });
 
 // DELETE /api/request-campaigns/:id  下書きだけ消せる（送った募集は答えが残るので消さない）
-router.delete('/:id', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.delete('/:id', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const c = getCampaign(req.companyId!, req.params.id);
   if (!c) { res.status(404).json({ error: '募集が見つかりません' }); return; }
@@ -334,16 +333,12 @@ router.delete('/:id', authenticateToken, requireCompany, requireEventMode, (req:
 });
 
 // POST /api/request-campaigns/:id/send  受付を始めて、LINE 連携済みのスタッフに本人専用リンクのカードを1人1通送る
-router.post('/:id/send', authenticateToken, requireCompany, requireEventMode, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:id/send', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
   if (!c) { res.status(404).json({ error: '募集が見つかりません' }); return; }
   if (c.status !== 'draft') { res.status(409).json({ error: 'この募集はもう送っています（未回答の人には「催促」を使ってください）' }); return; }
-  if (campaignDays(companyId, c.start_date, c.end_date).length === 0) {
-    res.status(400).json({ error: 'この期間に会場の営業枠がありません。先に「希望から自動作成」で会場ごとの必要人数を登録してください' });
-    return;
-  }
   db.prepare("UPDATE request_campaigns SET status = 'open', sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(c.id);
   const staff = campaignStaff(companyId);
   const result = await sendCampaignLinks(companyId, c, 'open', staff.filter(s => s.linked).map(s => s.id));
@@ -352,7 +347,7 @@ router.post('/:id/send', authenticateToken, requireCompany, requireEventMode, as
 });
 
 // POST /api/request-campaigns/:id/preview  管理者が自分のLINEに見本を1通送る（スタッフと同じカード。見え方の確認用）
-router.post('/:id/preview', authenticateToken, requireCompany, requireEventMode, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:id/preview', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
@@ -363,7 +358,7 @@ router.post('/:id/preview', authenticateToken, requireCompany, requireEventMode,
 });
 
 // POST /api/request-campaigns/:id/send-to  { user_ids }  募集のあとに連携した人などへ、最初と同じ案内カードを送る
-router.post('/:id/send-to', authenticateToken, requireCompany, requireEventMode, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:id/send-to', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
@@ -377,7 +372,7 @@ router.post('/:id/send-to', authenticateToken, requireCompany, requireEventMode,
 });
 
 // POST /api/request-campaigns/:id/send-more { user_ids? }  シフト公開後に「人が足りない日の希望」を募る（スタッフだけ）
-router.post('/:id/send-more', authenticateToken, requireCompany, requireEventMode, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:id/send-more', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
@@ -403,7 +398,7 @@ async function sendRemind(companyId: number, c: CampaignRow, only: Set<number> |
 }
 
 // POST /api/request-campaigns/:id/remind  まだ答えていない人（LINE 連携済み）にだけ送る
-router.post('/:id/remind', authenticateToken, requireCompany, requireEventMode, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/:id/remind', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
@@ -414,7 +409,7 @@ router.post('/:id/remind', authenticateToken, requireCompany, requireEventMode, 
 });
 
 // PUT /api/request-campaigns/:id/allday-until { date: 'YYYY-MM-DD' | null }  この日以降に登録した人は通しを選べない
-router.put('/:id/allday-until', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.put('/:id/allday-until', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const c = getCampaign(req.companyId!, req.params.id);
   if (!c) { res.status(404).json({ error: '募集が見つかりません' }); return; }
@@ -425,7 +420,7 @@ router.put('/:id/allday-until', authenticateToken, requireCompany, requireEventM
 });
 
 // PUT /api/request-campaigns/:id/remind-at { at: 'YYYY-MM-DD HH:MM'（JST） | null, user_ids? }  催促を予約する／取り消す
-router.put('/:id/remind-at', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.put('/:id/remind-at', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
@@ -464,7 +459,7 @@ export function startCampaignReminders(): void {
 }
 
 // POST /api/request-campaigns/:id/close  締め切る / reopen で受付に戻す
-router.post('/:id/:action(close|reopen)', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.post('/:id/:action(close|reopen)', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
@@ -475,7 +470,7 @@ router.post('/:id/:action(close|reopen)', authenticateToken, requireCompany, req
 });
 
 // GET /api/request-campaigns/:id/summary  集まり具合（回答状況・人ごとの答え・日×会場の人数と足りない日）
-router.get('/:id/summary', authenticateToken, requireCompany, requireEventMode, (req: AuthRequest, res: Response): void => {
+router.get('/:id/summary', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
   if (!adminOnly(req, res)) return;
   const companyId = req.companyId!;
   const c = getCampaign(companyId, req.params.id);
@@ -483,7 +478,7 @@ router.get('/:id/summary', authenticateToken, requireCompany, requireEventMode, 
   const st = stores(companyId);
   const names = new Map(st.map(s => [s.id, s.name]));
   const staff = campaignStaff(companyId);
-  const days = campaignDays(companyId, c.start_date, c.end_date);
+  const days = campaignDays(companyId, c.start_date, c.end_date, { everyDayIfNoRules: true });
   const answers = new Map((db.prepare('SELECT * FROM request_campaign_answers WHERE campaign_id = ?').all(c.id) as any[]).map(a => [a.user_id, a]));
   const reqRows = db.prepare(`
     SELECT user_id, date, availability, part FROM shift_requests WHERE company_id = ? AND date >= ? AND date <= ?
