@@ -1,0 +1,159 @@
+/* シフトログ LP（2026-11-14）
+   紙のシフト表をそのまま画面にした空気。方眼・定規の目盛り・付箋のチップ。
+   色は「紙・墨・青」の3色。LINE の緑と、未公開の琥珀は「状態」を表すときだけ使う。
+   すべて .lp の中だけに効かせる（アプリの画面には影響させない）。 */
+
+.lp {
+  --paper: #f6f4ef;
+  --paper-2: #efece4;
+  --ink: #16181d;
+  --sub: #5a606c;
+  --faint: #8b909a;
+  --rule: #e3dfd5;
+  --blue: #2563eb;
+  --blue-ink: #1d4ed8;
+  --blue-soft: #e8eefc;
+  --line: #06c755;
+  --amber: #b45309;
+  --amber-soft: #fef3c7;
+  --red: #c92a2a;
+  --green: #2f9e44;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+  font-feature-settings: 'palt' 1;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.8;
+  overflow-x: clip;
+}
+.lp h1, .lp h2, .lp h3, .lp .display {
+  font-family: 'Zen Kaku Gothic New', 'Noto Sans JP', sans-serif;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+.lp p, .lp li, .lp dd { text-wrap: pretty; }
+.lp .num { font-family: 'Inter', 'Noto Sans JP', sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.lp a:focus-visible, .lp button:focus-visible, .lp summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+
+/* 方眼（シフト表の紙） */
+.lp .grid-paper {
+  background-image:
+    linear-gradient(to right, rgba(22,24,29,.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(22,24,29,.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+/* 定規の目盛り（セクションの区切り）: 9時〜23時の時間軸 */
+.lp .ruler {
+  height: 14px;
+  background-image: repeating-linear-gradient(to right, var(--ink) 0 1px, transparent 1px 28px),
+                    repeating-linear-gradient(to right, rgba(22,24,29,.35) 0 1px, transparent 1px 14px);
+  background-size: 100% 14px, 100% 7px;
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  opacity: .22;
+}
+
+/* ボタン */
+.lp .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  font-weight: 700; border-radius: 12px; transition: transform .15s ease, background-color .15s ease, box-shadow .15s ease;
+  white-space: nowrap;
+}
+.lp .btn-main { background: var(--blue); color: #fff; padding: .95rem 1.6rem; box-shadow: 0 6px 18px -6px rgba(37,99,235,.55); }
+.lp .btn-main:hover { background: var(--blue-ink); transform: translateY(-1px); }
+.lp .btn-sub { background: transparent; color: var(--ink); padding: .95rem 1.2rem; border: 1px solid rgba(22,24,29,.18); }
+.lp .btn-sub:hover { background: #fff; }
+
+/* 見出しの小ラベル（番号つき） */
+.lp .kicker { display: inline-flex; align-items: center; gap: .6rem; font-size: .8rem; font-weight: 700; color: var(--blue); letter-spacing: .06em; }
+.lp .kicker::before { content: ''; width: 22px; height: 2px; background: currentColor; }
+
+/* 面: 白い紙＋細い線（影はほぼ使わない） */
+.lp .sheet { background: #fff; border: 1px solid var(--rule); border-radius: 18px; }
+
+/* ===== スマホの枠（LINE の画面） ===== */
+.lp .phone {
+  position: relative; width: 300px; max-width: 100%;
+  border-radius: 44px; padding: 10px; background: #1b1d22;
+  box-shadow: 0 40px 80px -30px rgba(22,24,29,.45), 0 0 0 1px rgba(255,255,255,.04) inset;
+}
+.lp .phone-screen { border-radius: 35px; overflow: hidden; background: #8aa7cf; display: flex; flex-direction: column; height: 600px; }
+.lp .line-head { background: #fff; display: flex; align-items: center; gap: .5rem; padding: 2.1rem .9rem .65rem; font-size: .82rem; font-weight: 700; border-bottom: 1px solid #e9e9ec; }
+.lp .line-body { flex: 1; padding: .9rem .7rem; display: flex; flex-direction: column; gap: .7rem; overflow: hidden; justify-content: flex-end; }
+.lp .line-row { display: flex; gap: .45rem; align-items: flex-end; }
+.lp .line-avatar { width: 30px; height: 30px; border-radius: 999px; background: var(--blue); display: grid; place-items: center; flex-shrink: 0; }
+.lp .flex-card { background: #fff; border-radius: 16px; width: 214px; padding: .85rem .9rem .8rem; box-shadow: 0 1px 0 rgba(0,0,0,.04); }
+.lp .flex-card .h { font-weight: 700; font-size: .84rem; line-height: 1.45; }
+.lp .flex-card .s { font-size: .64rem; color: #888; line-height: 1.5; }
+.lp .flex-card .big { font-weight: 800; font-size: 1.02rem; line-height: 1.35; }
+.lp .flex-btn { margin-top: .65rem; border-radius: 8px; text-align: center; color: #fff; font-weight: 700; font-size: .74rem; padding: .55rem 0; }
+.lp .line-time { font-size: .58rem; color: rgba(255,255,255,.85); margin-bottom: 2px; white-space: nowrap; }
+.lp .line-me { justify-content: flex-end; }
+.lp .bubble-me { background: #8de055; border-radius: 16px; padding: .5rem .75rem; font-size: .76rem; max-width: 190px; line-height: 1.55; }
+.lp .rich-menu { background: #fff; border-top: 1px solid #e9e9ec; }
+.lp .rich-menu img { display: block; width: 100%; }
+
+/* ヒーローの文字は読み込みと同時に出す（スクロール待ちにしない） */
+.lp .hero-in { opacity: 0; transform: translateY(12px); animation: lp-arrive .7s cubic-bezier(.2,.8,.2,1) forwards; }
+
+/* ヒーローの順番に届く演出（1回だけ。動きを減らす設定なら最初から全部見せる） */
+.lp .arrive { opacity: 0; transform: translateY(14px) scale(.98); animation: lp-arrive .55s cubic-bezier(.2,.8,.2,1) forwards; }
+@keyframes lp-arrive { to { opacity: 1; transform: none; } }
+.lp .typing { display: inline-flex; gap: 3px; background: #fff; border-radius: 14px; padding: .55rem .7rem; }
+.lp .typing i { width: 5px; height: 5px; border-radius: 99px; background: #b5b9c2; animation: lp-dot 1s infinite; }
+.lp .typing i:nth-child(2) { animation-delay: .15s; }
+.lp .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes lp-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-3px); opacity: 1; } }
+.lp .vanish { animation: lp-vanish .25s ease forwards; }
+@keyframes lp-vanish { to { opacity: 0; height: 0; margin: 0; padding: 0; } }
+
+/* 付箋のチップ（シフト表のマスに貼る） */
+.lp .chip { border-radius: 7px; font-size: .68rem; font-weight: 700; padding: .25rem .4rem; line-height: 1.3; color: #fff; }
+.lp .chip-wish { background: #fff; color: var(--blue-ink); border: 1.5px dashed #9db6f4; }
+
+/* スクロールで出てくる（文字は下から、面はマスクで開く） */
+.lp [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1); }
+.lp [data-reveal].is-in { opacity: 1; transform: none; }
+.lp [data-reveal='mask'] { opacity: 1; transform: none; clip-path: inset(0 0 100% 0 round 18px); transition: clip-path .9s cubic-bezier(.65,0,.35,1); }
+.lp [data-reveal='mask'].is-in { clip-path: inset(0 0 0 0 round 18px); }
+.lp [data-delay='1'] { transition-delay: .08s; }
+.lp [data-delay='2'] { transition-delay: .16s; }
+.lp [data-delay='3'] { transition-delay: .24s; }
+
+/* 1か月の流れ: 左の画面が切り替わる */
+.lp .stage-item { position: absolute; inset: 0; opacity: 0; transform: translateY(16px); transition: opacity .45s ease, transform .45s ease; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+.lp .stage-item.on { opacity: 1; transform: none; pointer-events: auto; }
+.lp .step { transition: opacity .35s ease; }
+@media (min-width: 1024px) {
+  .lp .step { opacity: .32; }
+  .lp .step.on { opacity: 1; }
+}
+.lp .rail-dot { width: 10px; height: 10px; border-radius: 99px; background: var(--rule); transition: background-color .3s, transform .3s; }
+.lp .rail-dot.on { background: var(--blue); transform: scale(1.25); }
+
+/* 公開の帯（アプリと同じ見た目）：琥珀 → 緑に切り替わる */
+.lp .pub { border-radius: 12px; padding: .8rem .9rem; display: flex; gap: .65rem; align-items: flex-start; transition: background-color .4s, border-color .4s; }
+.lp .pub.off { background: var(--amber-soft); border: 2px solid #fcd34d; }
+.lp .pub.onn { background: #ecfdf3; border: 2px solid #bbf7d0; }
+
+/* よくある質問 */
+.lp details summary { list-style: none; cursor: pointer; }
+.lp details summary::-webkit-details-marker { display: none; }
+.lp details .plus { transition: transform .25s ease; }
+.lp details[open] .plus { transform: rotate(45deg); }
+
+/* 料金表の行の強調 */
+.lp .cmp td, .lp .cmp th { padding: .85rem .9rem; }
+@media (max-width: 420px) { .lp .cmp td, .lp .cmp th { padding: .7rem .5rem; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lp *, .lp *::before, .lp *::after { animation: none !important; transition: none !important; }
+  .lp .arrive, .lp .hero-in { opacity: 1; transform: none; }
+  .lp [data-reveal] { opacity: 1; transform: none; clip-path: none; }
+  .lp .typing { display: none; }
+}
+
+.lp .lp-head { background: rgba(246,244,239,.86); }
+
+/* 言葉のまとまり（見出しはこの単位でしか改行しない） */
+.lp .ph { display: inline-block; }
