@@ -458,7 +458,7 @@ router.put('/settings', need('admin'), (req: InvReq, res: Response): void => {
   res.json({ ok: true, settings: getSettings(companyId) });
 });
 
-const ITEM_FIELDS = ['name', 'category', 'count_unit', 'use_unit', 'per_count', 'half_ok', 'source', 'track_company', 'lead_days', 'cap_per_venue', 'tolerance', 'note', 'sort', 'active'] as const;
+const ITEM_FIELDS = ['name', 'category', 'count_unit', 'use_unit', 'per_count', 'half_ok', 'source', 'track_company', 'lead_days', 'cap_per_venue', 'tolerance', 'note', 'sort', 'active', 'keep_at_venue'] as const;
 
 function itemValues(b: any) {
   const num = (v: unknown, d: number | null) => (v === '' || v == null ? d : Number(v));
@@ -466,6 +466,7 @@ function itemValues(b: any) {
     String(b.name || '').trim(), b.category === 'container' ? 'container' : 'food', String(b.count_unit || '個'), String(b.use_unit || b.count_unit || '個'),
     Math.max(0.0001, Number(b.per_count) || 1), b.half_ok ? 1 : 0, b.source === 'purchase' ? 'purchase' : 'kobo', b.track_company ? 1 : 0,
     num(b.lead_days, null), num(b.cap_per_venue, null), Math.max(0, Number(b.tolerance) || 0), b.note ? String(b.note) : null, Number(b.sort) || 0, b.active === 0 || b.active === false ? 0 : 1,
+    num(b.keep_at_venue, null),
   ];
 }
 

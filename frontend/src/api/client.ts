@@ -942,7 +942,7 @@ export type InvRole = 'admin' | 'full' | 'part'
 export interface InvItem {
   id: number; name: string; category: 'food' | 'container'; count_unit: string; use_unit: string; per_count: number
   half_ok: number; source: 'kobo' | 'purchase'; track_company: number; lead_days: number | null; cap_per_venue: number | null
-  tolerance: number; note: string | null; sort: number; active: number
+  tolerance: number; note: string | null; sort: number; active: number; keep_at_venue?: number | null
 }
 export interface InvMenu { id: number; name: string; register_label: string | null; store_ids: number[] | null; price: number | null; sort: number; active: number; parts: { item_id: number; qty: number }[] }
 export interface InvMe {

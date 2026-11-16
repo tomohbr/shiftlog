@@ -924,6 +924,8 @@ try {
 } catch (e) { console.error('[migration] 在庫テーブルの作成に失敗', e); }
 // 数えの「確認待ち」（11/7）: review = NULL（そのまま反映）/ 'hold'（大きい差・確認待ち）/ 'approved'（この数で確定）/ 'kept'（記録の数のまま）
 try { db.exec('ALTER TABLE inv_count_lines ADD COLUMN review TEXT'); } catch { /* 既にある */ }
+// 会場に常に置いておく数（11/16 ケチャップ・マスタード「在庫があればいい」）。これを切ると積み込みに出す
+try { db.exec('ALTER TABLE inv_items ADD COLUMN keep_at_venue REAL'); } catch { /* 既にある */ }
 try { db.exec('ALTER TABLE inv_count_lines ADD COLUMN reviewed_by INTEGER'); } catch { /* 既にある */ }
 
 export const SUPER_ADMIN_EMAIL = 'shibahara.724@gmail.com';

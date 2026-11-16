@@ -21,7 +21,7 @@ export interface InvSettings {
 
 export interface InvItem {
   id: number; name: string; category: string; count_unit: string; use_unit: string; per_count: number;
-  half_ok: number; source: string; track_company: number; lead_days: number | null; cap_per_venue: number | null;
+  half_ok: number; source: string; track_company: number; lead_days: number | null; cap_per_venue: number | null; keep_at_venue?: number | null;
   tolerance: number; note: string | null; sort: number; active: number;
 }
 
@@ -373,13 +373,16 @@ export function buildLoad(companyId: number, storeId: number, date: string) {
   const load = db.prepare('SELECT * FROM inv_loads WHERE company_id = ? AND store_id = ? AND date = ?').get(companyId, storeId, date) as any;
   const saved = load ? new Map((db.prepare('SELECT item_id, suggested, qty FROM inv_load_lines WHERE load_id = ?').all(load.id) as any[]).map(l => [l.item_id, l])) : new Map();
 
+  const usedHere = new Set(storeItemIds(companyId, storeId));
   const lines: LoadLine[] = [];
   for (const it of its) {
     const need = round2(use.get(it.id) || 0);
     const have = stock.get(it.id) || 0;
     const request = reqMap.get(it.id) || 0;
-    if (!need && !request && !saved.has(it.id)) continue;
-    let suggested = Math.max(0, Math.ceil(need - have - 1e-9)) + Math.ceil(request);
+    // 「会場に置いておく数」がある品目（ケチャップ等）は、この会場で使う品目なら切れた分を積む
+    const keep = it.keep_at_venue && usedHere.has(it.id) ? it.keep_at_venue : 0;
+    if (!need && !request && !saved.has(it.id) && !(keep && have < keep)) continue;
+    let suggested = Math.max(0, Math.ceil(need - have - 1e-9), Math.ceil(keep - have - 1e-9)) + Math.ceil(request);
     let capped = false;
     if (it.cap_per_venue != null && have + suggested > it.cap_per_venue) {
       suggested = Math.max(0, Math.floor(it.cap_per_venue - have));

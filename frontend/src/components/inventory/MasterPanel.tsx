@@ -48,7 +48,7 @@ function ItemsTable({ api, items, onSaved }: { api: InvApi; items: InvItem[]; on
       <p className="text-xs text-gray-500">「1数え単位＝」は、数える単位1つで何回分使えるか（スープ1袋＝35食など）。仕入れ品は会社の在庫を追って発注の目安を出します。</p>
       <div className="overflow-x-auto">
         <table className="text-sm min-w-[1000px]">
-          <thead><tr className="text-xs text-gray-500 text-left"><th>名前</th><th>種類</th><th>数える単位</th><th>使う単位</th><th>1数え単位＝</th><th>0.5</th><th>出どころ</th><th>会社在庫</th><th>届くまで日</th><th>会場の上限</th><th>差の許容</th><th>メモ</th><th>使う</th><th /></tr></thead>
+          <thead><tr className="text-xs text-gray-500 text-left"><th>名前</th><th>種類</th><th>数える単位</th><th>使う単位</th><th>1数え単位＝</th><th>0.5</th><th>出どころ</th><th>会社在庫</th><th>届くまで日</th><th>会場の上限</th><th>会場に置く数</th><th>差の許容</th><th>メモ</th><th>使う</th><th /></tr></thead>
           <tbody>
             {rows.map(it => (
               <tr key={it.id} className="border-t border-gray-100">
@@ -62,6 +62,7 @@ function ItemsTable({ api, items, onSaved }: { api: InvApi; items: InvItem[]; on
                 <td className="text-center"><input type="checkbox" checked={!!it.track_company} onChange={e => set(it.id, 'track_company', e.target.checked ? 1 : 0)} /></td>
                 <td><input type="number" value={it.lead_days ?? ''} onChange={e => set(it.id, 'lead_days', e.target.value === '' ? null : Number(e.target.value))} className={`${inp} w-14`} /></td>
                 <td><input type="number" value={it.cap_per_venue ?? ''} onChange={e => set(it.id, 'cap_per_venue', e.target.value === '' ? null : Number(e.target.value))} className={`${inp} w-16`} /></td>
+                <td><input type="number" value={it.keep_at_venue ?? ''} onChange={e => set(it.id, 'keep_at_venue', e.target.value === '' ? null : Number(e.target.value))} className={`${inp} w-16`} title="切れたら積み込みに出す数（ケチャップなど）" /></td>
                 <td><input type="number" value={it.tolerance} onChange={e => set(it.id, 'tolerance', Number(e.target.value))} className={`${inp} w-14`} /></td>
                 <td><input value={it.note || ''} onChange={e => set(it.id, 'note', e.target.value)} className={`${inp} w-48`} /></td>
                 <td className="text-center"><input type="checkbox" checked={!!it.active} onChange={e => set(it.id, 'active', e.target.checked ? 1 : 0)} /></td>
