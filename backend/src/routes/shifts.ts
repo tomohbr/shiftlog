@@ -76,6 +76,44 @@ router.get('/changes/pending', authenticateToken, requireCompany, (req: AuthRequ
   res.json({ pending: pendingChanges(req.companyId!) });
 });
 
+// GET /api/shifts/final-days?days=3 - 短期募集（希望の募集の期間）の最終出勤日が近いバイト（時給を見られる人だけ）
+// 給料を最終日に手渡しする店のための「給料の準備」お知らせ。今日〜days日後に最後のシフトがあり、
+// その日が希望の募集の期間内に入っている人だけを出す（ふだんの店で月末のシフトが「最終日」に見えないように）
+router.get('/final-days', authenticateToken, requireCompany, (req: AuthRequest, res: Response): void => {
+  if (!['admin','super_admin'].includes(req.user!.role) || !canSeeWages(req)) { res.json({ days: [] }); return; }
+  const companyId = req.companyId!;
+  const ahead = Math.min(45, Math.max(0, Number(req.query.days ?? 3) || 3));
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const until = new Date(Date.parse(`${today}T00:00:00Z`) + ahead * 86400000).toISOString().slice(0, 10);
+  const rows = db.prepare(`
+    SELECT s.user_id, u.name, uc.display_name, s.date, s.start_time, s.end_time, st.name AS store_name
+    FROM shifts s
+    JOIN users u ON u.id = s.user_id AND u.is_active = 1
+    JOIN user_companies uc ON uc.user_id = s.user_id AND uc.company_id = s.company_id
+    LEFT JOIN stores st ON st.id = s.store_id
+    WHERE s.company_id = ?
+      AND uc.role = 'staff' AND COALESCE(uc.wage_exempt, 0) = 0 AND u.role NOT IN ('admin', 'super_admin')
+      AND s.date = (SELECT MAX(s2.date) FROM shifts s2 WHERE s2.user_id = s.user_id AND s2.company_id = s.company_id)
+      AND s.date BETWEEN ? AND ?
+      AND EXISTS (SELECT 1 FROM request_campaigns c WHERE c.company_id = s.company_id AND c.status != 'draft' AND s.date BETWEEN c.start_date AND c.end_date)
+    ORDER BY s.date, s.start_time
+  `).all(companyId, today, until) as any[];
+  const byDate = new Map<string, Map<number, any>>();
+  for (const r of rows) {
+    if (!byDate.has(r.date)) byDate.set(r.date, new Map());
+    const people = byDate.get(r.date)!;
+    const p = people.get(r.user_id) || { user_id: r.user_id, name: r.display_name || r.name, shifts: [] as any[] };
+    p.shifts.push({ start_time: r.start_time, end_time: r.end_time, store_name: r.store_name || null });
+    people.set(r.user_id, p);
+  }
+  const days = [...byDate.entries()].map(([date, people]) => ({
+    date,
+    days_left: Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000),
+    people: [...people.values()],
+  }));
+  res.json({ today, days });
+});
+
 // POST /api/shifts/changes/notify { user_ids? } - 変更を本人に知らせる（LINE＋アプリ通知）。省略時は全員
 router.post('/changes/notify', authenticateToken, requireCompany, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!['admin','super_admin'].includes(req.user!.role)) { res.status(403).json({ error: '管理者権限が必要です' }); return; }

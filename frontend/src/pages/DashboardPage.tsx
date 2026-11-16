@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import TeamCalendar from '../components/TeamCalendar'
 import WageCostCard from '../components/WageCostCard'
 import ShortagesCard from '../components/ShortagesCard'
+import FinalDayBanner from '../components/FinalDayBanner'
 import TodayByVenue from '../components/TodayByVenue'
 import { storeColorMap } from '../lib/storeColors'
 import ShiftModal from '../components/ShiftModal'
@@ -144,6 +145,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {canWages && <FinalDayBanner companyId={selectedCompany?.id} />}
       {criticalEmpty && (
         <div className="card">
           <p className="eyebrow mb-1">はじめに</p>

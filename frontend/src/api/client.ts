@@ -173,6 +173,12 @@ export const companiesApi = {
   delete: (id: number) => api.delete(`/companies/${id}`),
 }
 
+export interface FinalDay {
+  date: string
+  days_left: number
+  people: { user_id: number; name: string; shifts: { start_time: string; end_time: string; store_name: string | null }[] }[]
+}
+
 export const shiftsApi = {
   getAll: (params?: { year?: number; month?: number; user_id?: number; store_id?: number; scope?: 'all' }) =>
     api.get<{ shifts: Shift[] }>('/shifts', { params }),
@@ -186,6 +192,7 @@ export const shiftsApi = {
   setPublication: (year: number, month: number, is_published: boolean) =>
     api.post('/shifts/publication', { year, month, is_published }),
   pendingChanges: () => api.get<{ pending: PendingShiftChange[] }>('/shifts/changes/pending'),
+  finalDays: (days = 3) => api.get<{ today: string; days: FinalDay[] }>('/shifts/final-days', { params: { days } }),
   notifyChanges: (user_ids?: number[]) =>
     api.post<{ people: number; sent_line: number; not_linked: string[]; failed: string[] }>('/shifts/changes/notify', { user_ids }),
 }
