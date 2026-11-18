@@ -794,7 +794,7 @@ router.post('/webhook/:companyId', async (req: Request, res: Response): Promise<
       } else if (event.type === 'follow' && event.replyToken) {
         const known = lineMember(companyId, lineUserId);
         await replyLine(s.channel_access_token, event.replyToken, known
-          ? `${known.name}さん、おかえりなさい。トーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・${consultName(companyId)}・打刻ができます。`
+          ? `${known.name}さん、おかえりなさい。トーク画面の下のメニューから、シフトを見る・${requestsName(companyId)}・休みの連絡・シフトの相談・打刻ができます。`
           : `友だち追加ありがとうございます。\n\nシフトの連絡を受け取るために、このトークに【名前とふりがな】を送ってください。\n例：山田 花子 やまだ はなこ\n\n${W(companyId)}が確認したら「連携できました」とお知らせします。\n（お店からもらった招待QRがある人は、そちらを読んでもOKです）`);
       } else if (event.type === 'unfollow') {
         db.prepare('DELETE FROM user_line_ids WHERE line_user_id = ?').run(lineUserId);
@@ -896,7 +896,7 @@ export function W(companyId: number): string {
 
 // 連携できたときの返事（招待リンク・承認のどちらでも同じ文面）
 const linkedMsg = (companyId: number, name: string) =>
-  `${name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・希望を出す・休みの連絡・打刻ができます。\n\nシフトを変えたい・代わってほしいときは${consultHow(companyId)}、そのほかは「質問・連絡」を押してください。${W(companyId)}に届きます。`;
+  `${name}さん、連携できました🎉\n\nこれからはこのLINEで、シフトの公開や希望の受付をお知らせします。\nトーク画面の下のメニューから、シフトを見る・${requestsName(companyId)}・休みの連絡・打刻ができます。\n\nシフトを変えたい・代わってほしいときは「シフトの相談」、そのほかは「質問・連絡」を押してください。${W(companyId)}に届きます。`;
 
 // まだ連携していない人への案内（メニューを押したときなど）
 const unlinkedMsg = (companyId: number) =>
@@ -1007,12 +1007,12 @@ async function handleText(text: string, companyId: number, lineUserId: string, t
       return;
     }
     if (what === 'help') {
-      await replyLine(token, replyToken, `【使い方】トーク画面の下のメニューを押してください。\n・シフトを見る … 自分とみんなの予定\n・希望を出す … 出られる日を提出\n・打刻する … ブースのQRを読んで出勤・退勤\n・休みの連絡 … 休むシフトを${W(companyId)}に連絡\n${stockMenu(companyId) ? '・締め・在庫 … 閉店の残りの数え・レジ締め\n・シフトの相談 … トークに「相談」と送る（時間を変えたい・代わりたい・日を増やしたい）\n' : '・シフトの相談 … 時間を変えたい・代わりたい・日を増やしたい\n'}・質問・連絡 … そのほか何でも\n\nこのトークにそのまま書いて送っても、${W(companyId)}に届きます。`);
+      await replyLine(token, replyToken, `【使い方】トーク画面の下のメニューを押してください。\n・シフトを見る … 自分とみんなの予定\n${stockMenu(companyId) ? '・締め・在庫 … 閉店の残りの数え・レジ締め\n' : '・希望を出す … 出られる日を提出\n'}・打刻する … ブースのQRを読んで出勤・退勤\n・休みの連絡 … 休むシフトを${W(companyId)}に連絡\n・シフトの相談 … 時間を変えたい・代わりたい・日を増やしたい\n・質問・連絡 … そのほか何でも\n\nこのトークにそのまま書いて送っても、${W(companyId)}に届きます。${stockMenu(companyId) ? '\n希望を出すときは、このトークに「希望」と送ってください。' : ''}`);
       return;
     }
     if (what) { await replyMenu(what, companyId, lineUserId, token, replyToken); return; }
     if (isAdminMember(me)) return; // 店長自身の書き込みは転送しない
-    await replyLine(token, replyToken, `${W(companyId)}に届けました。返事はこのトークでお知らせします。\n（シフトを変えたいときは、${consultHow(companyId)}からも送れます）`);
+    await replyLine(token, replyToken, `${W(companyId)}に届けました。返事はこのトークでお知らせします。\n（シフトを変えたいときは、下のメニューの「シフトの相談」からも送れます）`);
     if (!watched) await forwardToAdmins(companyId, token, me, lineUserId, '質問', [text.slice(0, 400)]);
     return;
   }
@@ -1078,7 +1078,7 @@ async function replyMenu(what: string, companyId: number, lineUserId: string, to
     const me = lineMember(companyId, lineUserId);
     if (!me) return replyLine(token, replyToken, unlinkedMsg(companyId));
     setConsult(companyId, lineUserId, 'ask', null);
-    return replyLine(token, replyToken, `聞きたいこと・伝えたいことを、このトークに書いて送ってください。${W(companyId)}に届きます。\n\n${CONSULT_TOPIC.ask.example}\n\n※シフトを変えたいときは${consultHow(companyId)}、休むときは「休みの連絡」が早いです。`);
+    return replyLine(token, replyToken, `聞きたいこと・伝えたいことを、このトークに書いて送ってください。${W(companyId)}に届きます。\n\n${CONSULT_TOPIC.ask.example}\n\n※シフトを変えたいときは「シフトの相談」、休むときは「休みの連絡」が早いです。`);
   }
   if (what === 'howto') {
     const liff = (db.prepare('SELECT liff_id FROM line_settings WHERE company_id = ?').get(companyId) as any)?.liff_id;
@@ -1224,10 +1224,9 @@ export function stockLiffUrl(companyId: number, query = ''): string | null {
   return `https://liff.line.me/${s.liff_id}/stock${query ? `?${query}` : ''}`;
 }
 
-/** メニューの「シフトの相談」が「締め・在庫」に替わっているか（催事の在庫を使っている間） */
+/** メニューの「希望を出す」が「締め・在庫」に替わっているか（催事の在庫を使っている間） */
 const stockMenu = (companyId: number) => !!stockLiffUrl(companyId);
-const consultName = (companyId: number) => stockMenu(companyId) ? '閉店の締め' : 'シフトの相談';
-const consultHow = (companyId: number) => stockMenu(companyId) ? 'トークに「相談」と送る' : '下のメニューの「シフトの相談」';
+const requestsName = (companyId: number) => stockMenu(companyId) ? '閉店の締め' : '希望を出す';
 
 /** 指定したスタッフの LINE に送る（連携していない人は飛ばす）。送れた人数を返す */
 export async function pushToUsers(companyId: number, userIds: number[], message: LineMessage): Promise<number> {
@@ -1572,7 +1571,7 @@ async function handleAbsencePostback(q: URLSearchParams, companyId: number, line
 
 // トーク画面の下のメニューを付ける（画像は backend/assets/richmenu.png、2500x1686 の 3列×2段）
 //   上: シフトを見る／希望を出す／打刻する   下: 休みの連絡／シフトの相談／質問・連絡
-//   催事の在庫を使っている間は「シフトの相談」の枠が「締め・在庫」（画像は richmenu-stock.png）。相談はトークに「相談」と送ればできる
+//   催事の在庫を使っている間は「希望を出す」の枠が「締め・在庫」（画像は richmenu-stock.png）。希望はトークに「希望」と送れば出せる
 export async function installRichMenu(companyId: number): Promise<{ ok: boolean; error?: string }> {
   const s = db.prepare('SELECT channel_access_token, rich_menu_id, liff_id FROM line_settings WHERE company_id = ?').get(companyId) as any;
   if (!s?.channel_access_token) return { ok: false, error: 'LINE 通知の設定がまだです' };
@@ -1588,13 +1587,13 @@ export async function installRichMenu(companyId: number): Promise<{ ok: boolean;
     ? { bounds: bounds(2), action: { type: 'uri', uri: `https://liff.line.me/${s.liff_id}` } }
     : area(2, 'howto', '打刻のしかた');
   const stock = stockLiffUrl(companyId);
-  const middleArea = stock ? { bounds: bounds(4), action: { type: 'uri', uri: stock } } : area(4, 'consult', 'シフトの相談');
+  const secondArea = stock ? { bounds: bounds(1), action: { type: 'uri', uri: stock } } : area(1, 'requests', '希望を出す');
   const created = await lineApi(token, '/v2/bot/richmenu', {
     method: 'POST',
     body: {
       size: { width: W, height: H }, selected: true, name: 'shiftlog-menu', chatBarText: 'シフトのメニュー',
-      areas: [area(0, 'shifts', 'シフトを見る'), area(1, 'requests', '希望を出す'), punchArea,
-        area(3, 'absent', '休みの連絡'), middleArea, area(5, 'ask', '質問・連絡')],
+      areas: [area(0, 'shifts', 'シフトを見る'), secondArea, punchArea,
+        area(3, 'absent', '休みの連絡'), area(4, 'consult', 'シフトの相談'), area(5, 'ask', '質問・連絡')],
     },
   });
   const id = created.data?.richMenuId;
