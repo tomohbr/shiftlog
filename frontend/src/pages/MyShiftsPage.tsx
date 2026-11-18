@@ -398,7 +398,7 @@ export default function MyShiftsPage() {
               myDay.length > 0
                 ? <>
                     {myDay.map(s => <ShiftCard key={s.id} s={s} showDate={false} />)}
-                    <p className="text-xs text-gray-500 px-1 pt-1">時間を変えたい・代わってほしいときは、LINEの下のメニュー「シフトの相談」から送れます。</p>
+                    <p className="text-xs text-gray-500 px-1 pt-1">時間を変えたい・代わってほしいときは、LINEのトークに「相談」と送ると選べます。</p>
                   </>
                 : <p className="text-sm text-gray-400 bg-white rounded-xl border border-gray-200 py-6 text-center">この日は勤務がありません</p>
             ) : (

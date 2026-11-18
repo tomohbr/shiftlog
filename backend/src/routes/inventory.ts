@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import db from '../db';
 import { JWT_SECRET } from '../middleware/auth';
 import { verifyPunchKey } from './liff';
+import { installRichMenu } from './line';
 import { getJSTDate, getJSTTime } from '../utils/jst';
 import {
   COMPANY_LOC, InvRole, addDays, addMove, buildLoad, businessDate, closingStatus, confirmLoad, countOf, dayTypeOf,
@@ -447,6 +448,7 @@ router.put('/settings', need('admin'), (req: InvReq, res: Response): void => {
   const ids = (v: unknown) => JSON.stringify((Array.isArray(v) ? v : []).map(Number).filter(n => n > 0));
   const special: Record<string, string> = {};
   for (const [k, v] of Object.entries(b.special_days || {})) if (validDate(k) && ['weekday', 'sat', 'sun'].includes(String(v))) special[k] = String(v);
+  const before = db.prepare('SELECT enabled FROM inv_settings WHERE company_id = ?').get(companyId) as { enabled: number } | undefined;
   db.prepare(`
     INSERT INTO inv_settings (company_id, enabled, store_ids, notify_user_ids, margin_pct, special_days, active_from, active_to, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -455,6 +457,8 @@ router.put('/settings', need('admin'), (req: InvReq, res: Response): void => {
       updated_at = CURRENT_TIMESTAMP
   `).run(companyId, b.enabled ? 1 : 0, ids(b.store_ids), ids(b.notify_user_ids), Math.max(0, Math.min(100, Number(b.margin_pct) || 0)),
     JSON.stringify(special), validDate(b.active_from), validDate(b.active_to));
+  // 在庫を使う／やめるで LINE の下のメニューを付け直す（使っている間は「シフトの相談」の枠が「締め・在庫」）
+  if (!!before?.enabled !== !!b.enabled) installRichMenu(companyId).catch(e => console.error('[inventory] メニューの付け直しに失敗', e));
   res.json({ ok: true, settings: getSettings(companyId) });
 });
 
