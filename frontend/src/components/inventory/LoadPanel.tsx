@@ -92,7 +92,7 @@ export default function LoadPanel({ ctx }: { ctx: InvCtx }) {
   if (!res) return <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 animate-spin text-gray-400" /></div>
   return (
     <div className="space-y-4">
-      <Msg kind="info">「使う見込み」は予想販売数（今年の同じ曜日の実績、なければ去年）に {res.margin_pct}% の余裕を足した数です。会場に残っている分を引いて「積む」の案を出しています。積んだ数に直してから確定してください。</Msg>
+      <Msg kind="info">「使う見込み」は予想販売数（今年の同じ曜日の実績、なければ去年）を、切らさないように多めにした数です（少ない日は2.5倍まで、多い日は＋100食。60食なら150食、250食なら350食。とても多い日は {res.margin_pct}% 増し）。会場に残っている分を引いて「積む」の案を出しています。積んだ数に直してから確定してください。</Msg>
       <ReorderNote list={res.reorder} />
       {res.per_count.map(p => (
         <Msg key={p.item_id} kind="info">

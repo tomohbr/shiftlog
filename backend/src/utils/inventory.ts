@@ -358,6 +358,40 @@ export function forecastUsage(companyId: number, storeId: number, date: string, 
   return use;
 }
 
+/**
+ * 積み込み用の「使う見込み」（数え単位）。会場は1日1回しか補充できないので、切らさないように多めに持っていく（11/19 芝原）。
+ * 品目ごとに「その品目を使うメニューの予想食数」を出し、次の数まで増やす:
+ *   予想 × (1 + 余裕%) と、min(予想 + 100食, 予想 × 2.5) の大きいほう
+ *   例: 60食 → 150食（2.5倍）、250食 → 350食（＋100食）、1,000食 → 1,150食（余裕15%）
+ * 発注の目安（reorderAlerts）は実際に使う量で見るので forecastUsage のまま。
+ */
+export const LOAD_BUFFER_MEALS = 100;
+export const LOAD_BUFFER_MAX_RATIO = 2.5;
+
+export function loadUsage(companyId: number, storeId: number, date: string, s: InvSettings | null): Map<number, number> {
+  const itemMap = new Map(items(companyId).map(i => [i.id, i]));
+  const ms = new Map(menus(companyId).map(m => [m.id, m]));
+  const margin = 1 + (s?.margin_pct ?? 15) / 100;
+  const base = new Map<number, number>();   // 予想どおりに売れたときに使う数（数え単位）
+  const meals = new Map<number, number>();  // その品目を使うメニューの予想食数の合計
+  for (const [menuId, f] of forecastMenus(companyId, storeId, date, s)) {
+    const m = ms.get(menuId);
+    if (!m || !(f.qty > 0)) continue;
+    for (const [itemId, per] of usagePerMenu(m, itemMap)) {
+      base.set(itemId, (base.get(itemId) || 0) + per * f.qty);
+      meals.set(itemId, (meals.get(itemId) || 0) + f.qty);
+    }
+  }
+  const out = new Map<number, number>();
+  for (const [itemId, b] of base) {
+    const n = meals.get(itemId) || 0;
+    if (!(n > 0)) continue;
+    const target = Math.max(n * margin, Math.min(n + LOAD_BUFFER_MEALS, n * LOAD_BUFFER_MAX_RATIO));
+    out.set(itemId, b * target / n);
+  }
+  return out;
+}
+
 // ---------- 積み込みリスト ----------
 
 export interface LoadLine { item_id: number; name: string; count_unit: string; category: string; need: number; stock: number; request: number; suggested: number; qty: number; capped: boolean }
@@ -366,7 +400,7 @@ export interface LoadLine { item_id: number; name: string; count_unit: string; c
 export function buildLoad(companyId: number, storeId: number, date: string) {
   const s = getSettings(companyId);
   const its = items(companyId);
-  const use = forecastUsage(companyId, storeId, date, s);
+  const use = loadUsage(companyId, storeId, date, s);
   const stock = stockAt(companyId, storeId);
   const reqs = db.prepare(`SELECT item_id, SUM(qty) AS q FROM inv_requests WHERE company_id = ? AND store_id = ? AND status = 'open' GROUP BY item_id`).all(companyId, storeId) as { item_id: number; q: number }[];
   const reqMap = new Map(reqs.map(r => [r.item_id, r.q]));
