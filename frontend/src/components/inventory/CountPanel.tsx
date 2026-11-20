@@ -5,6 +5,15 @@ import { Card, InvCtx, Msg, Stepper, errText, fmt, hm, md } from './common'
 
 // 残りを数える画面。会場（閉店時・バイトも）と会社（火・金・担当者）の両方で使う。
 // 数が変わっていない品目は「前回と同じ」で埋められる。
+// 入れかけの数はこの端末に下書きとして残す（別のタブ・別のアプリに行っても、戻れば続きから。保存したら消す）。
+
+const draftKey = (loc: number, date: string) => `invCountDraft:${loc}:${date}`
+const readDraft = (key: string): Record<number, number | ''> | null => {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null } catch { return null }
+}
+const writeDraft = (key: string, v: Record<number, number | ''> | null) => {
+  try { if (v) localStorage.setItem(key, JSON.stringify(v)); else localStorage.removeItem(key) } catch { /* 保存できない端末は下書きなし */ }
+}
 
 export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
   const { api, date, me } = ctx
@@ -19,6 +28,11 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [status, setStatus] = useState<InvClosing | null>(null)
+  const [restored, setRestored] = useState(false)
+  const key = draftKey(loc, countDate)
+  // 入力が変わるたびに下書きへ（読み込み中は書かない）
+  const setValsDraft = (f: (v: Record<number, number | ''>) => Record<number, number | ''>) =>
+    setVals(v => { const n = f(v); writeDraft(key, n); return n })
   const [blind, setBlind] = useState(false)
 
   const load = async () => {
@@ -26,7 +40,12 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
     try {
       const r = await api.getCount(loc, countDate)
       setList(r.data.items)
-      setVals(Object.fromEntries(r.data.lines.map(l => [l.item_id, l.counted])))
+      const server: Record<number, number | ''> = Object.fromEntries(r.data.lines.map(l => [l.item_id, l.counted]))
+      const draft = readDraft(key)
+      const ids = new Set(r.data.items.map(i => i.id))
+      const kept = draft ? Object.fromEntries(Object.entries(draft).filter(([id, v]) => ids.has(Number(id)) && v !== '')) : {}
+      setVals({ ...server, ...kept })
+      setRestored(Object.keys(kept).length > 0)
       setPrev({ date: r.data.previous.date, map: new Map(r.data.previous.lines.map(l => [l.item_id, l.counted])) })
       setBook(r.data.book ? new Map(r.data.book.map(b => [b.item_id, b.qty])) : null)
       setSavedAt(r.data.saved_at)
@@ -44,7 +63,7 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
   ].filter(g => g.rows.length), [list])
 
   const empty = list.filter(i => vals[i.id] === undefined || vals[i.id] === '')
-  const fillPrev = () => setVals(v => {
+  const fillPrev = () => setValsDraft(v => {
     const n = { ...v }
     for (const i of empty) if (prev.map.has(i.id)) n[i.id] = prev.map.get(i.id)!
     return n
@@ -61,6 +80,7 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
       setStatus(r.data.status)
       setMsg({ kind: 'ok', text: '保存しました。おつかれさまでした' })
       setSavedAt(new Date().toISOString())
+      writeDraft(key, null); setRestored(false)
       ctx.onSaved()
       if (isCompany) load()
     } catch (e) { setMsg({ kind: 'err', text: errText(e, '保存できませんでした。電波の良い所でもう一度押してください') }) }
@@ -76,6 +96,7 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
           ? <>会社（工房）に置いてある数を数えて入れてください。「記録上」は、入庫と積み込みから計算した数です。</>
           : <>{md(countDate)}の閉店後に、ヒュッテに<b>残っている数</b>を入れてください。開けた袋は 0.5 と数えます。{blind && <span className="block mt-1">前の数は見えないようにしています。見たままの数を入れてください。</span>}</>}
         {savedAt && <span className="block mt-1 font-bold">保存済み（{hm(savedAt)}）。直して保存し直せます。</span>}
+        {restored && <span className="block mt-1 font-bold">入れかけの数を戻しました。まだ保存していないので、最後に「保存する」を押してください。</span>}
       </Msg>
 
       {empty.length > 0 && prev.date && (
@@ -93,11 +114,11 @@ export default function CountPanel({ ctx, loc }: { ctx: InvCtx; loc: number }) {
                   <p className="font-bold text-gray-900 leading-tight">{i.name}</p>
                   <p className="text-xs text-gray-500">
                     {i.count_unit === 'kg' ? 'kgで量る（1.2 のように小数で入れられます）' : `${i.count_unit}で数える${i.half_ok ? '（開封済み＝0.5）' : ''}`}
-                    {prev.map.has(i.id) && <button type="button" onClick={() => setVals(v => ({ ...v, [i.id]: prev.map.get(i.id)! }))} className="ml-2 underline text-blue-600">前回 {fmt(prev.map.get(i.id))}</button>}
+                    {prev.map.has(i.id) && <button type="button" onClick={() => setValsDraft(v => ({ ...v, [i.id]: prev.map.get(i.id)! }))} className="ml-2 underline text-blue-600">前回 {fmt(prev.map.get(i.id))}</button>}
                     {book && <span className="ml-2">記録上 {fmt(book.get(i.id) || 0)}</span>}
                   </p>
                 </div>
-                <Stepper value={vals[i.id] ?? ''} onChange={v => setVals(s => ({ ...s, [i.id]: v }))} step={i.half_ok ? 0.5 : 1} />
+                <Stepper value={vals[i.id] ?? ''} onChange={v => setValsDraft(s => ({ ...s, [i.id]: v }))} step={i.half_ok ? 0.5 : 1} />
               </li>
             ))}
           </ul>
