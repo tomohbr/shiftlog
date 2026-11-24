@@ -198,6 +198,38 @@ export default function LiffPunchPage({ companyId }: { companyId: number }) {
         </a>
       )}
       <p className="text-xs text-center text-gray-400">打刻のとき、不正防止のため位置情報を記録します（許可しなくても打刻できます）</p>
+      <PermissionHelp />
     </>
+  )
+}
+
+// カメラ（QR読み取りはLINEのカメラ）と位置情報の確認が毎回出る人向けの案内。
+// どちらもスマホの設定で LINE アプリに許可しておけば聞かれなくなる
+function PermissionHelp() {
+  return (
+    <details className="rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm text-gray-700">
+      <summary className="font-bold text-gray-900 cursor-pointer">カメラや位置情報の確認が毎回出る人へ</summary>
+      <div className="mt-3 space-y-3 leading-relaxed">
+        <p>スマホの設定でLINEに許可しておくと<br />次から聞かれなくなります</p>
+        <div>
+          <p className="font-bold text-gray-900">iPhone</p>
+          <p>設定 → アプリ → LINE</p>
+          <ul className="list-disc pl-5">
+            <li>カメラ　オン</li>
+            <li>位置情報　「このAppの使用中」<br />（「次回または共有時に確認」だと毎回聞かれます）</li>
+            <li>正確な位置情報　オン</li>
+          </ul>
+        </div>
+        <div>
+          <p className="font-bold text-gray-900">Android</p>
+          <p>設定 → アプリ → LINE → 権限</p>
+          <ul className="list-disc pl-5">
+            <li>カメラ　「アプリの使用中のみ許可」</li>
+            <li>位置情報　「アプリの使用中のみ許可」<br />（「毎回確認する」だと毎回聞かれます）</li>
+          </ul>
+        </div>
+        <p className="text-xs text-gray-500">設定しても画面を開いた時に確認が出たら「許可」を押してください</p>
+      </div>
+    </details>
   )
 }
