@@ -886,6 +886,14 @@ try {
       load_id INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS inv_announcements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL,
+      store_id INTEGER,
+      date TEXT NOT NULL,
+      text TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE IF NOT EXISTS inv_notices (
       company_id INTEGER NOT NULL,
       key TEXT NOT NULL,

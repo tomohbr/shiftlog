@@ -948,6 +948,7 @@ export interface InvMenu { id: number; name: string; register_label: string | nu
 export interface InvMe {
   enabled: boolean; role: InvRole; name: string; date?: string
   stores?: { id: number; name: string }[]; my_store?: number | null; ocr?: boolean; items?: InvItem[]; menus?: InvMenu[]; store_items?: Record<string, number[]>
+  announcements?: { id: number; store_id: number | null; date: string; text: string }[]
 }
 export interface InvDiff { item_id: number; name: string; count_unit: string; counted: number; expected: number; diff: number; review?: 'hold' | 'approved' | 'kept' | null }
 export interface InvClosing { store_id: number; date: string; name?: string; open_today?: boolean; count_id?: number | null; counted: boolean; counted_at: string | null; counted_by?: string | null; sales_by?: string | null; holds?: number; sales_done: boolean; sales_at: string | null; complete: boolean; diffs: InvDiff[] }

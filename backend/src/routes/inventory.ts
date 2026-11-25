@@ -122,7 +122,28 @@ router.get('/me', (req: InvReq, res: Response): void => {
     items: items(companyId),
     menus: menus(companyId),
     store_items: Object.fromEntries(s.store_ids.map(id => [id, storeItemIds(companyId, id)])),
+    announcements: db.prepare('SELECT id, store_id, date, text FROM inv_announcements WHERE company_id = ? AND date = ? ORDER BY id').all(companyId, businessDate()),
   });
+});
+
+// その日のお知らせ（「ガスを1本持って帰る」など）。store_id が空なら全会場
+router.get('/announcements', enabled, need('admin'), (req: InvReq, res: Response): void => {
+  res.json(db.prepare('SELECT * FROM inv_announcements WHERE company_id = ? AND date >= ? ORDER BY date, id').all(req.inv!.companyId, businessDate()));
+});
+
+router.post('/announcements', enabled, need('admin'), (req: InvReq, res: Response): void => {
+  const { companyId } = req.inv!;
+  const date = validDate(req.body?.date) || businessDate();
+  const storeId = req.body?.store_id ? Number(req.body.store_id) : null;
+  const text = String(req.body?.text || '').trim().slice(0, 200);
+  if (!text) { res.status(400).json({ error: 'お知らせを入れてください' }); return; }
+  const r = db.prepare('INSERT INTO inv_announcements (company_id, store_id, date, text) VALUES (?, ?, ?, ?)').run(companyId, storeId, date, text);
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+
+router.delete('/announcements/:id', enabled, need('admin'), (req: InvReq, res: Response): void => {
+  db.prepare('DELETE FROM inv_announcements WHERE id = ? AND company_id = ?').run(Number(req.params.id), req.inv!.companyId);
+  res.json({ ok: true });
 });
 
 // GET /api/inventory/count?loc=&date= - 数える画面（前回の数も返す。「昨日と同じ」用）

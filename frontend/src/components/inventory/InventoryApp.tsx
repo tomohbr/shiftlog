@@ -79,6 +79,9 @@ export default function InventoryApp({ api, inLine, initialTab }: { api: InvApi;
             ))}
           </div>
         )}
+        {STORE_TABS.includes(cur) && me.announcements?.filter(a => a.store_id == null || a.store_id === storeId).map(a => (
+          <div key={a.id} className="rounded-xl bg-amber-50 border-2 border-amber-400 px-4 py-3 font-bold text-amber-900">📢 {a.text}</div>
+        ))}
         {STORE_TABS.includes(cur) && st && (
           <p className="text-sm text-gray-700 flex items-center gap-3">
             <span className="flex items-center gap-1">{st.counted ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Circle className="w-4 h-4 text-gray-400" />}残りの数え</span>
