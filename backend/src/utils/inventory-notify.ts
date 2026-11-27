@@ -11,6 +11,7 @@ import { toMinutes, weekdayOf } from './venueSchedule';
 //  1. 閉店から30分たっても締め（残りの数え・レジ締め）がそろっていない会場
 //  2. その日の締めがそろったら（遅くとも閉店90分後）、次に開く日の積み込みリスト
 //  3. 火曜・金曜の朝8時に「会社の在庫を数える日」
+//  4. 退勤の打刻漏れ（シフトの終わりから30分たっても退勤が無い人。11/27 芝原「退勤漏れがあったらリマインド」）
 // LINE の無料枠（月200通）を使うので、1回の通知は1通にまとめる。
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}（${'日月火水木金土'[weekdayOf(d)]}）`;
@@ -136,6 +137,25 @@ export async function runInventoryNotifier(): Promise<void> {
     if ((allDone || nowMin >= lastClose + 90) && once(cid, `load:${today}`)) {
       const card = loadCard(cid, s, today);
       if (card) await pushToUsers(cid, to, card);
+    }
+
+    // 4. 退勤の打刻漏れ（昨日の分も拾う。シフトが無ければ会場の閉店で見る）
+    const yest = addDays(today, -1);
+    const open4 = (db.prepare(`
+      SELECT tr.id, tr.date, tr.clock_in, tr.store_id, u.name, sh.end_time
+      FROM time_records tr JOIN users u ON u.id = tr.user_id
+      LEFT JOIN shifts sh ON sh.company_id = tr.company_id AND sh.user_id = tr.user_id AND sh.date = tr.date
+      WHERE tr.company_id = ? AND tr.clock_out IS NULL AND tr.date IN (?, ?)
+      ORDER BY tr.date, tr.clock_in
+    `).all(cid, yest, today) as { id: number; date: string; clock_in: string; store_id: number | null; name: string; end_time: string | null }[]);
+    const late = open4.filter(r => {
+      if (r.date < today) return true;
+      const end = r.end_time ? toMinutes(r.end_time) : (r.store_id ? open.get(r.store_id)?.get(today) : undefined);
+      return end != null && nowMin >= end + 30;
+    }).filter(r => once(cid, `noclockout:${r.id}`));
+    if (late.length) {
+      await pushToUsers(cid, to, buttonsCard('退勤の打刻漏れ', `退勤の打刻が無い人が${late.length}人います`,
+        late.map(r => `${md(r.date)} ${r.name}さん　出勤 ${r.clock_in}${r.end_time ? `／シフトは${r.end_time}まで` : ''}${r.store_id ? `（${names.get(r.store_id) ?? ''}）` : ''}`), []));
     }
 
     // 3. 会社在庫を数える日（火・金の朝）
